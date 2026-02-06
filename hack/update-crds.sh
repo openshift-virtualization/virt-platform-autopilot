@@ -37,7 +37,7 @@ echo "=== Fetching KubeVirt HCO CRD ==="
 fetch_github_file \
     "kubevirt/hyperconverged-cluster-operator" \
     "main" \
-    "deploy/crds/hco.kubevirt.io_hyperconvergeds.yaml" \
+    "deploy/crds/hco00.crd.yaml" \
     "$CRDS_DIR/kubevirt/hyperconverged-crd.yaml" || true
 
 # Fetch OpenShift MachineConfig CRDs

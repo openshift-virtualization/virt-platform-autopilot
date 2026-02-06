@@ -164,8 +164,6 @@ spec:
   liveMigrationConfig:
     parallelMigrationsPerCluster: 5
     parallelOutboundMigrationsPerNode: 2
-  featureGates:
-    - WithHostPassthroughCPU
 EOF
 
     echo "Mock HCO created in openshift-cnv namespace"

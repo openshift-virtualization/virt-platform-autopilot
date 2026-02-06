@@ -6,7 +6,7 @@ name: virt-platform-operator
 # Single control-plane node with workers
 nodes:
   - role: control-plane
-    image: kindest/node:v1.28.0
+    image: kindest/node:v1.35.0
     kubeadmConfigPatches:
       - |
         kind: InitConfiguration
@@ -24,7 +24,7 @@ nodes:
 
   # Additional worker node for multi-node testing
   - role: worker
-    image: kindest/node:v1.28.0
+    image: kindest/node:v1.35.0
     labels:
       node-role.kubernetes.io/worker: ""
 
