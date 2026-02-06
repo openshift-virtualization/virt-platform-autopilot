@@ -1,0 +1,114 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+cover.out
+coverage.out
+coverage.html
+
+# Go workspace file
+go.work
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+.project
+.classpath
+.settings/
+.metadata/
+
+# OS-specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Kubernetes
+*.kubeconfig
+kubeconfig
+.kubeconfig
+
+# Generated files
+config/rbac/role.yaml
+
+# Test artifacts
+testbin/
+**/testbin/
+*.test.log
+
+# Build artifacts
+_output/
+_tmp/
+
+# Helm charts (if added later)
+*.tgz
+charts/*/charts/
+
+# Container images
+*.tar
+
+# macOS
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Windows
+[Dd]esktop.ini
+*.stackdump
+
+# Ignore collected CRDs (will be regenerated)
+internal/assets/crds/*.yaml
+!internal/assets/crds/README.md
+
+# Debug files
+__debug_bin
+
+# golangci-lint cache
+.golangci-lint.cache
+
+# Air (live reload)
+tmp/
+.air.toml
+
+# Profiling data
+*.pprof
+*.prof
+mem.out
+cpu.out
+
+# Release artifacts
+release/
+
+# Claude
+.claude/
+claude_assets/

@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: virt-platform-operator-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: virt-platform-operator-controller-manager
+  namespace: virt-platform-operator-system
+  labels:
+    app: virt-platform-operator
+    control-plane: controller-manager
+spec:
+  selector:
+    matchLabels:
+      app: virt-platform-operator
+      control-plane: controller-manager
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: virt-platform-operator
+        control-plane: controller-manager
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: manager
+          image: virt-platform-operator:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /manager
+          args:
+            - --leader-elect
+            - --namespace=openshift-cnv
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+      serviceAccountName: virt-platform-operator-controller-manager
+      terminationGracePeriodSeconds: 10

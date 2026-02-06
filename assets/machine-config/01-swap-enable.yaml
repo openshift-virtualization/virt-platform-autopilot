@@ -1,0 +1,33 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 50-virt-swap-enable
+  labels:
+    machineconfiguration.openshift.io/role: worker
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    systemd:
+      units:
+        - name: swap.target
+          enabled: true
+        - name: create-swap.service
+          enabled: true
+          contents: |
+            [Unit]
+            Description=Create swap file for virtualization workloads
+            DefaultDependencies=no
+            After=var.mount
+            [Service]
+            Type=oneshot
+            ExecStart=/bin/bash -c ' \
+              if [ ! -f /var/vm-swap ]; then \
+                fallocate -l 8G /var/vm-swap && \
+                chmod 600 /var/vm-swap && \
+                mkswap /var/vm-swap && \
+                echo "/var/vm-swap none swap sw 0 0" >> /etc/fstab && \
+                swapon /var/vm-swap; \
+              fi'
+            [Install]
+            WantedBy=swap.target

@@ -1,0 +1,155 @@
+# Asset catalog defining what to manage
+# CRITICAL: HCO must be first - it's applied first, then read for RenderContext
+assets:
+  # Phase 0: HCO Golden Reference (Always, managed first!)
+  - name: hco-golden-config
+    path: hco/golden-config.yaml.tpl
+    phase: 0
+    install: always
+    component: HyperConverged
+    reconcile_order: 0
+    conditions: []
+
+  # Phase 1: Always installed - MachineConfig
+  - name: swap-enable
+    path: machine-config/01-swap-enable.yaml
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
+    conditions: []
+
+  - name: pci-passthrough
+    path: machine-config/02-pci-passthrough.yaml.tpl
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
+    conditions:
+      - type: hardware-detection
+        detector: pciDevicesPresent
+
+  - name: numa-topology
+    path: machine-config/03-numa.yaml.tpl
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
+    conditions:
+      - type: hardware-detection
+        detector: numaNodesPresent
+
+  # Phase 1: Always installed - Kubelet
+  - name: kubelet-perf-settings
+    path: kubelet/perf-settings.yaml.tpl
+    phase: 1
+    install: always
+    component: KubeletConfig
+    reconcile_order: 1
+    conditions: []
+
+  # Phase 1: Always installed - NodeHealthCheck
+  - name: node-health-check
+    path: node-health/standard-remediation.yaml
+    phase: 1
+    install: always
+    component: NodeHealthCheck
+    reconcile_order: 1
+    conditions: []
+
+  # Phase 1: Always installed - Operators
+  - name: mtv-operator
+    path: operators/mtv.yaml.tpl
+    phase: 1
+    install: always
+    component: ForkliftController
+    reconcile_order: 1
+    conditions: []
+
+  - name: metallb-operator
+    path: operators/metallb.yaml.tpl
+    phase: 1
+    install: always
+    component: MetalLB
+    reconcile_order: 1
+    conditions: []
+
+  - name: observability-operator
+    path: operators/observability.yaml.tpl
+    phase: 1
+    install: always
+    component: UIPlugin
+    reconcile_order: 1
+    conditions: []
+
+  # Phase 1: Opt-in - Descheduler
+  - name: descheduler-loadaware
+    path: descheduler/recommended.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: KubeDescheduler
+    reconcile_order: 1
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-loadaware
+        value: "true"
+
+  # Phase 1: Opt-in - CPU Manager
+  - name: kubelet-cpu-manager
+    path: kubelet/cpu-manager.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: KubeletConfig
+    reconcile_order: 1
+    conditions:
+      - type: feature-gate
+        value: CPUManager
+
+  # Phase 2: Opt-in - Advanced features
+  - name: vfio-assign
+    path: machine-config/04-vfio-assign.yaml.tpl
+    phase: 2
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 2
+    conditions:
+      - type: hardware-detection
+        detector: vfioCapable
+
+  - name: aaq-operator
+    path: operators/aaq.yaml.tpl
+    phase: 2
+    install: opt-in
+    component: AAQOperatorConfig
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-aaq
+        value: "true"
+
+  - name: node-maintenance-operator
+    path: operators/node-maintenance.yaml.tpl
+    phase: 2
+    install: always
+    component: NodeMaintenance
+    reconcile_order: 2
+    conditions: []
+
+  - name: fence-agents-operator
+    path: operators/fence-agents.yaml.tpl
+    phase: 2
+    install: always
+    component: FenceAgentsRemediation
+    reconcile_order: 2
+    conditions: []
+
+  # Phase 3: Specialized features
+  - name: usb-passthrough
+    path: machine-config/05-usb-passthrough.yaml.tpl
+    phase: 3
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 3
+    conditions:
+      - type: hardware-detection
+        detector: usbDevicesPresent

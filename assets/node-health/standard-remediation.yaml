@@ -1,0 +1,23 @@
+apiVersion: remediation.medik8s.io/v1alpha1
+kind: NodeHealthCheck
+metadata:
+  name: virt-node-health-check
+  namespace: openshift-operators
+spec:
+  minHealthy: 51%
+  remediationTemplate:
+    apiVersion: self-node-remediation.medik8s.io/v1alpha1
+    kind: SelfNodeRemediationTemplate
+    name: self-node-remediation-automatic-strategy-template
+    namespace: openshift-operators
+  selector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/worker
+        operator: Exists
+  unhealthyConditions:
+    - duration: 5m
+      status: "False"
+      type: Ready
+    - duration: 5m
+      status: Unknown
+      type: Ready

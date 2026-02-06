@@ -1,0 +1,87 @@
+version: "2"
+linters:
+  enable:
+    - ginkgolinter
+    - gocognit
+    - revive
+    - unparam
+  settings:
+    ginkgolinter:
+      forbid-focus-container: true
+      force-expect-to: true
+      force-tonot: true
+    revive:
+      rules:
+        - name: bare-return
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+          arguments:
+            - allowedPackages:
+                - github.com/onsi/ginkgo/v2
+                - github.com/onsi/gomega
+        - name: empty-block
+        - name: empty-lines
+          disabled: true
+        - name: enforce-slice-style
+          arguments:
+            - "nil"
+          disabled: true
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+          disabled: true
+        - name: filename-format
+          arguments:
+            - "^[_a-z][_a-z0-9]*\\.go$"
+          disabled: true
+        - name: increment-decrement
+        - name: indent-error-flow
+          disabled: true
+        - name: line-length-limit
+          arguments:
+            - 200
+          disabled: true
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-naming
+          disabled: true
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+          disabled: true
+        - name: useless-break
+        - name: use-any
+          disabled: true
+        - name: var-declaration
+        - name: var-naming
+          disabled: true
+    staticcheck:
+      dot-import-whitelist:
+        - github.com/onsi/ginkgo/v2
+        - github.com/onsi/gomega
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+run:
+  tests: true
