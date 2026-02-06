@@ -2,7 +2,7 @@
 
 This directory contains CRDs required for envtest and Kind testing.
 
-**Last updated:** 2026-02-06 17:35:51 UTC
+**Last updated:** 2026-02-06 17:57:33 UTC
 
 ## CRD Sources
 

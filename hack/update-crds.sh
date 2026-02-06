@@ -49,6 +49,12 @@ echo "=== Fetching OpenShift MachineConfig CRDs ==="
 echo "  Note: MachineConfig CRDs may require manual download from OpenShift release"
 echo "  See: https://github.com/openshift/machine-config-operator"
 
+fetch_github_file \
+    "openshift/api" \
+    "master" \
+    "machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_machineconfigs.crd.yaml" \
+    "$CRDS_DIR/openshift/machineconfig-crd.yaml" || true
+
 # Fetch KubeDescheduler CRD
 echo ""
 echo "=== Fetching KubeDescheduler CRD ==="
