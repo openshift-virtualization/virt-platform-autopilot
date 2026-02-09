@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, gw ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+ 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Setup envtest
+        run: make envtest ginkgo
+
+      - name: Run integration tests
+        run: make test-integration
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cover.out
+          if-no-files-found: ignore

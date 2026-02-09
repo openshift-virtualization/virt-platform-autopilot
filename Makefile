@@ -16,9 +16,28 @@ vet: ## Run go vet against code
 test: fmt vet ## Run unit tests
 	go test ./pkg/... -coverprofile cover.out
 
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.35.0
+ENVTEST = $(shell pwd)/bin/setup-envtest
+GINKGO = $(shell pwd)/bin/ginkgo
+
 .PHONY: test-integration
-test-integration: ## Run integration tests with envtest
-	go test ./test/... -tags=integration -v
+test-integration: envtest ginkgo ## Run integration tests with envtest
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(shell pwd)/bin -p path)" $(GINKGO) -v --trace ./test/...
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download envtest-setup locally if necessary
+$(ENVTEST): $(LOCALBIN)
+	GOBIN=$(shell pwd)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary
+$(GINKGO): $(LOCALBIN)
+	GOBIN=$(shell pwd)/bin go install github.com/onsi/ginkgo/v2/ginkgo@latest
+
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
 
 ##@ Build
 

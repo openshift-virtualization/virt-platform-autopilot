@@ -65,9 +65,8 @@ func (a *Applier) Apply(ctx context.Context, obj *unstructured.Unstructured, for
 	appliedObj := obj.DeepCopy()
 
 	// Apply using SSA
-	// Note: Using Patch with client.Apply for unstructured objects
-	// The client.Apply() method requires typed ApplyConfiguration objects
-	patchOptions := []client.PatchOption{
+	// Convert unstructured to ApplyConfiguration for the modern Apply() API
+	applyOptions := []client.ApplyOption{
 		client.ForceOwnership,
 		client.FieldOwner(FieldManager),
 	}
@@ -79,8 +78,9 @@ func (a *Applier) Apply(ctx context.Context, obj *unstructured.Unstructured, for
 		"force", force,
 	)
 
-	//nolint:staticcheck // SA1019: client.Apply is deprecated but still needed for unstructured objects
-	err := a.client.Patch(ctx, appliedObj, client.Apply, patchOptions...)
+	// Use modern Apply() API with ApplyConfigurationFromUnstructured
+	applyConfig := client.ApplyConfigurationFromUnstructured(appliedObj)
+	err := a.client.Apply(ctx, applyConfig, applyOptions...)
 	if err != nil {
 		if errors.IsConflict(err) {
 			return false, fmt.Errorf("field ownership conflict (another controller owns fields): %w", err)
