@@ -46,6 +46,11 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			err := InstallCRDs(ctx, k8sClient, CRDSetOpenShift)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Cleanup CRDs after test to avoid pollution
+			DeferCleanup(func() {
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetOpenShift)
+			})
+
 			By("waiting for CRD to be established")
 			err = WaitForCRD(ctx, k8sClient, "machineconfigs.machineconfiguration.openshift.io", 10*time.Second)
 			Expect(err).NotTo(HaveOccurred())
@@ -71,6 +76,12 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			err := InstallCRDs(ctx, k8sClient, CRDSetRemediation)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Cleanup CRDs after test
+			DeferCleanup(func() {
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetRemediation)
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetOperators)
+			})
+
 			By("verifying remediation CRDs are available")
 			ExpectCRDInstalled(ctx, k8sClient, "nodehealthchecks.remediation.medik8s.io")
 			ExpectCRDInstalled(ctx, k8sClient, "selfnoderemediations.self-node-remediation.medik8s.io")
@@ -91,6 +102,11 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			// Ensure operators CRDs are installed for this test
 			err := InstallCRDs(ctx, k8sClient, CRDSetOperators)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Cleanup CRDs after each test in this context
+			DeferCleanup(func() {
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetOperators)
+			})
 		})
 
 		It("should handle CRD removal gracefully", func() {
@@ -126,6 +142,11 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			By("adding optional CRDs after controller start")
 			err := InstallCRDs(ctx, k8sClient, CRDSetRemediation)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Cleanup CRDs after test
+			DeferCleanup(func() {
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetRemediation)
+			})
 
 			// TODO: Verify controller detects new CRDs and starts managing
 			// NodeHealthCheck resources automatically

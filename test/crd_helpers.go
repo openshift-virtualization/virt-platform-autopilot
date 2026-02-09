@@ -26,16 +26,10 @@ const (
 	CRDSetOperators   CRDSet = "operators"   // MTV, MetalLB CRDs
 )
 
-// InstalledCRDs tracks which CRD sets have been installed during tests
-var InstalledCRDs = make(map[CRDSet]bool)
-
 // InstallCRDs installs a CRD set dynamically during test execution
 // This simulates the scenario where CRDs are installed after the operator starts
+// This function is idempotent - it's safe to call multiple times
 func InstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
-	if InstalledCRDs[crdSet] {
-		return nil // Already installed
-	}
-
 	crdDir := filepath.Join("..", "assets", "crds", string(crdSet))
 
 	// Check if directory exists
@@ -55,7 +49,6 @@ func InstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
 		}
 	}
 
-	InstalledCRDs[crdSet] = true
 	return nil
 }
 
@@ -77,13 +70,40 @@ func installCRDFile(ctx context.Context, c client.Client, filePath string) error
 		return fmt.Errorf("file is not a CRD, got kind: %s", obj.GetKind())
 	}
 
-	// Create the CRD
+	crdName := obj.GetName()
+
+	// Check if CRD already exists
+	existing := &apiextensionsv1.CustomResourceDefinition{}
+	key := client.ObjectKey{Name: crdName}
+	err = c.Get(ctx, key, existing)
+
+	if err == nil {
+		// CRD exists - check if it's being deleted
+		if existing.DeletionTimestamp != nil {
+			// CRD is being deleted, wait for it to be fully removed
+			err := wait.PollUntilContextTimeout(ctx, 250*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+				checkCRD := &apiextensionsv1.CustomResourceDefinition{}
+				err := c.Get(ctx, key, checkCRD)
+				// CRD is gone when we get NotFound error
+				return err != nil, nil
+			})
+			if err != nil {
+				return fmt.Errorf("timeout waiting for CRD %s to be deleted: %w", crdName, err)
+			}
+			// CRD is now deleted, proceed with creation
+		} else {
+			// CRD exists and is not being deleted - it's already installed
+			// Just wait for it to be established (in case it was just created)
+			return waitForCRDEstablished(ctx, c, crdName)
+		}
+	}
+
+	// Create the CRD (either it didn't exist, or we waited for deletion to complete)
 	if err := c.Create(ctx, obj); err != nil {
 		return fmt.Errorf("failed to create CRD: %w", err)
 	}
 
 	// Wait for CRD to be established
-	crdName := obj.GetName()
 	return waitForCRDEstablished(ctx, c, crdName)
 }
 
@@ -108,11 +128,8 @@ func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string)
 }
 
 // UninstallCRDs removes a CRD set (useful for testing missing CRD scenarios)
+// This function is idempotent - it's safe to call multiple times
 func UninstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
-	if !InstalledCRDs[crdSet] {
-		return nil // Not installed
-	}
-
 	crdDir := filepath.Join("..", "assets", "crds", string(crdSet))
 	files, err := filepath.Glob(filepath.Join(crdDir, "*.yaml"))
 	if err != nil {
@@ -134,16 +151,20 @@ func UninstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
 		_ = c.Delete(ctx, obj)
 	}
 
-	delete(InstalledCRDs, crdSet)
 	return nil
 }
 
 // IsCRDInstalled checks if a specific CRD is installed in the cluster
+// Returns false if CRD is being deleted
 func IsCRDInstalled(ctx context.Context, c client.Client, crdName string) bool {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	key := client.ObjectKey{Name: crdName}
 	err := c.Get(ctx, key, crd)
-	return err == nil
+	if err != nil {
+		return false
+	}
+	// Don't count CRDs that are being deleted as "installed"
+	return crd.DeletionTimestamp == nil
 }
 
 // WaitForCRD waits for a CRD to be installed and established

@@ -32,6 +32,7 @@ import (
 	"github.com/kubevirt/virt-platform-operator/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
 	"github.com/kubevirt/virt-platform-operator/pkg/engine"
+	"github.com/kubevirt/virt-platform-operator/pkg/util"
 )
 
 const (
@@ -70,6 +71,7 @@ type PlatformReconciler struct {
 	patcher            *engine.Patcher
 	contextBuilder     *RenderContextBuilder
 	conditionEvaluator *assets.DefaultConditionEvaluator
+	crdChecker         *util.CRDChecker
 }
 
 // NewPlatformReconciler creates a new platform reconciler
@@ -89,6 +91,7 @@ func NewPlatformReconciler(c client.Client, namespace string) (*PlatformReconcil
 		patcher:            engine.NewPatcher(c, loader),
 		contextBuilder:     NewRenderContextBuilder(c),
 		conditionEvaluator: &assets.DefaultConditionEvaluator{},
+		crdChecker:         util.NewCRDChecker(c),
 	}, nil
 }
 
@@ -194,6 +197,27 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 		// Skip HCO (already reconciled in step 1)
 		if asset.ReconcileOrder == 0 {
 			continue
+		}
+
+		// Check if component's CRD is installed (soft dependency handling)
+		if asset.Component != "" {
+			supported, crdName, err := r.crdChecker.IsComponentSupported(ctx, asset.Component)
+			if err != nil {
+				logger.Error(err, "Failed to check CRD availability, skipping asset",
+					"asset", asset.Name,
+					"component", asset.Component,
+				)
+				continue
+			}
+
+			if !supported {
+				logger.V(1).Info("CRD not installed, skipping asset (soft dependency)",
+					"asset", asset.Name,
+					"component", asset.Component,
+					"crd", crdName,
+				)
+				continue
+			}
 		}
 
 		// Check if asset should be applied based on conditions
