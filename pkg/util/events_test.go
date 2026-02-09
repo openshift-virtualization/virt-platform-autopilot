@@ -356,3 +356,95 @@ func TestEventRecorder_MultipleEvents(t *testing.T) {
 		t.Errorf("Third event should be DriftCorrected, got %s", fake.Events[2].Reason)
 	}
 }
+
+func TestEventRecorder_InvalidIgnoreFields(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+	obj.SetName("test-obj")
+
+	recorder.InvalidIgnoreFields(obj, "ConfigMap", "default", "my-config", "invalid pointer")
+
+	if len(fake.Events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(fake.Events))
+	}
+
+	event := fake.Events[0]
+	if event.EventType != EventTypeWarning {
+		t.Errorf("Expected EventType=%s, got %s", EventTypeWarning, event.EventType)
+	}
+	if event.Reason != EventReasonInvalidIgnoreFields {
+		t.Errorf("Expected Reason=%s, got %s", EventReasonInvalidIgnoreFields, event.Reason)
+	}
+}
+
+func TestEventRecorder_NoDriftDetected(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+	obj.SetName("test-obj")
+
+	recorder.NoDriftDetected(obj, "ConfigMap", "default", "my-config")
+
+	if len(fake.Events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(fake.Events))
+	}
+
+	event := fake.Events[0]
+	if event.EventType != EventTypeNormal {
+		t.Errorf("Expected EventType=%s, got %s", EventTypeNormal, event.EventType)
+	}
+	if event.Reason != EventReasonNoDriftDetected {
+		t.Errorf("Expected Reason=%s, got %s", EventReasonNoDriftDetected, event.Reason)
+	}
+}
+
+func TestEventRecorder_Eventf(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+	obj.SetName("test-obj")
+
+	recorder.Eventf(obj, EventTypeNormal, "TestReason", "Test message: %s", "arg")
+
+	if len(fake.Events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(fake.Events))
+	}
+
+	event := fake.Events[0]
+	if event.EventType != EventTypeNormal {
+		t.Errorf("Expected EventType=%s, got %s", EventTypeNormal, event.EventType)
+	}
+	if event.Reason != "TestReason" {
+		t.Errorf("Expected Reason=TestReason, got %s", event.Reason)
+	}
+}
+
+func TestEventRecorder_AnnotatedEventf(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+	obj.SetName("test-obj")
+
+	annotations := map[string]string{
+		"key": "value",
+	}
+
+	recorder.AnnotatedEventf(obj, annotations, EventTypeWarning, "TestReason", "Test message: %s", "arg")
+
+	if len(fake.Events) != 1 {
+		t.Fatalf("Expected 1 event, got %d", len(fake.Events))
+	}
+
+	event := fake.Events[0]
+	if event.EventType != EventTypeWarning {
+		t.Errorf("Expected EventType=%s, got %s", EventTypeWarning, event.EventType)
+	}
+	if event.Reason != "TestReason" {
+		t.Errorf("Expected Reason=TestReason, got %s", event.Reason)
+	}
+}
