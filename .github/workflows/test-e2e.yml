@@ -26,6 +26,11 @@ jobs:
       - name: Verify kind installation
         run: kind version
 
-      - name: Running Test e2e (TODO)
-        run: |
-          go mod tidy
+      - name: Build operator image
+        run: make docker-build
+
+      - name: Run E2E tests on kind cluster
+        run: ./hack/run-e2e.sh
+        env:
+          CLUSTER_NAME: virt-platform-operator-ci
+          CLEANUP: true

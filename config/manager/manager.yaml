@@ -6,7 +6,7 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: virt-platform-operator-controller-manager
+  name: virt-platform-operator
   namespace: openshift-cnv
   labels:
     app: virt-platform-operator
@@ -58,5 +58,5 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
-      serviceAccountName: virt-platform-operator-controller-manager
+      serviceAccountName: virt-platform-operator
       terminationGracePeriodSeconds: 10

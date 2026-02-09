@@ -117,7 +117,7 @@ make deploy
 3. Verify installation:
 ```bash
 kubectl get deployment -n virt-platform-operator-system
-kubectl logs -n virt-platform-operator-system deployment/virt-platform-operator-controller-manager
+kubectl logs -n virt-platform-operator-system deployment/virt-platform-operator
 ```
 
 ### Local Development (Kind)
