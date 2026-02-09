@@ -103,8 +103,21 @@ func installCRDFile(ctx context.Context, c client.Client, filePath string) error
 }
 
 // waitForCRDEstablished waits for a CRD to become established
+// Uses a fresh context to avoid rate limiter issues with parent context deadlines
 func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string) error {
-	return wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 10*time.Second, true, func(ctx context.Context) (bool, error) {
+	// Check if parent context is already cancelled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Create a fresh context with generous timeout to handle rate limiting
+	// We don't use the parent context here to avoid inheriting its deadline,
+	// which could be too short when combined with rate limiter delays
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Poll less frequently to reduce rate limiter pressure
+	return wait.PollUntilContextTimeout(timeoutCtx, 250*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 
@@ -123,8 +136,22 @@ func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string)
 }
 
 // waitForCRDDeletion waits for a CRD to be fully deleted from the cluster
+// Uses a fresh context to avoid inheriting parent deadline - this prevents rate limiter
+// delays from causing context deadline exceeded errors
 func waitForCRDDeletion(ctx context.Context, c client.Client, crdName string) error {
-	return wait.PollUntilContextTimeout(ctx, 250*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+	// Check if parent context is already cancelled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Create a fresh context with generous timeout to handle rate limiting
+	// We don't use the parent context here to avoid inheriting its deadline,
+	// which could be too short when combined with rate limiter delays
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	// Poll less frequently to reduce rate limiter pressure
+	return wait.PollUntilContextTimeout(timeoutCtx, 500*time.Millisecond, 60*time.Second, true, func(ctx context.Context) (bool, error) {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 		err := c.Get(ctx, key, crd)
