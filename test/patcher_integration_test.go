@@ -36,7 +36,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 	)
 
 	BeforeEach(func() {
-		testNs = "test-patcher-" + randString(5)
+		testNs = "test-patcher-" + randString()
 
 		// Create test namespace
 		ns := &unstructured.Unstructured{}

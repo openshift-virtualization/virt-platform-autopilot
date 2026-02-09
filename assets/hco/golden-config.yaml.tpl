@@ -11,65 +11,38 @@ spec:
 
   # Live migration configuration optimized for stability
   liveMigrationConfig:
-    completionTimeoutPerGiB: 800
+    allowAutoConverge: false
+    allowPostCopy: false
+    completionTimeoutPerGiB: 150
     parallelMigrationsPerCluster: 5
     parallelOutboundMigrationsPerNode: 2
     progressTimeout: 150
 
   # Feature gates for production readiness
   featureGates:
-    - WithHostPassthroughCPU
-    - HotplugVolumes
-    - GPU
-    - HostDevices
-    - Snapshot
-    - VMExport
+    alignCPUs: false
+    decentralizedLiveMigration: false
+    declarativeHotplugVolumes: false
+    deployKubeSecondaryDNS: false
+    disableMDevConfiguration: false
+    downwardMetrics: false
+    enableMultiArchBootImageImport: false
+    objectGraph: false
+    persistentReservation: false
+    videoConfig: true
 
   # Certificate rotation configuration
   certConfig:
     ca:
-      duration: 48h
-      renewBefore: 24h
+      duration: 48h0m0s
+      renewBefore: 24h0m0s
     server:
-      duration: 24h
-      renewBefore: 12h
-
-  # Infrastructure placement for operator components
-  infra:
-    nodePlacement:
-      nodeSelector:
-        node-role.kubernetes.io/worker: ""
-      tolerations:
-        - effect: NoSchedule
-          key: node-role.kubernetes.io/infra
-          operator: Exists
-
-  # Workload placement for VM workloads
-  workloads:
-    nodePlacement:
-      nodeSelector:
-        node-role.kubernetes.io/worker: ""
+      duration: 24h0m0s
+      renewBefore: 12h0m0s
 
   # Resource requirements for virt components
   resourceRequirements:
     vmiCPUAllocationRatio: 10
-
-  # Storage configuration
-  storageImport:
-    insecureRegistries:
-      - "registry.example.com"
-
-  # Network configuration
-  defaultCPUModel: "host-passthrough"
-  defaultNetworkInterface: "masquerade"
-
-  # Observability settings
-  observability:
-    enabled: true
-
-  # High availability configuration
-  highAvailability:
-    interval: 30
 
   # Uninstall strategy
   uninstallStrategy: BlockUninstallIfWorkloadsExist

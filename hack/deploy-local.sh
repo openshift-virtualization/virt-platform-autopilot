@@ -90,6 +90,22 @@ create_namespace() {
         --dry-run=client -o yaml | kubectl apply --context "kind-$CLUSTER_NAME" -f -
 }
 
+# Install HCO CRD (required for operator to start)
+install_hco_crd() {
+    log_info "Installing HCO CRD"
+    kubectl apply --context "kind-$CLUSTER_NAME" -f assets/crds/kubevirt/hyperconverged-crd.yaml
+
+    # Wait for CRD to be established
+    log_info "Waiting for HCO CRD to be established..."
+    kubectl wait --for condition=established --timeout=60s \
+        crd/hyperconvergeds.hco.kubevirt.io \
+        --context "kind-$CLUSTER_NAME" || {
+        log_error "HCO CRD failed to become established"
+        return 1
+    }
+    log_info "HCO CRD installed successfully"
+}
+
 # Deploy operator manifests
 deploy_operator() {
     log_info "Deploying operator manifests"
@@ -157,6 +173,7 @@ deploy() {
     build_image
     load_image
     create_namespace
+    install_hco_crd
     deploy_operator
     wait_for_operator
     show_status

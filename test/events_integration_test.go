@@ -70,7 +70,7 @@ var _ = Describe("Event Recording Integration", func() {
 	)
 
 	BeforeEach(func() {
-		testNs = "test-events-" + randString(5)
+		testNs = "test-events-" + randString()
 
 		// Create test namespace
 		ns := &unstructured.Unstructured{}

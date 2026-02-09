@@ -92,9 +92,10 @@ var _ = AfterSuite(func() {
 
 // Test helpers
 
-// randString generates a random string of specified length
-func randString(length int) string {
+// randString generates a random 5-character string for test namespaces
+func randString() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	const length = 5
 	b := make([]byte, length)
 	for i := range b {
 		b[i] = charset[rand.Intn(len(charset))]

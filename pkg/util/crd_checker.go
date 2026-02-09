@@ -46,7 +46,7 @@ var ComponentKindMapping = map[string]string{
 
 // CRDChecker provides CRD availability checking with caching
 type CRDChecker struct {
-	client client.Client
+	client client.Reader
 	cache  *crdCache
 }
 
@@ -63,7 +63,8 @@ type cacheEntry struct {
 }
 
 // NewCRDChecker creates a new CRD checker
-func NewCRDChecker(c client.Client) *CRDChecker {
+// Accepts a Reader (not Client) since it only needs to read CRDs
+func NewCRDChecker(c client.Reader) *CRDChecker {
 	return &CRDChecker{
 		client: c,
 		cache: &crdCache{

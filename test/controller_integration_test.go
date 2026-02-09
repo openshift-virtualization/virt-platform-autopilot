@@ -7,8 +7,10 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/kubevirt/virt-platform-operator/pkg/engine"
 	"github.com/kubevirt/virt-platform-operator/pkg/util"
 )
 
@@ -208,7 +210,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			Expect(IsCRDInstalled(ctx, k8sClient, testCRDName)).To(BeFalse())
 
 			By("creating HCO instance to trigger reconciliation")
-			testNs := "test-soft-deps-" + randString(5)
+			testNs := "test-soft-deps-" + randString()
 
 			// Create test namespace
 			ns := &unstructured.Unstructured{}
@@ -294,6 +296,93 @@ var _ = Describe("Platform Controller Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(supported).To(BeTrue(), "NodeHealthCheck should be supported after CRD installation")
 			Expect(crdName).To(Equal("nodehealthchecks.remediation.medik8s.io"))
+		})
+	})
+
+	Describe("Unlabeled HCO Adoption", func() {
+		It("should detect and label pre-existing unlabeled HyperConverged", func() {
+			testNs := "test-unlabeled-hco-" + randString()
+
+			// Create test namespace
+			ns := &unstructured.Unstructured{}
+			ns.SetGroupVersionKind(nsGVK)
+			ns.SetName(testNs)
+			Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(ctx, ns)
+			})
+
+			By("creating an HCO without the managed-by label")
+			hco := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "hco.kubevirt.io/v1beta1",
+					"kind":       "HyperConverged",
+					"metadata": map[string]interface{}{
+						"name":      "kubevirt-hyperconverged",
+						"namespace": testNs,
+					},
+					"spec": map[string]interface{}{
+						"liveMigrationConfig": map[string]interface{}{
+							"parallelMigrationsPerCluster":      5,
+							"parallelOutboundMigrationsPerNode": 2,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, hco)).To(Succeed())
+
+			By("verifying HCO starts without the label")
+			key := client.ObjectKey{Name: "kubevirt-hyperconverged", Namespace: testNs}
+			created := &unstructured.Unstructured{}
+			created.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "hco.kubevirt.io",
+				Version: "v1beta1",
+				Kind:    "HyperConverged",
+			})
+			Expect(k8sClient.Get(ctx, key, created)).To(Succeed())
+			Expect(created.GetLabels()).ToNot(HaveKey(engine.ManagedByLabel),
+				"HCO should not have managed-by label initially")
+
+			By("testing object adoption (labeling unlabeled objects)")
+			// The applier's Apply method should automatically label objects
+			// even if they don't have the managed-by label initially
+			testObj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-adoption-cm",
+						"namespace": testNs,
+					},
+					"data": map[string]interface{}{
+						"key": "value",
+					},
+				},
+			}
+
+			applier := engine.NewApplier(k8sClient, apiReader)
+			applied, err := applier.Apply(ctx, testObj, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(applied).NotTo(BeNil())
+
+			By("verifying the object got labeled")
+			final := &unstructured.Unstructured{}
+			final.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "ConfigMap",
+			})
+			key = client.ObjectKey{Name: "test-adoption-cm", Namespace: testNs}
+			Expect(k8sClient.Get(ctx, key, final)).To(Succeed())
+
+			labels := final.GetLabels()
+			Expect(labels).To(HaveKey(engine.ManagedByLabel),
+				"Applied object should have managed-by label")
+			Expect(labels[engine.ManagedByLabel]).To(Equal(engine.ManagedByValue))
+
+			By("cleaning up test object")
+			_ = k8sClient.Delete(ctx, testObj)
 		})
 	})
 })
