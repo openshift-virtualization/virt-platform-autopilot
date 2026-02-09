@@ -19,13 +19,19 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -73,6 +79,7 @@ type PlatformReconciler struct {
 	conditionEvaluator *assets.DefaultConditionEvaluator
 	crdChecker         *util.CRDChecker
 	eventRecorder      *util.EventRecorder
+	watchedCRDs        map[string]bool // Track CRDs we're watching to avoid restart loops
 }
 
 // NewPlatformReconciler creates a new platform reconciler
@@ -95,7 +102,8 @@ func NewPlatformReconciler(c client.Client, apiReader client.Reader, namespace s
 		patcher:            engine.NewPatcher(c, apiReader, loader),
 		contextBuilder:     NewRenderContextBuilder(c),
 		conditionEvaluator: &assets.DefaultConditionEvaluator{},
-		crdChecker:         util.NewCRDChecker(c),
+		crdChecker:         util.NewCRDChecker(apiReader), // Use apiReader (not cache-dependent)
+		watchedCRDs:        make(map[string]bool),
 	}, nil
 }
 
@@ -304,15 +312,181 @@ func extractFeatureGates(hco *unstructured.Unstructured) map[string]bool {
 }
 
 // SetupWithManager sets up the controller with the Manager
+// isManagedCRD checks if a CRD is for a resource type we manage
+func (r *PlatformReconciler) isManagedCRD(crdName string) bool {
+	for _, mappedCRD := range util.ComponentKindMapping {
+		if crdName == mappedCRD {
+			return true
+		}
+	}
+	return false
+}
+
+// crdEventHandler handles CRD creation/update/deletion events
+// On create/delete of managed CRDs: restart operator to reconfigure watches
+// On update: invalidate cache and trigger reconciliation
+func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventHandler {
+	logger := log.FromContext(ctx)
+
+	return handler.Funcs{
+		CreateFunc: func(ctx context.Context, e event.CreateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			crd, ok := e.Object.(*apiextensionsv1.CustomResourceDefinition)
+			if !ok {
+				return
+			}
+
+			// If this is a new managed CRD we aren't watching yet, restart to add watch
+			if r.isManagedCRD(crd.Name) && !r.watchedCRDs[crd.Name] {
+				logger.Info("New managed CRD created - restarting operator to configure watch for drift detection",
+					"crd", crd.Name)
+				// Exit cleanly so deployment restarts us with new watches
+				os.Exit(0)
+			}
+
+			// For non-managed CRDs, just invalidate cache and trigger reconciliation
+			r.crdChecker.InvalidateCache("")
+			q.Add(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      HCOName,
+					Namespace: r.Namespace,
+				},
+			})
+		},
+		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			crd, ok := e.Object.(*apiextensionsv1.CustomResourceDefinition)
+			if !ok {
+				return
+			}
+
+			// If we were watching this CRD, restart to remove watch
+			if r.isManagedCRD(crd.Name) && r.watchedCRDs[crd.Name] {
+				logger.Info("Watched CRD deleted - restarting operator to remove watch",
+					"crd", crd.Name)
+				// Exit cleanly so deployment restarts us without the watch
+				os.Exit(0)
+			}
+
+			// For non-managed CRDs, just invalidate cache and trigger reconciliation
+			r.crdChecker.InvalidateCache("")
+			q.Add(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      HCOName,
+					Namespace: r.Namespace,
+				},
+			})
+		},
+		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			crd, ok := e.ObjectNew.(*apiextensionsv1.CustomResourceDefinition)
+			if !ok {
+				return
+			}
+
+			logger.Info("CRD updated, invalidating cache and triggering HCO reconciliation",
+				"crd", crd.Name)
+
+			// Invalidate cache and trigger reconciliation
+			r.crdChecker.InvalidateCache("")
+			q.Add(reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      HCOName,
+					Namespace: r.Namespace,
+				},
+			})
+		},
+	}
+}
+
 func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	logger := mgr.GetLogger().WithName("setup")
+	ctx := context.Background()
+
 	// Create unstructured object for HCO
 	hco := &unstructured.Unstructured{}
 	hco.SetGroupVersionKind(HCOGVK)
 
-	return ctrl.NewControllerManagedBy(mgr).
+	// Build controller with HCO watch
+	builder := ctrl.NewControllerManagedBy(mgr).
 		For(hco).
-		Named("platform").
-		Complete(r)
+		Watches(
+			&apiextensionsv1.CustomResourceDefinition{},
+			r.crdEventHandler(ctx),
+		).
+		Named("platform")
+
+	// Dynamically add watches for resource types we manage (if their CRDs exist)
+	logger.Info("Discovering managed resource types to watch")
+
+	// Iterate through ALL components in ComponentKindMapping
+	// This ensures we watch all managed types, even if they don't have assets yet
+	for component, crdName := range util.ComponentKindMapping {
+
+		// Check if CRD is installed
+		installed, err := r.crdChecker.IsCRDInstalled(ctx, crdName)
+		if err != nil {
+			logger.Error(err, "Failed to check CRD", "crd", crdName)
+			continue
+		}
+
+		if !installed {
+			logger.Info("CRD not installed, skipping watch", "component", component, "crd", crdName)
+			continue
+		}
+
+		// Fetch CRD to get GVK information
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		if err := mgr.GetAPIReader().Get(ctx, types.NamespacedName{Name: crdName}, crd); err != nil {
+			logger.Error(err, "Failed to fetch CRD", "crd", crdName)
+			continue
+		}
+
+		// Use the preferred version for the watch
+		var version string
+		for _, v := range crd.Spec.Versions {
+			if v.Storage {
+				version = v.Name
+				break
+			}
+		}
+		if version == "" && len(crd.Spec.Versions) > 0 {
+			version = crd.Spec.Versions[0].Name
+		}
+
+		// Construct GVK
+		gvk := schema.GroupVersionKind{
+			Group:   crd.Spec.Group,
+			Version: version,
+			Kind:    crd.Spec.Names.Kind,
+		}
+
+		// Create unstructured object for this type
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(gvk)
+
+		// Add watch - enqueue HCO for reconciliation when these resources change
+		logger.Info("Adding watch for managed resource type",
+			"component", component,
+			"gvk", gvk.String())
+
+		// Track that we're watching this CRD
+		r.watchedCRDs[crdName] = true
+
+		builder = builder.Watches(
+			obj,
+			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, o client.Object) []reconcile.Request {
+				// All managed resources trigger HCO reconciliation
+				return []reconcile.Request{
+					{
+						NamespacedName: types.NamespacedName{
+							Name:      HCOName,
+							Namespace: r.Namespace,
+						},
+					},
+				}
+			}),
+		)
+	}
+
+	return builder.Complete(r)
 }
 
 // Ensure PlatformReconciler implements reconcile.Reconciler
