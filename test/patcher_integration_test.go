@@ -71,7 +71,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 			}
 
 			// Apply the asset using Applier directly (simulating what Patcher does)
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			applied, err := applier.Apply(ctx, asset, true)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(applied).To(BeTrue())
@@ -109,7 +109,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -183,7 +183,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 			Expect(data["newKey"]).To(Equal("patched"), "Patched data should be added")
 
 			// Apply to cluster
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err = applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -220,7 +220,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, live, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -269,7 +269,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -345,7 +345,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -389,7 +389,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 			}
 
 			// Apply as operator
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -450,7 +450,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, live, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -532,6 +532,181 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 			Expect(finalData["userField"]).To(Equal("user-controlled"), "User field preserved by masking")
 			Expect(finalData["operatorField"]).To(Equal("new-operator-value"), "Operator field updated")
 			Expect(finalData["patched"]).To(Equal("yes"), "Patched field added")
+		})
+	})
+
+	Describe("Object Adoption and Labeling", func() {
+		It("should automatically label managed objects", func() {
+			// Create an object that will be managed
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "label-test",
+						"namespace": testNs,
+					},
+					"data": map[string]interface{}{
+						"key": "value",
+					},
+				},
+			}
+
+			applier := engine.NewApplier(k8sClient, apiReader)
+			applied, err := applier.Apply(ctx, obj, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(applied).To(BeTrue())
+
+			// Verify the managed-by label was added
+			final := &unstructured.Unstructured{}
+			final.SetGroupVersionKind(obj.GroupVersionKind())
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNs,
+				Name:      "label-test",
+			}, final)
+			Expect(err).NotTo(HaveOccurred())
+
+			labels := final.GetLabels()
+			Expect(labels).NotTo(BeNil())
+			Expect(labels[engine.ManagedByLabel]).To(Equal(engine.ManagedByValue),
+				"Object should have managed-by label")
+		})
+
+		It("should adopt existing unlabeled objects", func() {
+			// Create an object without the managed-by label (simulating pre-existing resource)
+			unlabeled := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "adoption-test",
+						"namespace": testNs,
+						"labels": map[string]interface{}{
+							"existing-label": "keep-me",
+						},
+					},
+					"data": map[string]interface{}{
+						"original": "data",
+					},
+				},
+			}
+
+			// Create object directly via k8s client (bypassing applier to avoid auto-labeling)
+			err := k8sClient.Create(ctx, unlabeled)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify it exists but lacks the managed-by label
+			current := &unstructured.Unstructured{}
+			current.SetGroupVersionKind(unlabeled.GroupVersionKind())
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNs,
+				Name:      "adoption-test",
+			}, current)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(engine.HasManagedByLabel(current)).To(BeFalse(), "Should not have label initially")
+
+			// Now apply using the applier - it should adopt the object by adding the label
+			updated := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "adoption-test",
+						"namespace": testNs,
+					},
+					"data": map[string]interface{}{
+						"original": "data",
+						"added":    "by-operator",
+					},
+				},
+			}
+
+			applier := engine.NewApplier(k8sClient, apiReader)
+			_, err = applier.Apply(ctx, updated, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify the object was adopted (labeled) and updated
+			final := &unstructured.Unstructured{}
+			final.SetGroupVersionKind(updated.GroupVersionKind())
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNs,
+				Name:      "adoption-test",
+			}, final)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Check label was added
+			Expect(engine.HasManagedByLabel(final)).To(BeTrue(), "Should have managed-by label after adoption")
+
+			// Check existing label was preserved
+			labels := final.GetLabels()
+			Expect(labels["existing-label"]).To(Equal("keep-me"), "Existing labels should be preserved")
+
+			// Check data was updated
+			data, _, _ := unstructured.NestedStringMap(final.Object, "data")
+			Expect(data["original"]).To(Equal("data"))
+			Expect(data["added"]).To(Equal("by-operator"))
+		})
+
+		It("should re-label objects if label is removed", func() {
+			// Create a labeled object
+			labeled := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "relabel-test",
+						"namespace": testNs,
+					},
+					"data": map[string]interface{}{
+						"key": "value",
+					},
+				},
+			}
+
+			applier := engine.NewApplier(k8sClient, apiReader)
+			_, err := applier.Apply(ctx, labeled, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify label exists
+			current := &unstructured.Unstructured{}
+			current.SetGroupVersionKind(labeled.GroupVersionKind())
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNs,
+				Name:      "relabel-test",
+			}, current)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(engine.HasManagedByLabel(current)).To(BeTrue())
+
+			// Simulate user removing the label
+			labels := current.GetLabels()
+			delete(labels, engine.ManagedByLabel)
+			current.SetLabels(labels)
+			err = k8sClient.Update(ctx, current)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify label was removed
+			unlabeled := &unstructured.Unstructured{}
+			unlabeled.SetGroupVersionKind(current.GroupVersionKind())
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNs,
+				Name:      "relabel-test",
+			}, unlabeled)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(engine.HasManagedByLabel(unlabeled)).To(BeFalse(), "Label should be removed")
+
+			// Apply again - should re-add the label
+			_, err = applier.Apply(ctx, labeled, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Verify label was restored
+			relabeled := &unstructured.Unstructured{}
+			relabeled.SetGroupVersionKind(labeled.GroupVersionKind())
+			err = k8sClient.Get(ctx, client.ObjectKey{
+				Namespace: testNs,
+				Name:      "relabel-test",
+			}, relabeled)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(engine.HasManagedByLabel(relabeled)).To(BeTrue(), "Label should be restored")
 		})
 	})
 })

@@ -29,22 +29,35 @@ import (
 const (
 	// FieldManager is the field manager name used for SSA
 	FieldManager = "virt-platform-operator"
+
+	// ManagedByLabel is the label key used to mark managed objects
+	ManagedByLabel = "platform.kubevirt.io/managed-by"
+
+	// ManagedByValue is the label value for objects managed by this operator
+	ManagedByValue = "virt-platform-operator"
 )
 
 // Applier handles Server-Side Apply operations
 type Applier struct {
 	client client.Client
+	// apiReader provides direct API access bypassing cache for object adoption
+	// If nil, GetDirect falls back to cached client (used in tests)
+	apiReader client.Reader
 }
 
 // NewApplier creates a new SSA applier
-func NewApplier(c client.Client) *Applier {
+// The apiReader enables object adoption by detecting unlabeled objects
+// For tests with fake clients, pass nil for apiReader
+func NewApplier(c client.Client, apiReader client.Reader) *Applier {
 	return &Applier{
-		client: c,
+		client:    c,
+		apiReader: apiReader,
 	}
 }
 
 // Apply applies an object using Server-Side Apply
 // Returns true if the object was created/updated, false if unchanged
+// Automatically adds the managed-by label to track operator-managed objects
 func (a *Applier) Apply(ctx context.Context, obj *unstructured.Unstructured, force bool) (bool, error) {
 	logger := log.FromContext(ctx)
 
@@ -63,6 +76,9 @@ func (a *Applier) Apply(ctx context.Context, obj *unstructured.Unstructured, for
 
 	// Create a copy to avoid modifying the input
 	appliedObj := obj.DeepCopy()
+
+	// Ensure managed-by label is present (GitOps best practice)
+	ensureManagedByLabel(appliedObj)
 
 	// Apply using SSA
 	// Convert unstructured to ApplyConfiguration for the modern Apply() API
@@ -128,7 +144,40 @@ func (a *Applier) Delete(ctx context.Context, obj *unstructured.Unstructured) er
 	return nil
 }
 
-// Get retrieves an object by key
+// Get retrieves an object by key using the cached client
+// Note: This may not find objects that lack the managed-by label if cache filtering is enabled
 func (a *Applier) Get(ctx context.Context, key client.ObjectKey, obj *unstructured.Unstructured) error {
 	return a.client.Get(ctx, key, obj)
+}
+
+// GetDirect retrieves an object directly from the API server, bypassing the cache
+// This is used to detect objects that exist but lack the managed-by label (adoption scenario)
+func (a *Applier) GetDirect(ctx context.Context, key client.ObjectKey, obj *unstructured.Unstructured) error {
+	if a.apiReader != nil {
+		// Use direct API reader to bypass cache
+		return a.apiReader.Get(ctx, key, obj)
+	}
+	// Fallback to cached client if no API reader is configured
+	// This happens in tests with fake clients
+	return a.client.Get(ctx, key, obj)
+}
+
+// ensureManagedByLabel adds the managed-by label to an object
+// This is a GitOps best practice and enables cache filtering
+func ensureManagedByLabel(obj *unstructured.Unstructured) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[ManagedByLabel] = ManagedByValue
+	obj.SetLabels(labels)
+}
+
+// HasManagedByLabel checks if an object has the managed-by label
+func HasManagedByLabel(obj *unstructured.Unstructured) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		return false
+	}
+	return labels[ManagedByLabel] == ManagedByValue
 }

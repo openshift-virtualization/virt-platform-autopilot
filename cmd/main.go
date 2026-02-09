@@ -20,15 +20,19 @@ import (
 	"flag"
 	"os"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/kubevirt/virt-platform-operator/pkg/controller"
+	"github.com/kubevirt/virt-platform-operator/pkg/engine"
 	"github.com/kubevirt/virt-platform-operator/pkg/util"
 )
 
@@ -63,6 +67,19 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	// Create label selector for cache filtering
+	// Only watch objects managed by this operator (GitOps best practice)
+	managedByRequirement, err := labels.NewRequirement(
+		engine.ManagedByLabel,
+		selection.Equals,
+		[]string{engine.ManagedByValue},
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to create label selector")
+		os.Exit(1)
+	}
+	managedBySelector := labels.NewSelector().Add(*managedByRequirement)
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -71,6 +88,11 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "virt-platform-operator.kubevirt.io",
+		Cache: cache.Options{
+			// Only cache objects with our managed-by label
+			// This reduces memory usage and improves performance
+			DefaultLabelSelector: managedBySelector,
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -78,7 +100,12 @@ func main() {
 	}
 
 	// Setup platform controller
-	reconciler, err := controller.NewPlatformReconciler(mgr.GetClient(), namespace)
+	// The API reader bypasses cache to detect and adopt unlabeled objects
+	reconciler, err := controller.NewPlatformReconciler(
+		mgr.GetClient(),
+		mgr.GetAPIReader(),
+		namespace,
+	)
 	if err != nil {
 		setupLog.Error(err, "unable to create platform reconciler")
 		os.Exit(1)

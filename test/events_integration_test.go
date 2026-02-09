@@ -84,7 +84,7 @@ var _ = Describe("Event Recording Integration", func() {
 
 		// Setup patcher with event recorder
 		loader := assets.NewLoader()
-		patcher = engine.NewPatcher(k8sClient, loader)
+		patcher = engine.NewPatcher(k8sClient, apiReader, loader)
 
 		// Use fake recorder to capture events
 		fakeRecorder = &FakeEventRecorder{}
@@ -124,7 +124,7 @@ var _ = Describe("Event Recording Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -198,7 +198,7 @@ var _ = Describe("Event Recording Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -254,7 +254,7 @@ var _ = Describe("Event Recording Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -294,7 +294,7 @@ var _ = Describe("Event Recording Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -336,7 +336,7 @@ var _ = Describe("Event Recording Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -375,13 +375,13 @@ var _ = Describe("Event Recording Integration", func() {
 				},
 			}
 
-			applier := engine.NewApplier(k8sClient)
+			applier := engine.NewApplier(k8sClient, apiReader)
 			_, err := applier.Apply(ctx, obj, true)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create patcher without event recorder
 			loader := assets.NewLoader()
-			patcherNoEvents := engine.NewPatcher(k8sClient, loader)
+			patcherNoEvents := engine.NewPatcher(k8sClient, apiReader, loader)
 			// Don't set event recorder (leave it nil)
 
 			// Calling SetEventRecorder with nil should not crash

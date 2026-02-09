@@ -44,10 +44,12 @@ type Patcher struct {
 }
 
 // NewPatcher creates a new patcher
-func NewPatcher(c client.Client, loader *assets.Loader) *Patcher {
+// The apiReader enables object adoption (detecting and labeling unlabeled objects)
+// For tests with fake clients, pass nil for apiReader
+func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader) *Patcher {
 	return &Patcher{
 		renderer:      NewRenderer(loader),
-		applier:       NewApplier(c),
+		applier:       NewApplier(c, apiReader),
 		driftDetector: NewDriftDetector(c),
 		throttle:      throttling.NewTokenBucket(),
 		client:        c,
@@ -87,6 +89,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	}
 
 	// Get live object from cluster
+	// First try cached Get, then fall back to direct API call for adoption scenarios
 	live := &unstructured.Unstructured{}
 	live.SetGroupVersionKind(desired.GroupVersionKind())
 	objKey := client.ObjectKey{
@@ -95,11 +98,43 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	}
 
 	err = p.applier.Get(ctx, objKey, live)
-	if err != nil && !errors.IsNotFound(err) {
+	liveExists := err == nil
+
+	if errors.IsNotFound(err) {
+		// Object not found in cache - might be unlabeled and filtered out
+		// Try direct API call to check if it exists but lacks managed-by label
+		directLive := &unstructured.Unstructured{}
+		directLive.SetGroupVersionKind(desired.GroupVersionKind())
+		directErr := p.applier.GetDirect(ctx, objKey, directLive)
+
+		if directErr == nil {
+			// Object exists but was not in cache (probably unlabeled)
+			// We'll adopt it by adding the label during Apply
+			logger.V(1).Info("Adopting unlabeled object",
+				"kind", desired.GetKind(),
+				"namespace", desired.GetNamespace(),
+				"name", desired.GetName(),
+			)
+			live = directLive
+			liveExists = true
+		} else if !errors.IsNotFound(directErr) {
+			// Some other error occurred
+			return false, fmt.Errorf("failed to get live object: %w", directErr)
+		}
+		// If directErr is NotFound, object truly doesn't exist
+	} else if err != nil {
+		// Some other error occurred during cached Get
 		return false, fmt.Errorf("failed to get live object: %w", err)
 	}
 
-	liveExists := err == nil
+	// Log if we need to re-label an existing object
+	if liveExists && !HasManagedByLabel(live) {
+		logger.V(1).Info("Re-labeling object with managed-by label",
+			"kind", desired.GetKind(),
+			"namespace", desired.GetNamespace(),
+			"name", desired.GetName(),
+		)
+	}
 
 	// Step 2: Check opt-out annotation (mode: unmanaged)
 	if liveExists && overrides.IsUnmanaged(live) {

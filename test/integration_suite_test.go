@@ -22,6 +22,7 @@ import (
 var (
 	cfg       *rest.Config
 	k8sClient client.Client
+	apiReader client.Reader // Direct API reader for adoption scenarios
 	testEnv   *envtest.Environment
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -65,6 +66,10 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	// In tests without a manager, k8sClient is already a direct client
+	// Use it as the API reader for adoption scenarios
+	apiReader = k8sClient
 
 	// Wait for API server to be ready
 	Eventually(func() error {

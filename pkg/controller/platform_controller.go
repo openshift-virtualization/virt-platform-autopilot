@@ -76,8 +76,10 @@ type PlatformReconciler struct {
 }
 
 // NewPlatformReconciler creates a new platform reconciler
+// The apiReader enables object adoption (detecting and labeling unlabeled objects)
+// For tests with fake clients, pass nil for apiReader
 // The event recorder will be set automatically by SetupWithManager()
-func NewPlatformReconciler(c client.Client, namespace string) (*PlatformReconciler, error) {
+func NewPlatformReconciler(c client.Client, apiReader client.Reader, namespace string) (*PlatformReconciler, error) {
 	loader := assets.NewLoader()
 
 	registry, err := assets.NewRegistry(loader)
@@ -90,7 +92,7 @@ func NewPlatformReconciler(c client.Client, namespace string) (*PlatformReconcil
 		Namespace:          namespace,
 		loader:             loader,
 		registry:           registry,
-		patcher:            engine.NewPatcher(c, loader),
+		patcher:            engine.NewPatcher(c, apiReader, loader),
 		contextBuilder:     NewRenderContextBuilder(c),
 		conditionEvaluator: &assets.DefaultConditionEvaluator{},
 		crdChecker:         util.NewCRDChecker(c),
