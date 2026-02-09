@@ -56,16 +56,16 @@ func (d *DriftDetector) DetectDrift(ctx context.Context, desired, live *unstruct
 	// Perform SSA dry-run to see what would change
 	dryRunObj := desired.DeepCopy()
 
-	// Note: Using Patch with client.Apply for unstructured objects
-	// The client.Apply() method requires typed ApplyConfiguration objects
-	patchOptions := []client.PatchOption{
+	// Use modern Apply() API with dry-run for drift detection
+	applyOptions := []client.ApplyOption{
 		client.DryRunAll,
 		client.ForceOwnership,
 		client.FieldOwner(FieldManager),
 	}
 
-	//nolint:staticcheck // SA1019: client.Apply is deprecated but still needed for unstructured objects
-	err := d.client.Patch(ctx, dryRunObj, client.Apply, patchOptions...)
+	// Convert unstructured to ApplyConfiguration
+	applyConfig := client.ApplyConfigurationFromUnstructured(dryRunObj)
+	err := d.client.Apply(ctx, applyConfig, applyOptions...)
 	if err != nil {
 		return false, fmt.Errorf("failed to perform dry-run apply: %w", err)
 	}
