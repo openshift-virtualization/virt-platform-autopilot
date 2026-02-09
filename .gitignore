@@ -112,3 +112,4 @@ release/
 # Claude
 .claude/
 claude_assets/
+PROGRESS.md

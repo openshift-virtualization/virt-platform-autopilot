@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"math/rand"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,6 +25,13 @@ var (
 	testEnv   *envtest.Environment
 	ctx       context.Context
 	cancel    context.CancelFunc
+
+	// Common GVKs for tests
+	nsGVK = schema.GroupVersionKind{
+		Group:   "",
+		Version: "v1",
+		Kind:    "Namespace",
+	}
 )
 
 func TestIntegration(t *testing.T) {
@@ -76,3 +84,15 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 })
+
+// Test helpers
+
+// randString generates a random string of specified length
+func randString(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
+}
