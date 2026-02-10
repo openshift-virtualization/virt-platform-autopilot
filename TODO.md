@@ -116,7 +116,7 @@ This document tracks implementation progress against the original plan in `claud
 
 ---
 
-## Phase 3: Safety & Context-Awareness (Week 5-6) - ✅ COMPLETE
+## Phase 3: Safety & Context-Awareness (Week 5-6) - MOSTLY COMPLETE
 
 ### ✅ Anti-Thrashing Protection (CRITICAL)
 
@@ -151,6 +151,39 @@ This document tracks implementation progress against the original plan in `claud
 - [x] Integrated throughout Patcher reconciliation flow
 - [x] 14 unit tests + 5 integration tests
 - [x] Nil-safe (graceful degradation)
+
+### ⏳ Metrics & Alerting (Next Priority - Critical Observability Pillar)
+
+**Status**: Not implemented. Events are comprehensive, but metrics/alerts are our primary monitoring mechanism.
+
+**Context**: The operator doesn't use conditions or status reporting. **Metrics and OpenShift alerts are the primary reporting and monitoring mechanism**, following "Silent when fine, precise when broken" philosophy.
+
+**Implementation Plan** (see `claude_assets/metrics_plan.md`):
+- [ ] `pkg/observability/metrics.go` - Custom metrics package (5 metrics)
+  - virt_platform_compliance_status (Gauge) - Core health indicator
+  - virt_platform_thrashing_total (Counter) - Anti-thrashing events
+  - virt_platform_customization_info (Gauge) - Intentional deviations tracking
+  - virt_platform_missing_dependency (Gauge) - Missing CRD detection
+  - virt_platform_reconcile_duration_seconds (Histogram) - Performance
+- [ ] `assets/observability/prometheus-rules.yaml.tpl` - PrometheusRule with 3 alerts
+  - VirtPlatformSyncFailed (Critical) - Asset failed >15min
+  - VirtPlatformThrashingDetected (Warning) - Edit war detected
+  - VirtPlatformDependencyMissing (Warning) - Optional CRD missing
+- [ ] Instrumentation of reconciliation loop, throttler, CRD checker
+- [ ] Runbooks for each alert in `docs/runbooks/`
+
+**Testing Strategy** (Hybrid - No Prometheus Operator in Integration Tests):
+- [ ] Unit tests with `prometheus/testutil` (metric value verification)
+- [ ] `promtool test rules` for alert expression validation (offline YAML tests)
+- [ ] Integration tests for metric emission during reconciliation (envtest)
+- [ ] PrometheusRule YAML validation in integration tests (CRD only, no operator)
+- [ ] E2E tests for actual alert firing (future - real cluster with Prometheus)
+
+**Why This Matters:**
+- **Primary monitoring** - Metrics/alerts are how we report operator health
+- **Precise failure reporting** - Know exactly which asset failed and why
+- **Proactive detection** - Catch thrashing, missing deps, performance issues
+- **No status bloat** - Zero API Surface design means no custom status fields
 
 ### ✅ Soft Dependency Handling
 
@@ -565,7 +598,95 @@ All critical phases have been completed:
 - Risk of permission gaps as new assets are added
 - Automation enables faster asset development
 
-#### 2. **Add missing asset templates** (Production Readiness)
+#### 2. **Metrics & Alerting** (Observability - Critical Pillar)
+**Goal**: Production-ready monitoring and alerting following "Silent when fine, precise when broken" philosophy.
+
+**Context**: The operator has comprehensive event recording but lacks metrics/alerts. We don't use conditions or status reporting - metrics and OpenShift alerts are our primary monitoring and reporting mechanism.
+
+**Metrics Implementation**: `pkg/observability/metrics.go`
+- [ ] `virt_platform_compliance_status` (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
+  - Labels: kind, name, namespace
+  - Used by main VirtPlatformSyncFailed alert
+- [ ] `virt_platform_thrashing_total` (Counter) - Reconciliation throttling events
+  - Labels: kind, name, namespace
+  - Indicates "Edit War" scenarios
+- [ ] `virt_platform_customization_info` (Gauge) - Tracks intentional deviations
+  - Labels: kind, name, type (patch/ignore/unmanaged)
+  - Always 1, used for visibility ("Is this cluster stock or customized?")
+- [ ] `virt_platform_missing_dependency` (Gauge) - Missing CRD tracking
+  - Labels: gvk
+  - Distinguishes "Broken" from "Not Installed"
+- [ ] `virt_platform_reconcile_duration_seconds` (Histogram) - Performance monitoring
+  - Labels: kind, name
+  - High latency implies API server stress
+
+**Alert Definitions**: `assets/observability/prometheus-rules.yaml.tpl`
+- [ ] **VirtPlatformSyncFailed** (Critical) - Asset failed to apply for >15min
+  - Expr: `virt_platform_compliance_status == 0` for >15m
+  - Runbook: Check logs, webhook errors, resource locks
+- [ ] **VirtPlatformThrashingDetected** (Warning) - Edit war detected
+  - Expr: `increase(virt_platform_thrashing_total[10m]) > 5`
+  - Runbook: Check audit logs, consider unmanaged mode
+- [ ] **VirtPlatformDependencyMissing** (Warning) - Optional CRD missing
+  - Expr: `virt_platform_missing_dependency == 1`
+  - Runbook: Verify operator installation status
+
+**Integration Points:**
+- [ ] Instrument `pkg/controller/platform_controller.go` - Compliance & duration metrics
+- [ ] Instrument `pkg/throttling/token_bucket.go` - Thrashing counter
+- [ ] Instrument `pkg/util/crd_checker.go` - Missing dependency gauge
+- [ ] Instrument `pkg/engine/patcher.go` - Customization info metric
+
+**Testing Strategy** (Hybrid Approach):
+
+**Unit Tests** (Fast, No Prometheus Operator):
+- [ ] `pkg/observability/metrics_test.go` - Test metric values with `prometheus/testutil`
+  - Verify SetCompliance() changes gauge value
+  - Verify IncThrashing() increments counter
+  - Verify SetCustomization() sets info metric
+  - No Prometheus operator needed
+- [ ] `test/promtool/` - Prometheus alert rule unit tests
+  - Use `promtool test rules` to validate alert expressions
+  - Test alert firing conditions (time series scenarios)
+  - Test alert annotations and labels
+  - Format: YAML test files with input_series and expected alerts
+  - Run via `promtool test rules test/*.yml`
+
+**Integration Tests** (With envtest, No Prometheus Operator):
+- [ ] `test/metrics_integration_test.go` - Verify metrics change during reconciliation
+  - Test compliance metric changes after drift detection
+  - Test thrashing counter increases when throttled
+  - Test customization info metric for patch/ignore/unmanaged
+  - Use `prometheus/testutil.CollectAndCompare()` to verify values
+- [ ] `test/prometheus_rules_test.go` - Verify PrometheusRule YAML validity
+  - Render alert template
+  - Apply to envtest (with PrometheusRule CRD installed)
+  - Verify rule syntax is valid
+  - No operator needed - just validate YAML structure
+
+**E2E Tests** (Future - Real Cluster with Prometheus):
+- [ ] Test actual alert firing (VirtPlatformSyncFailed after 15min)
+- [ ] Test alert resolution when drift corrected
+- [ ] Query Prometheus API to verify metrics scraped
+- [ ] Validate runbook procedures
+
+**Runbooks:**
+- [ ] `docs/runbooks/VirtPlatformSyncFailed.md` - Troubleshooting sync failures
+- [ ] `docs/runbooks/VirtPlatformThrashingDetected.md` - Resolving edit wars
+- [ ] `docs/runbooks/VirtPlatformDependencyMissing.md` - Missing CRD guidance
+
+**Why This Approach:**
+- ✅ **Fast integration tests** - No Prometheus operator startup time (currently 157s suite)
+- ✅ **Test what we own** - Metric values, alert expressions, PrometheusRule validity
+- ✅ **promtool** - Industry standard for alert rule testing (offline, no cluster needed)
+- ✅ **Fits existing suite** - Extends envtest without heavyweight dependencies
+- ✅ **Save E2E for behavior** - Real alert firing tested later with full stack
+
+**Reference:**
+- Metrics specification: `claude_assets/metrics_plan.md`
+- Prometheus rule testing: https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/
+
+#### 3. **Add missing asset templates** (Production Readiness)
 **Phase 1 Always-On** (Missing 4/8):
 - [ ] `assets/machine-config/02-pci-passthrough.yaml.tpl` - IOMMU for PCI passthrough
 - [ ] `assets/machine-config/03-numa.yaml.tpl` - NUMA topology configuration
@@ -602,9 +723,10 @@ All critical phases have been completed:
 
 ### Why This Priority Order?
 
-1. **RBAC automation** (next immediate step) - Unblocks faster asset development
-2. **Asset templates** - Enable production use cases (virtualization at scale)
-3. **Documentation** - Enable user adoption and customization
+1. **RBAC automation** - Unblocks faster asset development
+2. **Metrics & Alerting** - Production monitoring (our primary reporting mechanism)
+3. **Asset templates** - Enable production use cases (virtualization at scale)
+4. **Documentation** - Enable user adoption and customization
 
 The platform now has all core differentiating features:
 - ✅ Annotation-based user control (Zero API Surface)
@@ -612,6 +734,8 @@ The platform now has all core differentiating features:
 - ✅ Complete Patched Baseline algorithm
 - ✅ GitOps best practices (labeling, adoption)
 - ✅ Comprehensive observability (events)
+- ✅ Asset failure handling (error aggregation)
 - ✅ Production-ready quality (295 tests, 0 flaky)
 - ✅ Automated CRD management
 - ✅ CI/CD infrastructure with code quality gates
+- ⏳ Metrics & Alerting (next critical pillar)
