@@ -115,9 +115,9 @@ func (r *Renderer) RenderMultiAsset(assetMeta *assets.AssetMetadata, ctx *pkgcon
 
 // renderTemplate renders a template string with the given context
 func (r *Renderer) renderTemplate(name, templateContent string, ctx *pkgcontext.RenderContext) ([]byte, error) {
-	// Create template with sprig functions
+	// Create template with safe functions only (not all of Sprig)
 	tmpl, err := template.New(name).
-		Funcs(sprig.TxtFuncMap()).
+		Funcs(safeFuncMap()).
 		Funcs(customFuncMap()).
 		Parse(templateContent)
 	if err != nil {
@@ -131,6 +131,65 @@ func (r *Renderer) renderTemplate(name, templateContent string, ctx *pkgcontext.
 	}
 
 	return buf.Bytes(), nil
+}
+
+// safeFuncMap returns a allowlist of safe Sprig functions
+// Explicitly excludes dangerous functions like:
+// - env/expandenv (leak secrets)
+// - genPrivateKey/genCertificate (CPU intensive, DoS risk)
+// - now/date (non-deterministic, causes drift)
+// - randAlpha/uuid (non-deterministic)
+func safeFuncMap() template.FuncMap {
+	// Get all Sprig functions
+	allFuncs := sprig.TxtFuncMap()
+
+	// Define safe function names to include
+	safeFuncs := template.FuncMap{}
+
+	// String functions (safe)
+	safeNames := []string{
+		// String manipulation
+		"upper", "lower", "title", "untitle", "repeat", "substr",
+		"nospace", "trim", "trimAll", "trimSuffix", "trimPrefix",
+		"replace", "plural", "snakecase", "camelcase", "kebabcase",
+		"contains", "hasPrefix", "hasSuffix", "quote", "squote",
+		"cat", "indent", "nindent", "wrap", "wrapWith",
+
+		// Logic and flow control
+		"default", "empty", "coalesce", "ternary",
+		"eq", "ne", "lt", "le", "gt", "ge",
+		"not", "and", "or",
+
+		// Type conversion
+		"toString", "toStrings", "toInt", "toInt64", "toFloat64",
+		"toBool", "toJson", "toPrettyJson", "toRawJson", "fromJson",
+		"toYaml", "fromYaml",
+
+		// Lists and collections
+		"list", "append", "prepend", "first", "rest", "last",
+		"initial", "reverse", "uniq", "without", "has", "compact",
+		"slice", "concat", "chunk", "splitList", "join",
+
+		// Dictionaries
+		"dict", "set", "unset", "hasKey", "pluck", "merge",
+		"mergeOverwrite", "keys", "pick", "omit", "values",
+
+		// Math operations
+		"add", "add1", "sub", "div", "mod", "mul", "max", "min",
+		"floor", "ceil", "round",
+
+		// Encoding (safe read-only operations)
+		"b64enc", "b64dec", "b32enc", "b32dec",
+	}
+
+	// Copy only allowlisted functions
+	for _, name := range safeNames {
+		if fn, exists := allFuncs[name]; exists {
+			safeFuncs[name] = fn
+		}
+	}
+
+	return safeFuncs
 }
 
 // customFuncMap provides custom template functions beyond sprig

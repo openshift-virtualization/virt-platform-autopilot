@@ -339,3 +339,89 @@ func BenchmarkTokenBucket_ConcurrentAccess(b *testing.B) {
 		}
 	})
 }
+
+func TestTokenBucket_CleanupStale(t *testing.T) {
+	t.Run("removes entries older than TTL", func(t *testing.T) {
+		tb := NewTokenBucket()
+
+		// Create some entries
+		tb.Allow("active-key")
+		tb.Allow("stale-key")
+
+		// Wait a bit
+		time.Sleep(10 * time.Millisecond)
+
+		// Access active-key again to update lastAccessed
+		tb.Allow("active-key")
+
+		// Cleanup with very short TTL should remove stale-key but keep active-key
+		removed := tb.CleanupStale(5 * time.Millisecond)
+
+		if removed != 1 {
+			t.Errorf("Expected 1 entry removed, got %d", removed)
+		}
+
+		// Verify stale-key was removed (new access creates new bucket)
+		tb.mu.RLock()
+		_, staleExists := tb.buckets["stale-key"]
+		_, activeExists := tb.buckets["active-key"]
+		tb.mu.RUnlock()
+
+		if staleExists {
+			t.Error("stale-key should have been removed")
+		}
+		if !activeExists {
+			t.Error("active-key should still exist")
+		}
+	})
+
+	t.Run("removes nothing when all entries are fresh", func(t *testing.T) {
+		tb := NewTokenBucket()
+
+		tb.Allow("key1")
+		tb.Allow("key2")
+		tb.Allow("key3")
+
+		// Cleanup with very long TTL should remove nothing
+		removed := tb.CleanupStale(1 * time.Hour)
+
+		if removed != 0 {
+			t.Errorf("Expected 0 entries removed, got %d", removed)
+		}
+	})
+
+	t.Run("removes all entries when all are stale", func(t *testing.T) {
+		tb := NewTokenBucket()
+
+		tb.Allow("key1")
+		tb.Allow("key2")
+
+		// Wait for entries to become stale
+		time.Sleep(10 * time.Millisecond)
+
+		// Cleanup should remove both
+		removed := tb.CleanupStale(5 * time.Millisecond)
+
+		if removed != 2 {
+			t.Errorf("Expected 2 entries removed, got %d", removed)
+		}
+
+		tb.mu.RLock()
+		count := len(tb.buckets)
+		tb.mu.RUnlock()
+
+		if count != 0 {
+			t.Errorf("Expected 0 buckets remaining, got %d", count)
+		}
+	})
+
+	t.Run("handles empty bucket map", func(t *testing.T) {
+		tb := NewTokenBucket()
+
+		removed := tb.CleanupStale(1 * time.Hour)
+
+		if removed != 0 {
+			t.Errorf("Expected 0 entries removed from empty bucket, got %d", removed)
+		}
+	})
+}

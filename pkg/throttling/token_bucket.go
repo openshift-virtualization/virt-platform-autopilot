@@ -28,6 +28,10 @@ const (
 
 	// DefaultWindow is the default time window for token refill
 	DefaultWindow = 1 * time.Minute
+
+	// DefaultTTL is the time after which unused bucket entries are cleaned up
+	// This prevents memory leaks from deleted resources
+	DefaultTTL = 1 * time.Hour
 )
 
 // TokenBucket implements a token bucket for rate limiting
@@ -40,8 +44,9 @@ type TokenBucket struct {
 
 // bucket represents a single token bucket for a resource
 type bucket struct {
-	tokens   int
-	lastFill time.Time
+	tokens       int
+	lastFill     time.Time
+	lastAccessed time.Time // Track when bucket was last used for TTL cleanup
 }
 
 // NewTokenBucket creates a new token bucket with default settings
@@ -64,18 +69,22 @@ func (tb *TokenBucket) Allow(key string) bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
+	now := time.Now()
 	b, exists := tb.buckets[key]
 	if !exists {
 		// First request for this key - create bucket with full capacity
 		tb.buckets[key] = &bucket{
-			tokens:   tb.capacity - 1, // Consume one token
-			lastFill: time.Now(),
+			tokens:       tb.capacity - 1, // Consume one token
+			lastFill:     now,
+			lastAccessed: now,
 		}
 		return true
 	}
 
+	// Update last accessed time
+	b.lastAccessed = now
+
 	// Check if window has expired and refill bucket
-	now := time.Now()
 	if now.Sub(b.lastFill) >= tb.window {
 		b.tokens = tb.capacity
 		b.lastFill = now
@@ -136,6 +145,26 @@ func (tb *TokenBucket) GetTokens(key string) int {
 	}
 
 	return b.tokens
+}
+
+// CleanupStale removes bucket entries that haven't been accessed for longer than ttl
+// This prevents memory leaks from deleted resources
+// Returns the number of entries removed
+func (tb *TokenBucket) CleanupStale(ttl time.Duration) int {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	now := time.Now()
+	removed := 0
+
+	for key, b := range tb.buckets {
+		if now.Sub(b.lastAccessed) > ttl {
+			delete(tb.buckets, key)
+			removed++
+		}
+	}
+
+	return removed
 }
 
 // ThrottledError is returned when an operation is throttled

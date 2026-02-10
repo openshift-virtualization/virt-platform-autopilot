@@ -36,8 +36,25 @@ const (
 
 var (
 	// sensitiveKinds defines resource kinds where JSON patches are blocked for security
+	// These resources have elevated privileges or control cluster security
 	sensitiveKinds = map[string]bool{
+		// Machine configuration - controls node-level config
 		"MachineConfig": true,
+		"KubeletConfig": true,
+
+		// RBAC resources - control permissions
+		"ClusterRole":        true,
+		"ClusterRoleBinding": true,
+		"Role":               true,
+		"RoleBinding":        true,
+		"ServiceAccount":     true,
+
+		// Security and admission control
+		"PodSecurityPolicy":              true,
+		"SecurityContextConstraints":     true,
+		"ValidatingWebhookConfiguration": true,
+		"MutatingWebhookConfiguration":   true,
+
 		// Note: We intentionally allow patching NodeHealthCheck to let users customize
 		// remediation settings, but we could add it here if needed
 	}

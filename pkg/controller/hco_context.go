@@ -23,13 +23,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
+	"github.com/kubevirt/virt-platform-operator/pkg/util"
 )
 
 // RenderContextBuilder builds RenderContext from cluster state
 type RenderContextBuilder struct {
-	client client.Client
+	client        client.Client
+	eventRecorder *util.EventRecorder
 }
 
 // NewRenderContextBuilder creates a new RenderContext builder
@@ -39,8 +42,15 @@ func NewRenderContextBuilder(c client.Client) *RenderContextBuilder {
 	}
 }
 
+// SetEventRecorder sets the event recorder for hardware detection events
+func (b *RenderContextBuilder) SetEventRecorder(recorder *util.EventRecorder) {
+	b.eventRecorder = recorder
+}
+
 // Build constructs a RenderContext from the current HCO state
 func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unstructured) (*pkgcontext.RenderContext, error) {
+	logger := log.FromContext(ctx)
+
 	if hco == nil {
 		return nil, fmt.Errorf("HCO object is nil")
 	}
@@ -48,7 +58,15 @@ func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unst
 	// Detect hardware capabilities
 	hardware, err := b.detectHardware(ctx)
 	if err != nil {
-		// Log warning but don't fail - use defaults
+		logger.Error(err, "Hardware detection failed, using defaults",
+			"hco", hco.GetName())
+
+		// Emit warning event with specific reason
+		if b.eventRecorder != nil {
+			b.eventRecorder.HardwareDetectionFailed(hco, err.Error())
+		}
+
+		// Use defaults - don't fail reconciliation
 		hardware = &pkgcontext.HardwareContext{}
 	}
 

@@ -29,6 +29,16 @@ import (
 	embeddedassets "github.com/kubevirt/virt-platform-operator/assets"
 )
 
+const (
+	// MaxYAMLSize is the maximum size of YAML content to prevent DoS attacks
+	// This protects against YAML bombs and excessively large manifests
+	MaxYAMLSize = 10 * 1024 * 1024 // 10MB
+
+	// MaxYAMLDepth is the maximum nesting depth for YAML structures
+	// This protects against deeply nested structures that cause stack overflow
+	MaxYAMLDepth = 100
+)
+
 // Loader handles loading and parsing assets from embedded filesystem
 type Loader struct {
 	fs embed.FS
@@ -119,17 +129,60 @@ func IsTemplate(path string) bool {
 }
 
 // ParseYAML parses YAML content into an unstructured object
+// Validates size and depth to prevent DoS attacks
 func ParseYAML(data []byte) (*unstructured.Unstructured, error) {
+	// Validate size to prevent DoS via large YAML documents
+	if len(data) > MaxYAMLSize {
+		return nil, fmt.Errorf("YAML content exceeds maximum size of %d bytes (got %d bytes)", MaxYAMLSize, len(data))
+	}
+
 	obj := &unstructured.Unstructured{}
 	if err := yaml.Unmarshal(data, obj); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
+
+	// Validate depth to prevent DoS via deeply nested structures
+	if depth := calculateDepth(obj.Object); depth > MaxYAMLDepth {
+		return nil, fmt.Errorf("YAML structure exceeds maximum nesting depth of %d (got %d)", MaxYAMLDepth, depth)
+	}
+
 	return obj, nil
+}
+
+// calculateDepth recursively calculates the maximum nesting depth of a map structure
+func calculateDepth(obj interface{}) int {
+	switch v := obj.(type) {
+	case map[string]interface{}:
+		maxDepth := 0
+		for _, value := range v {
+			depth := calculateDepth(value)
+			if depth > maxDepth {
+				maxDepth = depth
+			}
+		}
+		return 1 + maxDepth
+	case []interface{}:
+		maxDepth := 0
+		for _, item := range v {
+			depth := calculateDepth(item)
+			if depth > maxDepth {
+				maxDepth = depth
+			}
+		}
+		return 1 + maxDepth
+	default:
+		return 1
+	}
 }
 
 // ParseMultiYAML parses YAML content that may contain multiple documents
 // Returns a slice of unstructured objects
 func ParseMultiYAML(data []byte) ([]*unstructured.Unstructured, error) {
+	// Validate total size to prevent DoS
+	if len(data) > MaxYAMLSize {
+		return nil, fmt.Errorf("YAML content exceeds maximum size of %d bytes (got %d bytes)", MaxYAMLSize, len(data))
+	}
+
 	// Split by document separator
 	docs := strings.Split(string(data), "\n---\n")
 

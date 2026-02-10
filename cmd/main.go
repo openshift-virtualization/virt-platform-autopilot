@@ -169,6 +169,12 @@ func main() {
 	)
 	reconciler.SetEventRecorder(eventRecorder)
 
+	// Create cancellable context for graceful shutdown
+	// This allows the reconciler to trigger shutdown instead of calling os.Exit(0)
+	signalCtx := ctrl.SetupSignalHandler()
+	ctx, cancel := context.WithCancel(signalCtx)
+	reconciler.SetShutdownFunc(cancel)
+
 	if err = reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to setup platform controller")
 		os.Exit(1)
@@ -185,7 +191,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
