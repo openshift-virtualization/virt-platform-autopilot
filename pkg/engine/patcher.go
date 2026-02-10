@@ -29,6 +29,7 @@ import (
 
 	"github.com/kubevirt/virt-platform-operator/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
+	"github.com/kubevirt/virt-platform-operator/pkg/observability"
 	"github.com/kubevirt/virt-platform-operator/pkg/overrides"
 	"github.com/kubevirt/virt-platform-operator/pkg/throttling"
 	"github.com/kubevirt/virt-platform-operator/pkg/util"
@@ -89,6 +90,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		return false, nil
 	}
 
+	// Start reconciliation duration timer (will be observed at function exit)
+	timer := observability.ReconcileDurationTimer(desired)
+	defer timer.ObserveDuration()
+
 	// Get live object from cluster
 	// First try cached Get, then fall back to direct API call for adoption scenarios
 	live := &unstructured.Unstructured{}
@@ -145,6 +150,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"namespace", desired.GetNamespace(),
 			"objectName", desired.GetName(),
 		)
+		// Track unmanaged customization
+		observability.SetCustomization(desired, "unmanaged")
+
 		// Record event about unmanaged mode
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
 			p.eventRecorder.UnmanagedMode(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName())
@@ -157,6 +165,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	if liveExists {
 		liveAnnotations := live.GetAnnotations()
 		if patchStr, exists := liveAnnotations[overrides.PatchAnnotation]; exists && patchStr != "" {
+			// Track patch customization
+			observability.SetCustomization(desired, "patch")
+
 			// Copy patch annotation to desired temporarily
 			desiredAnnotations := desired.GetAnnotations()
 			if desiredAnnotations == nil {
@@ -187,6 +198,13 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 	// Step 4: Mask ignored fields → Effective Desired State
 	if liveExists {
+		// Check if ignore-fields annotation exists
+		liveAnnotations := live.GetAnnotations()
+		if _, exists := liveAnnotations[overrides.AnnotationIgnoreFields]; exists {
+			// Track ignore-fields customization
+			observability.SetCustomization(desired, "ignore")
+		}
+
 		desired, err = overrides.MaskIgnoredFields(desired, live)
 		if err != nil {
 			return false, fmt.Errorf("failed to mask ignored fields: %w", err)
@@ -238,6 +256,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 				"name", assetMeta.Name,
 				"key", resourceKey,
 			)
+			// Increment thrashing counter metric
+			observability.IncThrashing(desired)
+
 			// Record throttling event
 			if p.eventRecorder != nil && renderCtx.HCO != nil {
 				throttledErr := err.(*throttling.ThrottledError)
@@ -252,6 +273,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Step 7: Apply via Server-Side Apply
 	applied, err := p.applier.Apply(ctx, desired, true)
 	if err != nil {
+		// Set compliance status to failed (0)
+		observability.SetCompliance(desired, 0)
+
 		// Record apply failure event
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
 			p.eventRecorder.ApplyFailed(renderCtx.HCO, assetMeta.Name, err.Error())
@@ -266,6 +290,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"namespace", desired.GetNamespace(),
 			"objectName", desired.GetName(),
 		)
+		// Set compliance status to synced (1)
+		observability.SetCompliance(desired, 1)
+
 		// Record successful asset application
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
 			p.eventRecorder.AssetApplied(renderCtx.HCO, assetMeta.Name, desired.GetKind(), desired.GetNamespace(), desired.GetName())
@@ -274,6 +301,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		if liveExists && p.eventRecorder != nil && renderCtx.HCO != nil {
 			p.eventRecorder.DriftCorrected(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName())
 		}
+	} else {
+		// No drift detected or skipped - still compliant
+		observability.SetCompliance(desired, 1)
 	}
 
 	return applied, nil

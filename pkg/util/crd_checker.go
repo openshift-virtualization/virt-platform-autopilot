@@ -19,6 +19,7 @@ package util
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/kubevirt/virt-platform-operator/pkg/observability"
 )
 
 // ComponentKindMapping maps asset components to their CRD names
@@ -78,6 +81,8 @@ func NewCRDChecker(c client.Reader) *CRDChecker {
 func (c *CRDChecker) IsCRDInstalled(ctx context.Context, crdName string) (bool, error) {
 	// Check cache first
 	if exists, found := c.cache.get(crdName); found {
+		// Update metrics from cache (no API call needed)
+		c.updateDependencyMetric(crdName, !exists)
 		return exists, nil
 	}
 
@@ -89,6 +94,8 @@ func (c *CRDChecker) IsCRDInstalled(ctx context.Context, crdName string) (bool, 
 		if errors.IsNotFound(err) {
 			// CRD not found - cache negative result
 			c.cache.set(crdName, false)
+			// Emit missing dependency metric
+			c.updateDependencyMetric(crdName, true)
 			return false, nil
 		}
 		// Other error - don't cache, return error
@@ -97,7 +104,38 @@ func (c *CRDChecker) IsCRDInstalled(ctx context.Context, crdName string) (bool, 
 
 	// CRD exists - cache positive result
 	c.cache.set(crdName, true)
+	// Emit present dependency metric (0 = present)
+	c.updateDependencyMetric(crdName, false)
 	return true, nil
+}
+
+// updateDependencyMetric emits metrics for missing/present CRDs
+// Parses CRD name (format: <plural>.<group>) to extract group and kind
+func (c *CRDChecker) updateDependencyMetric(crdName string, missing bool) {
+	// Parse CRD name: "metallbs.metallb.io" → group="metallb.io", kind="MetalLB"
+	// We need to extract group and infer kind from the plural form
+	parts := strings.SplitN(crdName, ".", 2)
+	if len(parts) != 2 {
+		// Invalid CRD name format, skip metrics
+		return
+	}
+
+	plural := parts[0]
+	group := parts[1]
+
+	// Derive singular kind from plural (simple heuristic: remove trailing 's')
+	// This works for most CRDs: metallbs→MetalLB, deployments→Deployment
+	kind := strings.TrimSuffix(plural, "s")
+	// Capitalize first letter
+	if len(kind) > 0 {
+		kind = strings.ToUpper(kind[:1]) + kind[1:]
+	}
+
+	// Use a default version for metrics (doesn't affect functionality)
+	// The actual version doesn't matter for our "is this CRD missing?" metric
+	version := "v1beta1"
+
+	observability.SetMissingDependency(group, version, kind, missing)
 }
 
 // IsComponentSupported checks if a component's CRD is installed
