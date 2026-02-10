@@ -31,6 +31,17 @@ jobs:
       - name: Run go vet
         run: make vet
 
+      - name: Verify go mod vendoring
+        run: |
+          go mod tidy
+          go mod vendor
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Go vendoring is inconsistent. Please run 'go mod tidy && go mod vendor' locally and commit the changes."
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
