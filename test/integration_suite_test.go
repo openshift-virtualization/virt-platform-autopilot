@@ -37,6 +37,14 @@ var (
 
 func TestIntegration(t *testing.T) {
 	RegisterFailHandler(Fail)
+
+	// Set generous timeouts for CI environments with rate limiting
+	// CRD operations can take a long time when rate limited
+	SetDefaultEventuallyTimeout(2 * time.Minute)
+	SetDefaultEventuallyPollingInterval(1 * time.Second)
+	SetDefaultConsistentlyDuration(10 * time.Second)
+	SetDefaultConsistentlyPollingInterval(1 * time.Second)
+
 	RunSpecs(t, "Integration Test Suite")
 }
 

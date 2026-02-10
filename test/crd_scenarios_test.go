@@ -100,6 +100,8 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 	Context("when CRDs are removed", func() {
 		BeforeEach(func() {
 			// Ensure operators CRDs are installed for this test
+			// NOTE: This may take up to 2 minutes in CI due to rate limiting
+			// and potential CRD cleanup from previous tests
 			err := InstallCRDs(ctx, k8sClient, CRDSetOperators)
 			Expect(err).NotTo(HaveOccurred())
 

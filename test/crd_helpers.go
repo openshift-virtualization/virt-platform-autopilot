@@ -113,11 +113,12 @@ func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string)
 	// Create a fresh context with generous timeout to handle rate limiting
 	// We don't use the parent context here to avoid inheriting its deadline,
 	// which could be too short when combined with rate limiter delays
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Increased to 90s to handle CI rate limiting (was 30s, caused flakes)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	// Poll less frequently to reduce rate limiter pressure
-	return wait.PollUntilContextTimeout(timeoutCtx, 250*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(timeoutCtx, 500*time.Millisecond, 90*time.Second, true, func(ctx context.Context) (bool, error) {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 
@@ -147,11 +148,12 @@ func waitForCRDDeletion(ctx context.Context, c client.Client, crdName string) er
 	// Create a fresh context with generous timeout to handle rate limiting
 	// We don't use the parent context here to avoid inheriting its deadline,
 	// which could be too short when combined with rate limiter delays
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Increased to 120s to handle CI rate limiting (was 60s, caused flakes)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// Poll less frequently to reduce rate limiter pressure
-	return wait.PollUntilContextTimeout(timeoutCtx, 500*time.Millisecond, 60*time.Second, true, func(ctx context.Context) (bool, error) {
+	// Poll less frequently to reduce rate limiter pressure (1 second intervals)
+	return wait.PollUntilContextTimeout(timeoutCtx, 1*time.Second, 120*time.Second, true, func(ctx context.Context) (bool, error) {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 		err := c.Get(ctx, key, crd)
