@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# E2E test overlay - optimizations for faster test execution
+# 1. Disables leader election (unnecessary with 1 replica)
+# 2. Aggressive probe settings for faster restart detection
+# 3. Reduced startup validation timeout
+
+namespace: openshift-cnv
+
+resources:
+  - ../manager
+  - ../rbac
+
+patches:
+  # Remove --leader-elect flag and add fast-startup flag
+  - target:
+      kind: Deployment
+      name: virt-platform-operator
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value:
+          - --namespace=openshift-cnv
+          - --crd-validation-timeout=2s
+      # Aggressive readiness probe for faster restart detection
+      - op: replace
+        path: /spec/template/spec/containers/0/readinessProbe
+        value:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 1
+          periodSeconds: 1
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3
+      # Aggressive liveness probe
+      - op: replace
+        path: /spec/template/spec/containers/0/livenessProbe
+        value:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 3

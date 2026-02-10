@@ -62,6 +62,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var namespace string
+	var crdValidationTimeout time.Duration
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -70,6 +71,8 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&namespace, "namespace", "openshift-cnv",
 		"The namespace where HyperConverged CR is located.")
+	flag.DurationVar(&crdValidationTimeout, "crd-validation-timeout", 10*time.Second,
+		"Timeout for validating that required CRDs exist at startup.")
 
 	opts := zap.Options{
 		Development: true,
@@ -130,10 +133,10 @@ func main() {
 
 	// Validate HCO CRD exists before proceeding
 	// This operator requires the HyperConverged CRD to be installed by OLM
-	setupLog.Info("Validating HCO CRD exists")
+	setupLog.Info("Validating HCO CRD exists", "timeout", crdValidationTimeout)
 	crdChecker := util.NewCRDChecker(mgr.GetAPIReader())
 	// Use a short-lived context for validation (not the signal handler context)
-	validateCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	validateCtx, cancel := context.WithTimeout(context.Background(), crdValidationTimeout)
 	defer cancel()
 	hcoCRDInstalled, err := crdChecker.IsCRDInstalled(validateCtx, "hyperconvergeds.hco.kubevirt.io")
 	if err != nil {
