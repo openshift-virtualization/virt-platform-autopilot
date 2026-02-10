@@ -191,22 +191,37 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			desiredAnnotations[overrides.PatchAnnotation] = patchStr
 			desired.SetAnnotations(desiredAnnotations)
 
-			// Apply the patch (modifies desired in-place)
-			patched, err := overrides.ApplyJSONPatch(desired)
-			if err != nil {
-				logger.Error(err, "Failed to apply JSON patch, using desired without patch",
+			// Validate patch security before applying
+			if err := overrides.ValidateAnnotations(desired); err != nil {
+				logger.Error(err, "Patch validation failed, using desired without patch",
 					"name", assetMeta.Name,
+					"kind", desired.GetKind(),
 				)
-				// Record event about invalid patch
+				// Record event about invalid/insecure patch
 				if p.eventRecorder != nil && renderCtx.HCO != nil {
 					p.eventRecorder.InvalidPatch(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName(), err.Error())
 				}
-				// Continue with unpatched desired (don't fail reconciliation)
-			} else if patched && p.eventRecorder != nil && renderCtx.HCO != nil {
-				// Record successful patch application
-				// Count operations in the patch string
-				operations := countJSONPatchOperations(patchStr)
-				p.eventRecorder.PatchApplied(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName(), operations)
+				// Remove invalid patch annotation and continue with unpatched desired
+				delete(desiredAnnotations, overrides.PatchAnnotation)
+				desired.SetAnnotations(desiredAnnotations)
+			} else {
+				// Apply the patch (modifies desired in-place)
+				patched, err := overrides.ApplyJSONPatch(desired)
+				if err != nil {
+					logger.Error(err, "Failed to apply JSON patch, using desired without patch",
+						"name", assetMeta.Name,
+					)
+					// Record event about invalid patch
+					if p.eventRecorder != nil && renderCtx.HCO != nil {
+						p.eventRecorder.InvalidPatch(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName(), err.Error())
+					}
+					// Continue with unpatched desired (don't fail reconciliation)
+				} else if patched && p.eventRecorder != nil && renderCtx.HCO != nil {
+					// Record successful patch application
+					// Count operations in the patch string
+					operations := countJSONPatchOperations(patchStr)
+					p.eventRecorder.PatchApplied(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName(), operations)
+				}
 			}
 		}
 	}
@@ -367,6 +382,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 // ReconcileAssets reconciles multiple assets in order
 func (p *Patcher) ReconcileAssets(ctx context.Context, assetMetas []assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) (int, error) {
+	// Opportunistically clean up stale throttle bucket entries (prevents memory leak)
+	// This runs once per reconciliation loop to remove entries for deleted resources
+	p.throttle.CleanupStale(throttling.DefaultTTL)
+
 	appliedCount := 0
 	var failedAssets []string
 	var errors []error

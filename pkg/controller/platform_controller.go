@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -79,7 +80,10 @@ type PlatformReconciler struct {
 	conditionEvaluator *assets.DefaultConditionEvaluator
 	crdChecker         *util.CRDChecker
 	eventRecorder      *util.EventRecorder
-	watchedCRDs        map[string]bool // Track CRDs we're watching to avoid restart loops
+	watchedCRDs        map[string]bool    // Track CRDs we're watching to avoid restart loops
+	watchedCRDsMu      sync.RWMutex       // Protects watchedCRDs from concurrent access
+	shutdownFunc       context.CancelFunc // Graceful shutdown instead of os.Exit
+	shutdownMu         sync.Mutex         // Protects shutdownFunc
 }
 
 // NewPlatformReconciler creates a new platform reconciler
@@ -113,6 +117,30 @@ func (r *PlatformReconciler) SetEventRecorder(recorder *util.EventRecorder) {
 	// Also set it on the patcher so it can emit events during reconciliation
 	if r.patcher != nil {
 		r.patcher.SetEventRecorder(recorder)
+	}
+	// Also set it on the context builder for hardware detection events
+	if r.contextBuilder != nil {
+		r.contextBuilder.SetEventRecorder(recorder)
+	}
+}
+
+// SetShutdownFunc sets the shutdown function for graceful operator restart
+// This allows the reconciler to trigger graceful shutdown instead of os.Exit(0)
+func (r *PlatformReconciler) SetShutdownFunc(shutdownFunc context.CancelFunc) {
+	r.shutdownMu.Lock()
+	defer r.shutdownMu.Unlock()
+	r.shutdownFunc = shutdownFunc
+}
+
+// triggerShutdown initiates graceful shutdown (for CRD watch reconfiguration)
+func (r *PlatformReconciler) triggerShutdown() {
+	r.shutdownMu.Lock()
+	defer r.shutdownMu.Unlock()
+	if r.shutdownFunc != nil {
+		r.shutdownFunc()
+	} else {
+		// Fallback to os.Exit if shutdown func not set (for tests or legacy usage)
+		os.Exit(0)
 	}
 }
 
@@ -322,6 +350,20 @@ func (r *PlatformReconciler) isManagedCRD(crdName string) bool {
 	return false
 }
 
+// isWatchedCRD safely checks if a CRD is currently being watched
+func (r *PlatformReconciler) isWatchedCRD(crdName string) bool {
+	r.watchedCRDsMu.RLock()
+	defer r.watchedCRDsMu.RUnlock()
+	return r.watchedCRDs[crdName]
+}
+
+// markCRDAsWatched safely marks a CRD as being watched
+func (r *PlatformReconciler) markCRDAsWatched(crdName string) {
+	r.watchedCRDsMu.Lock()
+	defer r.watchedCRDsMu.Unlock()
+	r.watchedCRDs[crdName] = true
+}
+
 // crdEventHandler handles CRD creation/update/deletion events
 // On create/delete of managed CRDs: restart operator to reconfigure watches
 // On update: invalidate cache and trigger reconciliation
@@ -336,11 +378,11 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			}
 
 			// If this is a new managed CRD we aren't watching yet, restart to add watch
-			if r.isManagedCRD(crd.Name) && !r.watchedCRDs[crd.Name] {
+			if r.isManagedCRD(crd.Name) && !r.isWatchedCRD(crd.Name) {
 				logger.Info("New managed CRD created - restarting operator to configure watch for drift detection",
 					"crd", crd.Name)
-				// Exit cleanly so deployment restarts us with new watches
-				os.Exit(0)
+				// Trigger graceful shutdown so deployment restarts us with new watches
+				r.triggerShutdown()
 			}
 
 			// For non-managed CRDs, just invalidate cache and trigger reconciliation
@@ -359,11 +401,11 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			}
 
 			// If we were watching this CRD, restart to remove watch
-			if r.isManagedCRD(crd.Name) && r.watchedCRDs[crd.Name] {
+			if r.isManagedCRD(crd.Name) && r.isWatchedCRD(crd.Name) {
 				logger.Info("Watched CRD deleted - restarting operator to remove watch",
 					"crd", crd.Name)
-				// Exit cleanly so deployment restarts us without the watch
-				os.Exit(0)
+				// Trigger graceful shutdown so deployment restarts us without the watch
+				r.triggerShutdown()
 			}
 
 			// For non-managed CRDs, just invalidate cache and trigger reconciliation
@@ -468,7 +510,7 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			"gvk", gvk.String())
 
 		// Track that we're watching this CRD
-		r.watchedCRDs[crdName] = true
+		r.markCRDAsWatched(crdName)
 
 		builder = builder.Watches(
 			obj,

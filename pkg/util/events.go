@@ -46,14 +46,15 @@ const (
 	EventReasonUnmanagedMode   = "UnmanagedMode"
 
 	// Warning events
-	EventReasonDriftDetected       = "DriftDetected"
-	EventReasonThrottled           = "Throttled"
-	EventReasonThrashingDetected   = "ThrashingDetected"
-	EventReasonInvalidPatch        = "InvalidPatch"
-	EventReasonInvalidIgnoreFields = "InvalidIgnoreFields"
-	EventReasonCRDMissing          = "CRDMissing"
-	EventReasonApplyFailed         = "ApplyFailed"
-	EventReasonRenderFailed        = "RenderFailed"
+	EventReasonDriftDetected           = "DriftDetected"
+	EventReasonThrottled               = "Throttled"
+	EventReasonThrashingDetected       = "ThrashingDetected"
+	EventReasonInvalidPatch            = "InvalidPatch"
+	EventReasonInvalidIgnoreFields     = "InvalidIgnoreFields"
+	EventReasonCRDMissing              = "CRDMissing"
+	EventReasonApplyFailed             = "ApplyFailed"
+	EventReasonRenderFailed            = "RenderFailed"
+	EventReasonHardwareDetectionFailed = "HardwareDetectionFailed"
 )
 
 // EventRecorder wraps the Kubernetes event recorder with helper methods
@@ -168,4 +169,10 @@ func (e *EventRecorder) ReconcileSucceeded(object runtime.Object, appliedCount, 
 func (e *EventRecorder) NoDriftDetected(object runtime.Object, kind, namespace, name string) {
 	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonNoDriftDetected, "NoDriftDetected",
 		"No drift detected for %s/%s/%s", kind, namespace, name)
+}
+
+// HardwareDetectionFailed records that hardware detection failed (using defaults)
+func (e *EventRecorder) HardwareDetectionFailed(object runtime.Object, reason string) {
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonHardwareDetectionFailed, "HardwareDetectionFailed",
+		"Hardware detection failed, using defaults: %s", reason)
 }
