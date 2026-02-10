@@ -131,6 +131,26 @@ deploy_operator() {
     log_info "Operator deployed successfully"
 }
 
+# Deploy operator manifests for E2E tests (without leader election)
+deploy_operator_e2e() {
+    log_info "Deploying operator for E2E tests (leader election disabled)"
+
+    # Determine the actual image name to use
+    # Podman prefixes with localhost/, so we need to use that in the deployment
+    local deploy_image="$IMAGE_NAME"
+    if [ "$(detect_runtime)" = "podman" ] && [[ "$IMAGE_NAME" != localhost/* ]]; then
+        deploy_image="localhost/$IMAGE_NAME"
+    fi
+
+    # Use E2E kustomization overlay and patch the image
+    kubectl kustomize config/e2e | \
+        sed "s|image:.*|image: $deploy_image|" | \
+        sed "s|imagePullPolicy:.*|imagePullPolicy: Never|" | \
+        kubectl apply --context "kind-$CLUSTER_NAME" -f -
+
+    log_info "Operator deployed successfully (E2E mode)"
+}
+
 # Wait for operator to be ready
 wait_for_operator() {
     log_info "Waiting for operator to be ready..."
@@ -209,7 +229,7 @@ deploy_prebuilt() {
     load_image
     create_namespace
     install_hco_crd
-    deploy_operator
+    deploy_operator_e2e  # Use E2E deployment (no leader election)
     wait_for_operator
     show_status
 
