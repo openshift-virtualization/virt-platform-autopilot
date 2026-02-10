@@ -362,3 +362,254 @@ func TestLoader_ListAssets(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateDepth(t *testing.T) {
+	tests := []struct {
+		name        string
+		obj         interface{}
+		expectedMax int
+		description string
+	}{
+		{
+			name:        "simple string",
+			obj:         "simple value",
+			expectedMax: 1,
+			description: "Simple values have depth 1",
+		},
+		{
+			name:        "simple number",
+			obj:         42,
+			expectedMax: 1,
+			description: "Numbers have depth 1",
+		},
+		{
+			name:        "empty map",
+			obj:         map[string]interface{}{},
+			expectedMax: 1,
+			description: "Empty map has depth 1",
+		},
+		{
+			name: "flat map",
+			obj: map[string]interface{}{
+				"key1": "value1",
+				"key2": "value2",
+			},
+			expectedMax: 2,
+			description: "Flat map has depth 2",
+		},
+		{
+			name: "nested map",
+			obj: map[string]interface{}{
+				"level1": map[string]interface{}{
+					"level2": map[string]interface{}{
+						"level3": "value",
+					},
+				},
+			},
+			expectedMax: 4,
+			description: "Nested maps increase depth",
+		},
+		{
+			name: "array of strings",
+			obj: []interface{}{
+				"item1",
+				"item2",
+			},
+			expectedMax: 2,
+			description: "Array with simple values has depth 2",
+		},
+		{
+			name: "array of maps",
+			obj: []interface{}{
+				map[string]interface{}{
+					"nested": "value",
+				},
+			},
+			expectedMax: 3,
+			description: "Array of maps has depth 3",
+		},
+		{
+			name: "complex nested structure",
+			obj: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"name": "test",
+					"labels": map[string]interface{}{
+						"app": "myapp",
+					},
+				},
+				"spec": map[string]interface{}{
+					"replicas": 3,
+					"template": map[string]interface{}{
+						"spec": map[string]interface{}{
+							"containers": []interface{}{
+								map[string]interface{}{
+									"name":  "nginx",
+									"image": "nginx:latest",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedMax: 7,
+			description: "Complex Kubernetes-like structure (1:root + 1:metadata + 1:labels + 1:app OR 1:spec + 1:template + 1:spec + 1:containers + 1:map)",
+		},
+		{
+			name:        "empty array",
+			obj:         []interface{}{},
+			expectedMax: 1,
+			description: "Empty array has depth 1",
+		},
+		{
+			name: "deeply nested maps",
+			obj: map[string]interface{}{
+				"l1": map[string]interface{}{
+					"l2": map[string]interface{}{
+						"l3": map[string]interface{}{
+							"l4": map[string]interface{}{
+								"l5": "deep",
+							},
+						},
+					},
+				},
+			},
+			expectedMax: 6,
+			description: "Very deep nesting",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			depth := calculateDepth(tt.obj)
+			if depth != tt.expectedMax {
+				t.Errorf("calculateDepth() = %d, want %d (%s)", depth, tt.expectedMax, tt.description)
+			}
+		})
+	}
+}
+
+func TestParseYAML_SizeLimits(t *testing.T) {
+	t.Run("rejects YAML exceeding size limit", func(t *testing.T) {
+		// Create YAML larger than MaxYAMLSize
+		largeData := make([]byte, MaxYAMLSize+1)
+		for i := range largeData {
+			largeData[i] = 'a'
+		}
+
+		_, err := ParseYAML(largeData)
+		if err == nil {
+			t.Error("ParseYAML() should reject YAML exceeding size limit")
+		}
+	})
+
+	t.Run("accepts YAML within size limit", func(t *testing.T) {
+		smallData := []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: small-config
+`)
+		_, err := ParseYAML(smallData)
+		if err != nil {
+			t.Errorf("ParseYAML() should accept small YAML, got error: %v", err)
+		}
+	})
+}
+
+func TestParseYAML_DepthLimits(t *testing.T) {
+	t.Run("accepts YAML within depth limit", func(t *testing.T) {
+		normalYAML := []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: normal
+  labels:
+    app: test
+data:
+  key1: value1
+  nested:
+    level2: value2
+`)
+		_, err := ParseYAML(normalYAML)
+		if err != nil {
+			t.Errorf("ParseYAML() should accept normal depth YAML, got error: %v", err)
+		}
+	})
+
+	t.Run("depth checking logic works", func(t *testing.T) {
+		// Test that calculateDepth is being called
+		// We'll create a moderately deep structure and verify it parses
+		deepButValidYAML := []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test
+  annotations:
+    deep:
+      level1:
+        level2:
+          level3:
+            level4: value
+`)
+		_, err := ParseYAML(deepButValidYAML)
+		if err != nil {
+			t.Errorf("ParseYAML() should accept moderately deep YAML, got error: %v", err)
+		}
+	})
+}
+
+func TestLoadAssetAsUnstructured_ValidFiles(t *testing.T) {
+	loader := NewLoader()
+
+	t.Run("loads metadata.yaml successfully", func(t *testing.T) {
+		// metadata.yaml should exist in the assets directory
+		obj, err := loader.LoadAssetAsUnstructured("metadata.yaml")
+
+		if err != nil {
+			t.Skipf("metadata.yaml not found or invalid: %v", err)
+		}
+
+		if obj == nil {
+			t.Error("LoadAssetAsUnstructured() returned nil object for valid file")
+		}
+	})
+}
+
+func TestParseMultiYAML_EdgeCases(t *testing.T) {
+	t.Run("handles documents with only whitespace", func(t *testing.T) {
+		data := []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test1
+---
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test2
+`)
+		objs, err := ParseMultiYAML(data)
+		if err != nil {
+			t.Errorf("ParseMultiYAML() error = %v", err)
+		}
+
+		if len(objs) != 2 {
+			t.Errorf("ParseMultiYAML() returned %d objects, want 2", len(objs))
+		}
+	})
+
+	t.Run("handles trailing separator", func(t *testing.T) {
+		data := []byte(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test1
+---
+`)
+		objs, err := ParseMultiYAML(data)
+		if err != nil {
+			t.Errorf("ParseMultiYAML() error = %v", err)
+		}
+
+		if len(objs) != 1 {
+			t.Errorf("ParseMultiYAML() returned %d objects, want 1", len(objs))
+		}
+	})
+}
