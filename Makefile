@@ -89,7 +89,28 @@ undeploy: ## Undeploy controller from the cluster
 
 .PHONY: generate-rbac
 generate-rbac: ## Generate RBAC from assets
-	go run cmd/rbac-gen/main.go -output config/rbac/role.yaml
+	@echo "Generating RBAC from assets..."
+	@go run cmd/rbac-gen/main.go
+
+.PHONY: verify-rbac
+verify-rbac: ## Verify RBAC matches generated (for CI)
+	@echo "Verifying RBAC is up-to-date..."
+	@go run cmd/rbac-gen/main.go --dry-run > /tmp/generated-rbac.yaml
+	@if ! diff -u config/rbac/role.yaml /tmp/generated-rbac.yaml; then \
+		echo ""; \
+		echo "❌ ERROR: RBAC is out of sync with assets!"; \
+		echo ""; \
+		echo "The committed config/rbac/role.yaml does not match the generated RBAC."; \
+		echo ""; \
+		echo "To fix:"; \
+		echo "  1. Run: make generate-rbac"; \
+		echo "  2. Commit the updated config/rbac/role.yaml"; \
+		echo ""; \
+		rm -f /tmp/generated-rbac.yaml; \
+		exit 1; \
+	fi
+	@rm -f /tmp/generated-rbac.yaml
+	@echo "✓ RBAC is up-to-date"
 
 .PHONY: update-crds
 update-crds: ## Update CRD collection from upstream
