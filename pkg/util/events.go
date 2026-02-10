@@ -50,6 +50,7 @@ const (
 	// Warning events
 	EventReasonDriftDetected       = "DriftDetected"
 	EventReasonThrottled           = "Throttled"
+	EventReasonThrashingDetected   = "ThrashingDetected"
 	EventReasonInvalidPatch        = "InvalidPatch"
 	EventReasonInvalidIgnoreFields = "InvalidIgnoreFields"
 	EventReasonCRDMissing          = "CRDMissing"
@@ -109,6 +110,20 @@ func (e *EventRecorder) InvalidIgnoreFields(object runtime.Object, kind, namespa
 func (e *EventRecorder) Throttled(object runtime.Object, kind, namespace, name string, capacity int, window string) {
 	msg := fmt.Sprintf("Update throttled for %s/%s/%s (limit: %d updates per %s)", kind, namespace, name, capacity, window)
 	e.recorder.Event(object, EventTypeWarning, EventReasonThrottled, msg)
+}
+
+// ThrashingDetected records that an edit war was detected and reconciliation was paused
+func (e *EventRecorder) ThrashingDetected(object runtime.Object, kind, namespace, name string, attempts int) {
+	msg := fmt.Sprintf(
+		"Edit war detected for %s/%s/%s after %d consecutive throttles. "+
+			"Reconciliation paused. Another actor is modifying this resource, "+
+			"conflicting with operator management. Remove annotation '%s=true' "+
+			"to resume, or set '%s=unmanaged' if external management is intentional.",
+		kind, namespace, name, attempts,
+		"platform.kubevirt.io/reconcile-paused",
+		"platform.kubevirt.io/mode",
+	)
+	e.recorder.Event(object, EventTypeWarning, EventReasonThrashingDetected, msg)
 }
 
 // AssetSkipped records that an asset was skipped (conditions not met)

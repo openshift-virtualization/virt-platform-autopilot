@@ -37,12 +37,13 @@ import (
 
 // Patcher implements the Patched Baseline algorithm
 type Patcher struct {
-	renderer      *Renderer
-	applier       *Applier
-	driftDetector *DriftDetector
-	throttle      *throttling.TokenBucket
-	client        client.Client
-	eventRecorder *util.EventRecorder
+	renderer          *Renderer
+	applier           *Applier
+	driftDetector     *DriftDetector
+	throttle          *throttling.TokenBucket
+	thrashingDetector *throttling.ThrashingDetector
+	client            client.Client
+	eventRecorder     *util.EventRecorder
 }
 
 // NewPatcher creates a new patcher
@@ -50,11 +51,12 @@ type Patcher struct {
 // For tests with fake clients, pass nil for apiReader
 func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader) *Patcher {
 	return &Patcher{
-		renderer:      NewRenderer(loader),
-		applier:       NewApplier(c, apiReader),
-		driftDetector: NewDriftDetector(c),
-		throttle:      throttling.NewTokenBucket(),
-		client:        c,
+		renderer:          NewRenderer(loader),
+		applier:           NewApplier(c, apiReader),
+		driftDetector:     NewDriftDetector(c),
+		throttle:          throttling.NewTokenBucket(),
+		thrashingDetector: throttling.NewThrashingDetector(),
+		client:            c,
 	}
 }
 
@@ -140,6 +142,19 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"namespace", desired.GetNamespace(),
 			"name", desired.GetName(),
 		)
+	}
+
+	// Step 1.5: Check if reconciliation is paused due to edit war
+	if liveExists && overrides.IsPaused(live) {
+		logger.Info("Reconciliation paused due to edit war detection",
+			"name", assetMeta.Name,
+			"kind", desired.GetKind(),
+			"namespace", desired.GetNamespace(),
+			"objectName", desired.GetName(),
+		)
+		// Don't emit metrics or events repeatedly - annotation is self-documenting
+		// User must remove annotation to resume reconciliation
+		return false, nil
 	}
 
 	// Step 2: Check opt-out annotation (mode: unmanaged)
@@ -243,7 +258,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		p.eventRecorder.DriftDetected(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName())
 	}
 
-	// Step 6: Anti-thrashing gate
+	// Step 6: Anti-thrashing gate (two-level protection)
 	resourceKey := throttling.MakeResourceKey(
 		desired.GetNamespace(),
 		desired.GetName(),
@@ -252,14 +267,52 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 	if err := p.throttle.Record(resourceKey); err != nil {
 		if throttling.IsThrottled(err) {
+			// Token bucket exhausted - check thrashing detector
+			shouldPause := p.thrashingDetector.RecordThrottle(resourceKey)
+
+			if shouldPause {
+				// Edit war detected - pause reconciliation
+				logger.Info("Edit war detected, pausing reconciliation",
+					"name", assetMeta.Name,
+					"key", resourceKey,
+					"attempts", p.thrashingDetector.GetAttempts(resourceKey),
+				)
+
+				// Emit metric only once when threshold is reached
+				if p.thrashingDetector.ShouldEmitMetric(resourceKey) {
+					observability.IncThrashing(desired)
+				}
+
+				// Set pause annotation on live object
+				if liveExists {
+					if err := p.setPauseAnnotation(ctx, live); err != nil {
+						logger.Error(err, "Failed to set pause annotation", "key", resourceKey)
+						// Continue anyway - operator will retry
+					}
+				}
+
+				// Record event explaining the pause and recovery steps
+				if p.eventRecorder != nil && renderCtx.HCO != nil {
+					p.eventRecorder.ThrashingDetected(
+						renderCtx.HCO,
+						desired.GetKind(),
+						desired.GetNamespace(),
+						desired.GetName(),
+						p.thrashingDetector.GetAttempts(resourceKey),
+					)
+				}
+
+				return false, fmt.Errorf("reconciliation paused due to edit war (threshold: %d throttles)", throttling.ThrashingThreshold)
+			}
+
+			// First or second throttle - log and continue
 			logger.Info("Asset update throttled (anti-thrashing)",
 				"name", assetMeta.Name,
 				"key", resourceKey,
+				"attempts", p.thrashingDetector.GetAttempts(resourceKey),
 			)
-			// Increment thrashing counter metric
-			observability.IncThrashing(desired)
 
-			// Record throttling event
+			// Record throttling event (short-term rate limiting)
 			if p.eventRecorder != nil && renderCtx.HCO != nil {
 				throttledErr := err.(*throttling.ThrottledError)
 				window := throttledErr.Window.String()
@@ -292,6 +345,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		)
 		// Set compliance status to synced (1)
 		observability.SetCompliance(desired, 1)
+
+		// Reset thrashing detector - successful reconciliation resolves edit war
+		p.thrashingDetector.RecordSuccess(resourceKey)
 
 		// Record successful asset application
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
@@ -352,6 +408,37 @@ func (p *Patcher) ReconcileAssets(ctx context.Context, assetMetas []assets.Asset
 	}
 
 	return appliedCount, nil
+}
+
+// setPauseAnnotation sets the reconcile-paused annotation on a live object
+// This annotation signals that reconciliation should stop due to an edit war
+func (p *Patcher) setPauseAnnotation(ctx context.Context, obj *unstructured.Unstructured) error {
+	// Get fresh copy to avoid conflicts
+	fresh := &unstructured.Unstructured{}
+	fresh.SetGroupVersionKind(obj.GroupVersionKind())
+	objKey := client.ObjectKey{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}
+
+	if err := p.client.Get(ctx, objKey, fresh); err != nil {
+		return fmt.Errorf("failed to get fresh copy for pause annotation: %w", err)
+	}
+
+	// Add pause annotation
+	annotations := fresh.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[overrides.AnnotationReconcilePaused] = "true"
+	fresh.SetAnnotations(annotations)
+
+	// Update the object
+	if err := p.client.Update(ctx, fresh); err != nil {
+		return fmt.Errorf("failed to set pause annotation: %w", err)
+	}
+
+	return nil
 }
 
 // countJSONPatchOperations counts the number of operations in a JSON patch string

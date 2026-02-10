@@ -28,6 +28,10 @@ const (
 
 	// ModeUnmanaged indicates the operator should not manage this resource
 	ModeUnmanaged = "unmanaged"
+
+	// AnnotationReconcilePaused is set when an edit war is detected
+	// The operator will skip reconciliation while this annotation is present
+	AnnotationReconcilePaused = "platform.kubevirt.io/reconcile-paused"
 )
 
 var (
@@ -72,6 +76,22 @@ func IsUnmanaged(obj *unstructured.Unstructured) bool {
 
 	mode, exists := annotations[AnnotationMode]
 	return exists && mode == ModeUnmanaged
+}
+
+// IsPaused checks if a resource has the reconcile-paused annotation
+// This annotation is set by the operator when an edit war is detected
+func IsPaused(obj *unstructured.Unstructured) bool {
+	if obj == nil {
+		return false
+	}
+
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	val, exists := annotations[AnnotationReconcilePaused]
+	return exists && val == "true"
 }
 
 // ValidateAnnotations validates all override annotations on an object
