@@ -136,7 +136,7 @@ wait_for_operator() {
     log_info "Waiting for operator to be ready..."
 
     kubectl wait --for=condition=available --timeout=120s \
-        deployment/virt-platform-operator-controller-manager \
+        deployment/virt-platform-operator \
         -n "$NAMESPACE" \
         --context "kind-$CLUSTER_NAME" || {
         log_warn "Operator did not become ready in time"
@@ -194,7 +194,7 @@ redeploy() {
     load_image
 
     log_info "Restarting operator pods"
-    kubectl rollout restart deployment/virt-platform-operator-controller-manager \
+    kubectl rollout restart deployment/virt-platform-operator \
         -n "$NAMESPACE" \
         --context "kind-$CLUSTER_NAME"
 
@@ -202,10 +202,32 @@ redeploy() {
     show_status
 }
 
+# Deploy with pre-built image (skips build step)
+# Used by E2E tests where image is already built
+deploy_prebuilt() {
+    check_cluster
+    load_image
+    create_namespace
+    install_hco_crd
+    deploy_operator
+    wait_for_operator
+    show_status
+
+    echo ""
+    log_info "✓ Deployment complete!"
+    echo ""
+    log_info "Next steps:"
+    echo "  - View logs: make logs-local"
+    echo "  - Check HCO: kubectl get hyperconverged -n openshift-cnv"
+}
+
 # Main script
 case "${1:-deploy}" in
     deploy)
         deploy
+        ;;
+    deploy-prebuilt)
+        deploy_prebuilt
         ;;
     redeploy)
         redeploy
@@ -226,15 +248,16 @@ case "${1:-deploy}" in
         load_image
         ;;
     *)
-        echo "Usage: $0 {deploy|redeploy|undeploy|status|build|load}"
+        echo "Usage: $0 {deploy|deploy-prebuilt|redeploy|undeploy|status|build|load}"
         echo ""
         echo "Commands:"
-        echo "  deploy      Full deployment (build + load + deploy + wait)"
-        echo "  redeploy    Quick redeploy (rebuild + reload image + restart)"
-        echo "  undeploy    Remove operator from cluster"
-        echo "  status      Show operator status"
-        echo "  build       Build operator image only"
-        echo "  load        Load image into cluster only"
+        echo "  deploy          Full deployment (build + load + deploy + wait)"
+        echo "  deploy-prebuilt Deploy with pre-built image (load + deploy + wait)"
+        echo "  redeploy        Quick redeploy (rebuild + reload image + restart)"
+        echo "  undeploy        Remove operator from cluster"
+        echo "  status          Show operator status"
+        echo "  build           Build operator image only"
+        echo "  load            Load image into cluster only"
         exit 1
         ;;
 esac

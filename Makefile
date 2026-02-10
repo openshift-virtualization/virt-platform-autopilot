@@ -23,7 +23,11 @@ GINKGO = $(shell pwd)/bin/ginkgo
 
 .PHONY: test-integration
 test-integration: envtest ginkgo ## Run integration tests with envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(shell pwd)/bin -p path)" $(GINKGO) -v --trace ./test/...
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(shell pwd)/bin -p path)" $(GINKGO) -v --trace ./test/
+
+.PHONY: test-e2e
+test-e2e: docker-build ## Run E2E tests on kind cluster
+	./hack/run-e2e.sh
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary
@@ -39,6 +43,15 @@ LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
+# Container tool - auto-detects docker or podman, or can be overridden
+# Usage: make docker-build
+#        CONTAINER_TOOL=podman make docker-build
+CONTAINER_TOOL ?= $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+
+ifeq ($(CONTAINER_TOOL),)
+$(error Neither docker nor podman found in PATH. Please install one of them.)
+endif
+
 ##@ Build
 
 .PHONY: build
@@ -50,12 +63,12 @@ run: fmt vet ## Run from your host
 	go run cmd/main.go
 
 .PHONY: docker-build
-docker-build: ## Build docker image
-	docker build -t virt-platform-operator:latest .
+docker-build: ## Build container image
+	$(CONTAINER_TOOL) build -t virt-platform-operator:latest .
 
 .PHONY: docker-push
-docker-push: ## Push docker image
-	docker push virt-platform-operator:latest
+docker-push: ## Push container image
+	$(CONTAINER_TOOL) push virt-platform-operator:latest
 
 ##@ Deployment
 
