@@ -1,4 +1,4 @@
-name: E2E Tests
+name: Tests
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   test-e2e:
-    name: Run on Ubuntu
+    name: End-to-End Tests
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code

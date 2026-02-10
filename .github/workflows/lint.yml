@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    name: Run on Ubuntu
+    name: Code Linting (Go + Shell)
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -18,6 +18,18 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Run go fmt
+        run: |
+          make fmt
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Code is not formatted. Please run 'make fmt' locally and commit the changes."
+            git diff
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: make vet
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v8
