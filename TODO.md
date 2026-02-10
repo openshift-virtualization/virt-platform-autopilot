@@ -44,13 +44,14 @@ This document tracks implementation progress against the original plan in `claud
 - [x] **envtest integration testing** - Real API server with 30 integration tests
 - [x] **GitOps labeling and object adoption** - Cache optimization
 
-### ⏳ Still Missing (Optional)
-- [ ] **RBAC generation tool** (cmd/rbac-gen/main.go)
-  - Current: Manually maintained config/rbac/role.yaml
-  - Nice to have: Build tool to scan assets → generate RBAC
-- [ ] **CRD update script** (hack/update-crds.sh)
-  - Current: Manual CRD collection
-  - Nice to have: Automated fetching from upstream
+### ✅ Completed (Infrastructure Automation)
+- [x] **RBAC generation tool** ✅ COMPLETE (cmd/rbac-gen/main.go)
+  - ✅ Build tool to scan assets → generate RBAC
+  - ✅ Integrated with `make generate-rbac` and CI verification
+  - ✅ Automatically maintains config/rbac/role.yaml
+- [x] **CRD update script** ✅ COMPLETE (hack/update-crds.sh)
+  - ✅ Automated fetching from upstream
+  - ✅ Integrated with `make update-crds` and `make verify-crds`
 
 ---
 
@@ -120,19 +121,26 @@ This document tracks implementation progress against the original plan in `claud
 
 ### ✅ Anti-Thrashing Protection (CRITICAL)
 
-**Status**: ✅ Fully implemented and tested!
+**Status**: ✅ Fully implemented and tested with pause-with-annotation enhancement!
 
 **Implemented**:
-- [x] `pkg/throttling/token_bucket.go` - Token bucket implementation
+- [x] `pkg/throttling/token_bucket.go` - Token bucket implementation (short-term protection)
   - Per-resource key tracking
   - Configurable capacity (default: 5 updates) and window (default: 1 minute)
   - Automatic refill on window expiration
   - Returns ThrottledError for backpressure
   - 26 unit tests, 97.4% coverage
-- [x] Integrated into pkg/engine/patcher.go (Step 6 of algorithm)
-- [x] Event recording for "Throttled" events
+- [x] `pkg/throttling/thrashing_detector.go` - Thrashing detector (long-term protection)
+  - Detects edit wars via consecutive throttle tracking
+  - Threshold: 3 consecutive throttles → pause reconciliation
+  - Sets `platform.kubevirt.io/reconcile-paused=true` annotation
+  - Metric emission once per episode (stable, no flapping)
+  - 11 unit tests + 8 integration tests
+- [x] Integrated into pkg/engine/patcher.go (Step 1.5: pause check, Step 6: throttling)
+- [x] Event recording for "Throttled" and "ThrashingDetected" events
+- [x] Complete design documentation in `docs/anti-thrashing-design.md`
 
-**Result**: Prevents reconciliation storms from conflicting user modifications.
+**Result**: Two-level protection preventing reconciliation storms with GitOps-friendly pause mechanism.
 
 ### ✅ Event Recording
 
@@ -152,38 +160,41 @@ This document tracks implementation progress against the original plan in `claud
 - [x] 14 unit tests + 5 integration tests
 - [x] Nil-safe (graceful degradation)
 
-### ⏳ Metrics & Alerting (Next Priority - Critical Observability Pillar)
+### ✅ Metrics & Alerting (COMPLETE - Critical Observability Pillar)
 
-**Status**: Not implemented. Events are comprehensive, but metrics/alerts are our primary monitoring mechanism.
+**Status**: ✅ Fully implemented and tested! Metrics infrastructure complete.
 
-**Context**: The operator doesn't use conditions or status reporting. **Metrics and OpenShift alerts are the primary reporting and monitoring mechanism**, following "Silent when fine, precise when broken" philosophy.
+**Context**: The operator doesn't use conditions or status reporting. **Metrics are the primary reporting and monitoring mechanism**, following "Silent when fine, precise when broken" philosophy.
 
-**Implementation Plan** (see `claude_assets/metrics_plan.md`):
-- [ ] `pkg/observability/metrics.go` - Custom metrics package (5 metrics)
-  - virt_platform_compliance_status (Gauge) - Core health indicator
-  - virt_platform_thrashing_total (Counter) - Anti-thrashing events
+**Implemented** (Commits: 55de367, 2e6ea6f):
+- [x] `pkg/observability/metrics.go` - Custom metrics package (5 metrics)
+  - virt_platform_compliance_status (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
+  - virt_platform_thrashing_total (Counter) - Anti-thrashing gate hits
   - virt_platform_customization_info (Gauge) - Intentional deviations tracking
   - virt_platform_missing_dependency (Gauge) - Missing CRD detection
-  - virt_platform_reconcile_duration_seconds (Histogram) - Performance
-- [ ] `assets/observability/prometheus-rules.yaml.tpl` - PrometheusRule with 3 alerts
+  - virt_platform_reconcile_duration_seconds (Histogram) - Performance monitoring
+- [x] `pkg/observability/metrics_test.go` - 14 unit tests with prometheus/testutil
+- [x] `pkg/observability/label_consistency_test.go` - 4 label consistency tests
+- [x] `test/metrics_integration_test.go` - 17 integration scenarios
+- [x] Instrumentation of reconciliation loop, throttler, CRD checker
+  - pkg/engine/patcher.go - Compliance status, duration, customization tracking
+  - pkg/util/crd_checker.go - Missing dependency metrics
+
+**Test Coverage**: 35 observability tests (14 unit + 4 label + 17 integration)
+
+**Still Needed** (Phase 2):
+- [ ] `assets/observability/prometheus-rules.yaml.tpl` - PrometheusRule with alerts
   - VirtPlatformSyncFailed (Critical) - Asset failed >15min
   - VirtPlatformThrashingDetected (Warning) - Edit war detected
   - VirtPlatformDependencyMissing (Warning) - Optional CRD missing
-- [ ] Instrumentation of reconciliation loop, throttler, CRD checker
+- [ ] `promtool test rules` for alert expression validation
 - [ ] Runbooks for each alert in `docs/runbooks/`
 
-**Testing Strategy** (Hybrid - No Prometheus Operator in Integration Tests):
-- [ ] Unit tests with `prometheus/testutil` (metric value verification)
-- [ ] `promtool test rules` for alert expression validation (offline YAML tests)
-- [ ] Integration tests for metric emission during reconciliation (envtest)
-- [ ] PrometheusRule YAML validation in integration tests (CRD only, no operator)
-- [ ] E2E tests for actual alert firing (future - real cluster with Prometheus)
-
 **Why This Matters:**
-- **Primary monitoring** - Metrics/alerts are how we report operator health
+- **Primary monitoring** - Metrics are how we report operator health (no status/conditions)
 - **Precise failure reporting** - Know exactly which asset failed and why
 - **Proactive detection** - Catch thrashing, missing deps, performance issues
-- **No status bloat** - Zero API Surface design means no custom status fields
+- **Foundation for alerts** - Metrics power Prometheus alerting (PrometheusRule next step)
 
 ### ✅ Soft Dependency Handling
 
@@ -223,26 +234,32 @@ This document tracks implementation progress against the original plan in `claud
 
 ---
 
-## Phase 4: Build Tooling & Testing (Week 6+) - MOSTLY COMPLETE
+## Phase 4: Build Tooling & Testing (Week 6+) - ✅ COMPLETE
 
-### ⏳ RBAC Generation Tool (Next Priority)
+### ✅ RBAC Generation Tool (COMPLETE)
 
-**Status**: Not implemented. Role.yaml currently manually maintained (plan lines 712-717).
+**Status**: ✅ Fully implemented and integrated! Commit `b5f9fb3`, PR #29.
 
-**Required**: cmd/rbac-gen/main.go
-- [ ] Walk assets/ directory (exclude assets/crds/)
-- [ ] Parse YAML/templates (replace {{ }} with dummy values)
-- [ ] Extract GVKs from parsed resources
-- [ ] Generate ClusterRole with exact permissions
-- [ ] Output to config/rbac/role.yaml with "AUTO-GENERATED - DO NOT EDIT" header
-- [ ] Integrate with Makefile (`make generate-rbac`)
-- [ ] CI validation - Ensure generated RBAC matches committed version
+**Implemented**: cmd/rbac-gen/main.go
+- [x] Walk assets/ directory (exclude assets/crds/)
+- [x] Parse YAML/templates (replace {{ }} with dummy values)
+- [x] Extract GVKs from parsed resources
+- [x] Generate ClusterRole with exact permissions
+- [x] Output to config/rbac/role.yaml with "AUTO-GENERATED - DO NOT EDIT" header
+- [x] Integrate with Makefile (`make generate-rbac`)
+- [x] CI validation - Ensure generated RBAC matches committed version (`.github/workflows/verify-generated.yml`)
 
-**Why This Matters**:
-- Eliminates manual RBAC maintenance as assets are added
-- Ensures RBAC stays in sync with asset templates
-- Reduces risk of permission gaps or over-permissioning
-- Critical for scalability as asset library grows
+**Features**:
+- ✅ Template support for `.yaml.tpl` files
+- ✅ Automatic deduplication of permissions
+- ✅ Handles both namespaced and cluster-scoped resources
+- ✅ Dry-run mode for testing (`--dry-run`)
+- ✅ Comprehensive README in `cmd/rbac-gen/README.md`
+
+**Result**:
+- ✅ Zero manual RBAC maintenance
+- ✅ RBAC automatically stays in sync with assets
+- ✅ CI prevents merging PRs with out-of-sync RBAC
 
 ### ✅ CRD Management (COMPLETE!)
 
@@ -303,7 +320,7 @@ This document tracks implementation progress against the original plan in `claud
 - [ ] HCO golden config with user customization (future E2E)
 - [x] Context-aware assets (hardware detection tested via unit tests)
 
-**Test Summary**: 99 tests passing (69 unit + 30 integration), 0 flaky, 0 pending
+**Test Summary**: 350 tests passing (270 unit + 80 integration), 0 flaky, 3 skipped
 
 ### ❌ Documentation
 
@@ -399,18 +416,8 @@ Users can now:
   - Throttling gate (step 5)
   - Update recording (step 7)
 
-### ❌ Not Implemented
-- `pkg/overrides/` - Entire package missing
-  - jsonpatch.go
-  - jsonpointer.go
-  - validation.go
-- `pkg/throttling/` - Entire package missing
-  - token_bucket.go
-- `pkg/util/` - Missing utilities
-  - crd_checker.go
-  - events.go
-- `cmd/rbac-gen/` - RBAC generation tool
-- `test/` - All testing infrastructure
+### ✅ All Core Packages Implemented
+All planned packages and tools are now implemented and integrated.
 
 ---
 
@@ -515,8 +522,8 @@ All critical phases have been completed:
 4. ✅ Standardized CI job naming
 5. ✅ Added fmt/vet to lint pipeline
 
-### 🎯 Now (Current Focus): Automation & Asset Expansion
-1. [ ] Implement cmd/rbac-gen/main.go (RBAC automation) - **Next Immediate Step**
+### 🎯 Now (Current Focus): Observability & Asset Expansion
+1. [ ] Complete observability pillar (PrometheusRule alerts + runbooks)
 2. [ ] Add remaining Phase 1 assets (PCI, NUMA, kubelet, MTV)
 3. [ ] Write user documentation (user-guide, architecture, assets)
 4. [ ] Add Phase 2 assets (VFIO, AAQ, node-maintenance, fence-agents)
@@ -538,12 +545,13 @@ All critical phases have been completed:
 - [x] HCO dual role (managed + config source) ✅
 - [x] **Patched Baseline algorithm fully implemented** ✅ **COMPLETE** (all 7 steps)
 - [x] **All three user override mechanisms functional** ✅ **COMPLETE** (patch, ignore-fields, unmanaged)
-- [x] **Anti-thrashing protection working** ✅ **COMPLETE** (token bucket)
+- [x] **Anti-thrashing protection working** ✅ **COMPLETE** (token bucket + pause-with-annotation)
 - [x] **GitOps labeling and object adoption** ✅ **COMPLETE** (cache optimization)
 - [x] **Event recording for observability** ✅ **COMPLETE** (comprehensive)
-- [ ] Build-time RBAC generation from assets ⏳ **NEXT STEP**
+- [x] **Metrics infrastructure for monitoring** ✅ **COMPLETE** (5 metrics, 35 tests)
+- [x] **Build-time RBAC generation from assets** ✅ **COMPLETE** (cmd/rbac-gen + CI verification)
 - [x] Soft dependency handling ✅ **COMPLETE** (CRD checker with caching)
-- [x] **>80% integration test coverage with envtest** ✅ **EXCEEDED** (30 integration tests, 0 flaky)
+- [x] **>80% integration test coverage with envtest** ✅ **EXCEEDED** (80 integration tests, 0 flaky)
 
 ### ⏳ Operational Goals (Asset Expansion)
 - [ ] Phase 1 Always assets deployed automatically ⏳ **IN PROGRESS** (5/8 - missing PCI, NUMA, kubelet, MTV)
@@ -556,19 +564,21 @@ All critical phases have been completed:
 ### 📊 Current Status
 **Phase 1**: ✅ 100% complete (all core features implemented)
 **Phase 2**: ✅ 100% complete (user override system fully functional)
-**Phase 3**: ✅ 100% complete (safety, events, soft dependencies)
-**Phase 4**: ✅ 90% complete
-  - ✅ Comprehensive testing (295 tests, 0 flaky)
+**Phase 3**: ✅ 100% complete (safety, events, soft dependencies, metrics)
+**Phase 4**: ✅ 95% complete
+  - ✅ Comprehensive testing (350 tests, 0 flaky, 3 skipped)
   - ✅ CRD automation (update-crds, verify-crds)
-  - ✅ CI/CD infrastructure (lint, test, e2e, verify-crds)
+  - ✅ RBAC automation (generate-rbac, verify-rbac)
+  - ✅ CI/CD infrastructure (lint, test, e2e, verify-generated)
   - ✅ Shell script quality (shellcheck)
+  - ✅ Metrics infrastructure (5 metrics, 35 tests)
   - ❌ Documentation (user guides, architecture)
-  - ⏳ RBAC generator (next immediate step)
+  - ❌ Alert definitions (PrometheusRule, runbooks)
 
-**Overall**: ~92% complete against original plan!
+**Overall**: ~96% complete against original plan!
 
 **Remaining high-value work**:
-1. **RBAC automation** (next immediate step - unblocks asset development)
+1. **Alert definitions** (PrometheusRule + runbooks for observability)
 2. **Asset expansion** (production readiness)
 3. **User documentation** (adoption enablement)
 
@@ -580,47 +590,24 @@ All critical phases have been completed:
 
 ### Recommended Next Steps (Prioritized):
 
-#### 1. **RBAC Generation Tool** (Next Immediate Step - Automation)
-**Goal**: Eliminate manual RBAC maintenance and ensure permissions stay in sync with assets.
+#### 1. **Alert Definitions** (Observability - Complete the Pillar)
+**Goal**: Production-ready alerting following "Silent when fine, precise when broken" philosophy.
 
-**Implementation**: `cmd/rbac-gen/main.go`
-- [ ] Asset scanner - Walk assets/ directory (exclude assets/crds/)
-- [ ] Template parser - Handle .yaml.tpl files, replace {{ }} with dummy values for parsing
-- [ ] GVK extractor - Parse YAML and extract GroupVersionKind from all resources
-- [ ] ClusterRole generator - Create role with exact permissions for all discovered GVKs
-- [ ] Auto-updater - Output to config/rbac/role.yaml with "AUTO-GENERATED - DO NOT EDIT" header
-- [ ] Makefile integration - Add `make generate-rbac` target
-- [ ] CI validation - Ensure generated RBAC matches committed version
+**Context**: Metrics infrastructure is ✅ COMPLETE (5 metrics, 35 tests). Now need PrometheusRule definitions and runbooks. We don't use conditions or status reporting - metrics and OpenShift alerts are our primary monitoring and reporting mechanism.
 
-**Why Now**:
-- Asset library is growing (currently 8 assets, more planned)
-- Manual RBAC maintenance doesn't scale
-- Risk of permission gaps as new assets are added
-- Automation enables faster asset development
+**✅ Metrics (COMPLETE)**:
+- ✅ `virt_platform_compliance_status` (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
+- ✅ `virt_platform_thrashing_total` (Counter) - Reconciliation throttling events
+- ✅ `virt_platform_customization_info` (Gauge) - Tracks intentional deviations
+- ✅ `virt_platform_missing_dependency` (Gauge) - Missing CRD tracking
+- ✅ `virt_platform_reconcile_duration_seconds` (Histogram) - Performance monitoring
 
-#### 2. **Metrics & Alerting** (Observability - Critical Pillar)
-**Goal**: Production-ready monitoring and alerting following "Silent when fine, precise when broken" philosophy.
+**✅ Integration Points (COMPLETE)**:
+- ✅ `pkg/engine/patcher.go` - Compliance status, duration, customization tracking
+- ✅ `pkg/util/crd_checker.go` - Missing dependency metrics
+- ✅ Test coverage: 14 unit + 4 label + 17 integration tests
 
-**Context**: The operator has comprehensive event recording but lacks metrics/alerts. We don't use conditions or status reporting - metrics and OpenShift alerts are our primary monitoring and reporting mechanism.
-
-**Metrics Implementation**: `pkg/observability/metrics.go`
-- [ ] `virt_platform_compliance_status` (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
-  - Labels: kind, name, namespace
-  - Used by main VirtPlatformSyncFailed alert
-- [ ] `virt_platform_thrashing_total` (Counter) - Reconciliation throttling events
-  - Labels: kind, name, namespace
-  - Indicates "Edit War" scenarios
-- [ ] `virt_platform_customization_info` (Gauge) - Tracks intentional deviations
-  - Labels: kind, name, type (patch/ignore/unmanaged)
-  - Always 1, used for visibility ("Is this cluster stock or customized?")
-- [ ] `virt_platform_missing_dependency` (Gauge) - Missing CRD tracking
-  - Labels: gvk
-  - Distinguishes "Broken" from "Not Installed"
-- [ ] `virt_platform_reconcile_duration_seconds` (Histogram) - Performance monitoring
-  - Labels: kind, name
-  - High latency implies API server stress
-
-**Alert Definitions**: `assets/observability/prometheus-rules.yaml.tpl`
+**Alert Definitions** (Next Step): `assets/observability/prometheus-rules.yaml.tpl`
 - [ ] **VirtPlatformSyncFailed** (Critical) - Asset failed to apply for >15min
   - Expr: `virt_platform_compliance_status == 0` for >15m
   - Runbook: Check logs, webhook errors, resource locks
@@ -630,12 +617,6 @@ All critical phases have been completed:
 - [ ] **VirtPlatformDependencyMissing** (Warning) - Optional CRD missing
   - Expr: `virt_platform_missing_dependency == 1`
   - Runbook: Verify operator installation status
-
-**Integration Points:**
-- [ ] Instrument `pkg/controller/platform_controller.go` - Compliance & duration metrics
-- [ ] Instrument `pkg/throttling/token_bucket.go` - Thrashing counter
-- [ ] Instrument `pkg/util/crd_checker.go` - Missing dependency gauge
-- [ ] Instrument `pkg/engine/patcher.go` - Customization info metric
 
 **Testing Strategy** (Hybrid Approach):
 
@@ -686,7 +667,7 @@ All critical phases have been completed:
 - Metrics specification: `claude_assets/metrics_plan.md`
 - Prometheus rule testing: https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/
 
-#### 3. **Add missing asset templates** (Production Readiness)
+#### 2. **Add missing asset templates** (Production Readiness)
 **Phase 1 Always-On** (Missing 4/8):
 - [ ] `assets/machine-config/02-pci-passthrough.yaml.tpl` - IOMMU for PCI passthrough
 - [ ] `assets/machine-config/03-numa.yaml.tpl` - NUMA topology configuration
@@ -723,19 +704,20 @@ All critical phases have been completed:
 
 ### Why This Priority Order?
 
-1. **RBAC automation** - Unblocks faster asset development
-2. **Metrics & Alerting** - Production monitoring (our primary reporting mechanism)
-3. **Asset templates** - Enable production use cases (virtualization at scale)
-4. **Documentation** - Enable user adoption and customization
+1. **Alert definitions** - Complete observability pillar (metrics ✅ done, RBAC ✅ done, alerts next)
+2. **Asset templates** - Enable production use cases (virtualization at scale)
+3. **Documentation** - Enable user adoption and customization
 
 The platform now has all core differentiating features:
 - ✅ Annotation-based user control (Zero API Surface)
-- ✅ Anti-thrashing protection
+- ✅ Anti-thrashing protection (token bucket + pause-with-annotation)
 - ✅ Complete Patched Baseline algorithm
 - ✅ GitOps best practices (labeling, adoption)
-- ✅ Comprehensive observability (events)
+- ✅ Comprehensive observability (events + metrics)
 - ✅ Asset failure handling (error aggregation)
-- ✅ Production-ready quality (295 tests, 0 flaky)
+- ✅ Production-ready quality (350 tests, 0 flaky, 3 skipped)
 - ✅ Automated CRD management
+- ✅ Automated RBAC generation
 - ✅ CI/CD infrastructure with code quality gates
-- ⏳ Metrics & Alerting (next critical pillar)
+- ✅ Metrics infrastructure (5 metrics, 35 tests)
+- ⏳ Alert definitions (PrometheusRule + runbooks next)
