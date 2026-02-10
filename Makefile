@@ -91,8 +91,13 @@ update-crds: ## Update CRD collection from upstream
 	hack/update-crds.sh
 
 .PHONY: verify-crds
-verify-crds: ## Verify CRDs can be loaded
-	@echo "Verifying CRDs..."
+verify-crds: ## Verify CRDs match upstream (for CI)
+	@echo "Verifying CRDs match upstream..."
+	@hack/update-crds.sh --verify
+
+.PHONY: validate-crds
+validate-crds: ## Validate CRDs can be loaded (parser check)
+	@echo "Validating CRDs can be parsed..."
 	@go test ./test/crd_test.go -v
 
 ##@ Dependencies

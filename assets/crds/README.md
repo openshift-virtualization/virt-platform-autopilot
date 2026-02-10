@@ -2,64 +2,179 @@
 
 This directory contains CRDs required for envtest and Kind testing.
 
-**Last updated:** 2026-02-06 17:57:33 UTC
+CRDs are automatically fetched from upstream repositories using `hack/update-crds.sh`.
+
+## Directory Structure
+
+```
+assets/crds/
+├── kubevirt/          # KubeVirt ecosystem CRDs
+├── openshift/         # OpenShift platform CRDs
+├── remediation/       # Medik8s remediation CRDs
+├── operators/         # Third-party operator CRDs
+├── observability/     # Cluster Observability Operator CRDs
+└── oadp/              # OADP backup/restore CRDs
+```
 
 ## CRD Sources
 
+
 ### KubeVirt Ecosystem
-- **HyperConverged**: https://github.com/kubevirt/hyperconverged-cluster-operator
-  - Path: `deploy/crds/hco.kubevirt.io_hyperconvergeds.yaml`
+
+**HyperConverged**
+- Repository: https://github.com/kubevirt/hyperconverged-cluster-operator
+- Branch: `main`
+- Path: `deploy/crds/hco00.crd.yaml`
+- Local: `kubevirt/hyperconverged-crd.yaml`
+
 
 ### OpenShift Platform
-- **MachineConfig**: https://github.com/openshift/machine-config-operator
-  - Note: CRDs may need manual extraction from OpenShift release images
-- **KubeDescheduler**: https://github.com/openshift/cluster-kube-descheduler-operator
-  - Path: `manifests/stable/cluster-kube-descheduler-operator.crd.yaml`
+
+**MachineConfig**
+- Repository: https://github.com/openshift/api
+- Branch: `master`
+- Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_machineconfigs.crd.yaml`
+- Local: `openshift/machineconfig-crd.yaml`
+
+**KubeletConfig**
+- Repository: https://github.com/openshift/api
+- Branch: `master`
+- Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_kubeletconfigs.crd.yaml`
+- Local: `openshift/kubeletconfig-crd.yaml`
+
+**KubeDescheduler**
+- Repository: https://github.com/openshift/cluster-kube-descheduler-operator
+- Branch: `main`
+- Path: `manifests/kube-descheduler-operator.crd.yaml`
+- Local: `openshift/operator.openshift.io_kubedeschedulers.yaml`
+
 
 ### Medik8s Remediation
-- **NodeHealthCheck**: https://github.com/medik8s/node-healthcheck-operator
-  - Path: `config/crd/bases/remediation.medik8s.io_nodehealthchecks.yaml`
-- **Self Node Remediation**: https://github.com/medik8s/self-node-remediation
-  - Path: `config/crd/bases/self-node-remediation.medik8s.io_selfnoderemediations.yaml`
-- **Fence Agents**: https://github.com/medik8s/fence-agents-remediation
-  - Path: `config/crd/bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml`
+
+**NodeHealthCheck**
+- Repository: https://github.com/medik8s/node-healthcheck-operator
+- Branch: `main`
+- Path: `config/crd/bases/remediation.medik8s.io_nodehealthchecks.yaml`
+- Local: `remediation/nodehealthchecks.remediation.medik8s.io.yaml`
+
+**Self Node Remediation**
+- Repository: https://github.com/medik8s/self-node-remediation
+- Branch: `main`
+- Path: `config/crd/bases/self-node-remediation.medik8s.io_selfnoderemediations.yaml`
+- Local: `remediation/selfnoderemediations.self-node-remediation.medik8s.io.yaml`
+
+**Fence Agents Remediation**
+- Repository: https://github.com/medik8s/fence-agents-remediation
+- Branch: `main`
+- Path: `config/crd/bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml`
+- Local: `remediation/fenceagentsremediations.fence-agents-remediation.medik8s.io.yaml`
+
 
 ### Third-Party Operators
-- **MTV (Forklift)**: https://github.com/kubev2v/forklift
-  - Path: `operator/config/crd/bases/forklift.konveyor.io_forkliftcontrollers.yaml`
-- **MetalLB**: https://github.com/metallb/metallb-operator
-  - Path: `config/crd/bases/metallb.io_metallbs.yaml`
-- **AAQ**: https://github.com/kubevirt/application-aware-quota
-  - Path: `config/crd/bases/aaq.kubevirt.io_aaqoperatorconfigs.yaml`
+
+**MTV (Forklift)**
+- Repository: https://github.com/kubev2v/forklift
+- Branch: `main`
+- Path: `operator/config/crd/bases/forklift.konveyor.io_forkliftcontrollers.yaml`
+- Local: `operators/forklift.konveyor.io_forkliftcontrollers.yaml`
+
+**MetalLB**
+- Repository: https://github.com/metallb/metallb-operator
+- Branch: `main`
+- Path: `config/crd/bases/metallb.io_metallbs.yaml`
+- Local: `operators/metallb.io_metallbs.yaml`
+
+**AAQ**
+- Repository: https://github.com/kubevirt/hyperconverged-cluster-operator
+- Branch: `main`
+- Path: `deploy/crds/application-aware-quota00.crd.yaml`
+- Local: `operators/aaq.kubevirt.io_aaqoperatorconfigs.yaml`
+
+**NMState**
+- Repository: https://github.com/nmstate/kubernetes-nmstate
+- Branch: `main`
+- Path: `bundle/manifests/nmstate.io_nmstates.yaml`
+- Local: `operators/nmstate.io_nmstates.yaml`
+
+**Node Maintenance Operator**
+- Repository: https://github.com/medik8s/node-maintenance-operator
+- Branch: `main`
+- Path: `bundle/manifests/nodemaintenance.medik8s.io_nodemaintenances.yaml`
+- Local: `operators/nodemaintenance.medik8s.io_nodemaintenances.yaml`
+
+
+### Cluster Observability Operator
+
+**Multiple CRDs** (Perses, UIPlugin, Monitoring)
+- Repository: https://github.com/rhobs/observability-operator
+- Branch: `main`
+- Path: `bundle/manifests/*.yaml`
+- Local: `observability/`
+- Count: 18 files
+
+
+### OADP (OpenShift API for Data Protection)
+
+**Multiple CRDs** (Velero, DataProtection)
+- Repository: https://github.com/openshift/oadp-operator
+- Branch: `oadp-dev`
+- Path: `bundle/manifests/*.yaml`
+- Local: `oadp/`
+- Count: 23 files
+
 
 ## Update Instructions
 
-Run `make update-crds` to fetch the latest CRDs from upstream.
-Run `make verify-crds` to validate CRDs load correctly in envtest.
+**Fetch latest CRDs from upstream:**
+```bash
+make update-crds
+```
+
+**Verify CRDs match upstream (CI check):**
+```bash
+make verify-crds
+```
+
+**Validate CRDs can be loaded:**
+```bash
+go test ./test/crd_test.go -v
+```
 
 ## Usage in Tests
 
 ### envtest
+
 ```go
 testEnv = &envtest.Environment{
     CRDDirectoryPaths: []string{
-        filepath.Join("..", "internal", "assets", "crds", "kubevirt"),
-        filepath.Join("..", "internal", "assets", "crds", "openshift"),
-        filepath.Join("..", "internal", "assets", "crds", "remediation"),
-        filepath.Join("..", "internal", "assets", "crds", "operators"),
+        filepath.Join("..", "assets", "crds", "kubevirt"),
+        filepath.Join("..", "assets", "crds", "openshift"),
+        filepath.Join("..", "assets", "crds", "remediation"),
+        filepath.Join("..", "assets", "crds", "operators"),
+        filepath.Join("..", "assets", "crds", "observability"),
+        filepath.Join("..", "assets", "crds", "oadp"),
     },
 }
 ```
 
 ### Kind
-CRDs are automatically installed by `make kind-setup` or `make kind-install-crds`.
 
-## Manual Installation
-
-To install CRDs into a cluster manually:
 ```bash
-kubectl apply -f internal/assets/crds/kubevirt/
-kubectl apply -f internal/assets/crds/openshift/
-kubectl apply -f internal/assets/crds/remediation/
-kubectl apply -f internal/assets/crds/operators/
+kubectl apply -f assets/crds/kubevirt/
+kubectl apply -f assets/crds/openshift/
+kubectl apply -f assets/crds/remediation/
+kubectl apply -f assets/crds/operators/
+kubectl apply -f assets/crds/observability/
+kubectl apply -f assets/crds/oadp/
 ```
+
+## Maintenance
+
+This README is automatically generated by `hack/update-crds.sh`.
+**Do not edit manually** - changes will be overwritten.
+
+To add a new CRD:
+1. Edit the `CRD_METADATA` array in `hack/update-crds.sh`
+2. Run `make update-crds`
+3. Commit both the new CRD file and updated README
+

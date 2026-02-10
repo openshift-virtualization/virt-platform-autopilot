@@ -1,0 +1,30 @@
+name: Verify CRDs
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  verify:
+    name: Verify CRDs match upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify CRDs are up-to-date
+        run: make verify-crds
+
+      - name: Comment on PR if out of sync
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **CRD Verification Failed**\n\nThe CRDs in this PR are out of sync with upstream.\n\nPlease run `make update-crds` locally and commit the changes.'
+            })
