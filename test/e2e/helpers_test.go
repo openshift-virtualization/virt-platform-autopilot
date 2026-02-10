@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -161,15 +162,16 @@ func getUnstructuredResource(gvk schema.GroupVersionKind, name, namespace string
 
 // findDriftCorrectedEvents returns all events with reason "DriftCorrected" whose message
 // contains the given kind and resource name. Events are emitted on the HCO object.
-func findDriftCorrectedEvents(kind, name string) []corev1.Event {
-	events := &corev1.EventList{}
+func findDriftCorrectedEvents(kind, name string) []eventsv1.Event {
+	// Use new events.k8s.io/v1 API
+	events := &eventsv1.EventList{}
 	ExpectWithOffset(1, k8sClient.List(ctx, events, client.InNamespace(operatorNamespace))).To(Succeed())
 
-	var matched []corev1.Event
+	var matched []eventsv1.Event
 	for _, event := range events.Items {
 		if event.Reason == "DriftCorrected" &&
-			strings.Contains(event.Message, kind) &&
-			strings.Contains(event.Message, name) {
+			strings.Contains(event.Note, kind) &&
+			strings.Contains(event.Note, name) {
 			matched = append(matched, event)
 		}
 	}

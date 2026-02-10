@@ -17,10 +17,14 @@ limitations under the License.
 package test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
+	"k8s.io/klog/v2"
 
 	"github.com/kubevirt/virt-platform-operator/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
@@ -37,23 +41,22 @@ type FakeEventRecorder struct {
 type RecordedEvent struct {
 	EventType string
 	Reason    string
+	Action    string
 	Message   string
 }
 
-func (f *FakeEventRecorder) Event(object runtime.Object, eventtype, reason, message string) {
+func (f *FakeEventRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+	message := fmt.Sprintf(note, args...)
 	f.Events = append(f.Events, RecordedEvent{
 		EventType: eventtype,
 		Reason:    reason,
+		Action:    action,
 		Message:   message,
 	})
 }
 
-func (f *FakeEventRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-	f.Event(object, eventtype, reason, messageFmt)
-}
-
-func (f *FakeEventRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-	f.Event(object, eventtype, reason, messageFmt)
+func (f *FakeEventRecorder) WithLogger(logger klog.Logger) events.EventRecorderLogger {
+	return f
 }
 
 func (f *FakeEventRecorder) Reset() {

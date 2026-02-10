@@ -17,14 +17,16 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
+	"k8s.io/klog/v2"
 )
 
-// FakeRecorder implements record.EventRecorder for testing
+// FakeRecorder implements events.EventRecorder for testing
 type FakeRecorder struct {
 	Events []Event
 }
@@ -32,23 +34,18 @@ type FakeRecorder struct {
 type Event struct {
 	EventType string
 	Reason    string
+	Action    string
 	Message   string
 }
 
-func (f *FakeRecorder) Event(object runtime.Object, eventtype, reason, message string) {
+func (f *FakeRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+	message := fmt.Sprintf(note, args...)
 	f.Events = append(f.Events, Event{
 		EventType: eventtype,
 		Reason:    reason,
+		Action:    action,
 		Message:   message,
 	})
-}
-
-func (f *FakeRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-	f.Event(object, eventtype, reason, messageFmt)
-}
-
-func (f *FakeRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-	f.Event(object, eventtype, reason, messageFmt)
 }
 
 func (f *FakeRecorder) Reset() {
@@ -62,8 +59,13 @@ func (f *FakeRecorder) LastEvent() *Event {
 	return &f.Events[len(f.Events)-1]
 }
 
-// Ensure FakeRecorder implements EventRecorder interface
-var _ record.EventRecorder = &FakeRecorder{}
+// WithLogger returns the same recorder (not needed for testing)
+func (f *FakeRecorder) WithLogger(logger klog.Logger) events.EventRecorderLogger {
+	return f
+}
+
+// Ensure FakeRecorder implements EventRecorderLogger interface
+var _ events.EventRecorderLogger = &FakeRecorder{}
 
 func TestEventRecorder_AssetApplied(t *testing.T) {
 	fake := &FakeRecorder{}
@@ -398,53 +400,5 @@ func TestEventRecorder_NoDriftDetected(t *testing.T) {
 	}
 	if event.Reason != EventReasonNoDriftDetected {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonNoDriftDetected, event.Reason)
-	}
-}
-
-func TestEventRecorder_Eventf(t *testing.T) {
-	fake := &FakeRecorder{}
-	recorder := NewEventRecorder(fake)
-
-	obj := &unstructured.Unstructured{}
-	obj.SetName("test-obj")
-
-	recorder.Eventf(obj, EventTypeNormal, "TestReason", "Test message: %s", "arg")
-
-	if len(fake.Events) != 1 {
-		t.Fatalf("Expected 1 event, got %d", len(fake.Events))
-	}
-
-	event := fake.Events[0]
-	if event.EventType != EventTypeNormal {
-		t.Errorf("Expected EventType=%s, got %s", EventTypeNormal, event.EventType)
-	}
-	if event.Reason != "TestReason" {
-		t.Errorf("Expected Reason=TestReason, got %s", event.Reason)
-	}
-}
-
-func TestEventRecorder_AnnotatedEventf(t *testing.T) {
-	fake := &FakeRecorder{}
-	recorder := NewEventRecorder(fake)
-
-	obj := &unstructured.Unstructured{}
-	obj.SetName("test-obj")
-
-	annotations := map[string]string{
-		"key": "value",
-	}
-
-	recorder.AnnotatedEventf(obj, annotations, EventTypeWarning, "TestReason", "Test message: %s", "arg")
-
-	if len(fake.Events) != 1 {
-		t.Fatalf("Expected 1 event, got %d", len(fake.Events))
-	}
-
-	event := fake.Events[0]
-	if event.EventType != EventTypeWarning {
-		t.Errorf("Expected EventType=%s, got %s", EventTypeWarning, event.EventType)
-	}
-	if event.Reason != "TestReason" {
-		t.Errorf("Expected Reason=TestReason, got %s", event.Reason)
 	}
 }

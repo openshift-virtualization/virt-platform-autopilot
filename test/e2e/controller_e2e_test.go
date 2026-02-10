@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -66,6 +67,30 @@ var _ = Describe("Controller E2E Tests", func() {
 		var hco *unstructured.Unstructured
 
 		BeforeAll(func() {
+			By("ensuring no HCO exists before test")
+			existingHCO := &unstructured.Unstructured{}
+			existingHCO.SetGroupVersionKind(schema.GroupVersionKind{
+				Group:   "hco.kubevirt.io",
+				Version: "v1beta1",
+				Kind:    "HyperConverged",
+			})
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      hcoName,
+				Namespace: operatorNamespace,
+			}, existingHCO)
+			if err == nil {
+				// HCO exists, delete it
+				By("deleting existing HCO from previous test")
+				Expect(k8sClient.Delete(ctx, existingHCO)).To(Succeed())
+				Eventually(func() bool {
+					err := k8sClient.Get(ctx, types.NamespacedName{
+						Name:      hcoName,
+						Namespace: operatorNamespace,
+					}, existingHCO)
+					return err != nil
+				}, timeout, interval).Should(BeTrue(), "Existing HCO should be deleted")
+			}
+
 			By("creating unlabeled HCO instance")
 			hco = &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -105,12 +130,13 @@ var _ = Describe("Controller E2E Tests", func() {
 		It("should trigger reconciliation for unlabeled HCO", func() {
 			By("verifying ReconcileSucceeded event is emitted for HCO")
 			Eventually(func() bool {
-				events := &corev1.EventList{}
+				// Use new events.k8s.io/v1 API
+				events := &eventsv1.EventList{}
 				if err := k8sClient.List(ctx, events, client.InNamespace(operatorNamespace)); err != nil {
 					return false
 				}
 				for _, event := range events.Items {
-					if event.InvolvedObject.Name == hcoName &&
+					if event.Regarding.Name == hcoName &&
 						event.Reason == "ReconcileSucceeded" {
 						return true
 					}
@@ -158,14 +184,15 @@ var _ = Describe("Controller E2E Tests", func() {
 	Context("Event Recording", func() {
 		It("should emit events during reconciliation", func() {
 			By("fetching events for HCO")
-			events := &corev1.EventList{}
+			// Use new events.k8s.io/v1 API (modern event API)
+			events := &eventsv1.EventList{}
 			Eventually(func() bool {
 				if err := k8sClient.List(ctx, events, client.InNamespace(operatorNamespace)); err != nil {
 					return false
 				}
 				// Look for events related to our operator
 				for _, event := range events.Items {
-					if event.Source.Component == operatorComponentName {
+					if event.ReportingController == operatorComponentName {
 						return true
 					}
 				}

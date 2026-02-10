@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -244,7 +245,8 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 			// 4. Verify event message contains recovery instructions
 
 			By("listing events for HCO")
-			events := &corev1.EventList{}
+			// Use new events.k8s.io/v1 API
+			events := &eventsv1.EventList{}
 			Eventually(func() bool {
 				if err := k8sClient.List(ctx, events, client.InNamespace(operatorNamespace)); err != nil {
 					return false
@@ -253,7 +255,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 				// Look for ThrashingDetected event
 				for _, event := range events.Items {
 					if event.Reason == "ThrashingDetected" {
-						GinkgoWriter.Printf("Found ThrashingDetected event: %s\n", event.Message)
+						GinkgoWriter.Printf("Found ThrashingDetected event: %s\n", event.Note)
 						return true
 					}
 				}

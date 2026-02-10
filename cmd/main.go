@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -50,6 +51,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
+	utilruntime.Must(eventsv1.AddToScheme(scheme))
 
 	// Register Unstructured for HCO GVK so the manager can use it in ByObject cache config
 	// This avoids REST mapping queries that would fail if the CRD doesn't exist yet
@@ -163,7 +165,7 @@ func main() {
 
 	// Setup event recorder
 	eventRecorder := util.NewEventRecorder(
-		mgr.GetEventRecorderFor("virt-platform-operator"),
+		mgr.GetEventRecorder("virt-platform-operator"),
 	)
 	reconciler.SetEventRecorder(eventRecorder)
 

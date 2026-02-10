@@ -53,19 +53,25 @@ func staticRules() []RBACRule {
 			Resources: []string{"nodes"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		// Rule 2: Events (for observability)
+		// Rule 2: Events (for observability - legacy core/v1 API)
 		{
 			APIGroups: []string{""},
 			Resources: []string{"events"},
 			Verbs:     []string{"create", "patch"},
 		},
-		// Rule 3: Leader Election
+		// Rule 3: Events (for observability - modern events.k8s.io/v1 API)
+		{
+			APIGroups: []string{"events.k8s.io"},
+			Resources: []string{"events"},
+			Verbs:     []string{"create", "patch"},
+		},
+		// Rule 4: Leader Election
 		{
 			APIGroups: []string{"coordination.k8s.io"},
 			Resources: []string{"leases"},
 			Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
 		},
-		// Rule 4: CRD Discovery (for soft dependency detection)
+		// Rule 5: CRD Discovery (for soft dependency detection)
 		{
 			APIGroups: []string{"apiextensions.k8s.io"},
 			Resources: []string{"customresourcedefinitions"},
@@ -266,19 +272,21 @@ func formatRulesWithComments(rules []RBACRule) string {
 	builder.WriteString("  # ========================================\n")
 	builder.WriteString("  # Nodes (for hardware detection)\n")
 	writeRule(&builder, &rules[0])
-	builder.WriteString("  # Events (for observability)\n")
+	builder.WriteString("  # Events (for observability - legacy core/v1 API)\n")
 	writeRule(&builder, &rules[1])
-	builder.WriteString("  # Leader Election\n")
+	builder.WriteString("  # Events (for observability - modern events.k8s.io/v1 API)\n")
 	writeRule(&builder, &rules[2])
-	builder.WriteString("  # CRD Discovery (for soft dependency detection)\n")
+	builder.WriteString("  # Leader Election\n")
 	writeRule(&builder, &rules[3])
+	builder.WriteString("  # CRD Discovery (for soft dependency detection)\n")
+	writeRule(&builder, &rules[4])
 
 	// Dynamic rules from assets
 	builder.WriteString("  # ========================================\n")
 	builder.WriteString("  # Managed Resources (Dynamic - from assets/)\n")
 	builder.WriteString("  # ========================================\n")
 
-	for i := 4; i < len(rules); i++ {
+	for i := 5; i < len(rules); i++ {
 		// Add comment based on API group
 		rule := &rules[i]
 		comment := getCommentForAPIGroup(rule.APIGroups[0])
@@ -392,5 +400,5 @@ rules:
 	}
 
 	fmt.Printf("✓ RBAC ClusterRole written to %s\n", outputFile)
-	fmt.Printf("  Total rules: %d (4 static + %d dynamic)\n", len(allRules), len(dynamicRules))
+	fmt.Printf("  Total rules: %d (5 static + %d dynamic)\n", len(allRules), len(dynamicRules))
 }
