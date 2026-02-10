@@ -17,7 +17,13 @@ limitations under the License.
 package engine
 
 import (
+	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/kubevirt/virt-platform-operator/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
 )
 
 func TestDig(t *testing.T) {
@@ -184,4 +190,322 @@ func TestHas(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewRenderer(t *testing.T) {
+	loader := assets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	if renderer == nil {
+		t.Fatal("NewRenderer() returned nil")
+	}
+	if renderer.loader != loader {
+		t.Error("NewRenderer() did not set loader correctly")
+	}
+}
+
+func TestSafeFuncMap(t *testing.T) {
+	funcMap := safeFuncMap()
+
+	t.Run("includes safe string functions", func(t *testing.T) {
+		assertFunctionsExist(t, funcMap, []string{"upper", "lower", "trim", "replace", "contains"})
+	})
+
+	t.Run("includes safe logic functions", func(t *testing.T) {
+		assertFunctionsExist(t, funcMap, []string{"default", "empty", "ternary"})
+	})
+
+	t.Run("includes safe type conversion", func(t *testing.T) {
+		assertFunctionsExist(t, funcMap, []string{"toString", "toJson", "fromJson"})
+
+		// Verify at least some type conversion functions exist
+		typeConvCount := 0
+		for name := range funcMap {
+			if strings.HasPrefix(name, "to") || strings.HasPrefix(name, "from") {
+				typeConvCount++
+			}
+		}
+		if typeConvCount < 5 {
+			t.Errorf("Expected at least 5 type conversion functions, got %d", typeConvCount)
+		}
+	})
+
+	t.Run("includes safe list functions", func(t *testing.T) {
+		assertFunctionsExist(t, funcMap, []string{"list", "append", "first", "last", "reverse"})
+	})
+
+	t.Run("includes safe math functions", func(t *testing.T) {
+		assertFunctionsExist(t, funcMap, []string{"add", "sub", "mul", "div", "max", "min"})
+	})
+
+	t.Run("excludes dangerous functions", func(t *testing.T) {
+		assertFunctionsNotExist(t, funcMap, []string{"env", "expandenv", "genPrivateKey", "genCertificate", "now", "date", "randAlpha", "uuid"})
+	})
+}
+
+// assertFunctionsExist checks that all expected functions are present in the funcMap
+func assertFunctionsExist(t *testing.T, funcMap map[string]interface{}, expectedFuncs []string) {
+	t.Helper()
+	for _, name := range expectedFuncs {
+		if _, exists := funcMap[name]; !exists {
+			t.Errorf("safeFuncMap() missing safe function: %s", name)
+		}
+	}
+}
+
+// assertFunctionsNotExist checks that dangerous functions are not present in the funcMap
+func assertFunctionsNotExist(t *testing.T, funcMap map[string]interface{}, dangerousFuncs []string) {
+	t.Helper()
+	for _, name := range dangerousFuncs {
+		if _, exists := funcMap[name]; exists {
+			t.Errorf("safeFuncMap() includes dangerous function: %s", name)
+		}
+	}
+}
+
+func TestCustomFuncMap(t *testing.T) {
+	funcMap := customFuncMap()
+
+	t.Run("includes dig function", func(t *testing.T) {
+		if _, exists := funcMap["dig"]; !exists {
+			t.Error("customFuncMap() missing 'dig' function")
+		}
+	})
+
+	t.Run("includes has function", func(t *testing.T) {
+		if _, exists := funcMap["has"]; !exists {
+			t.Error("customFuncMap() missing 'has' function")
+		}
+	})
+}
+
+func TestRenderTemplate(t *testing.T) {
+	loader := assets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	t.Run("renders simple template", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"name": "test-hco",
+					},
+				},
+			},
+		}
+
+		template := "name: {{ .HCO.Object.metadata.name }}"
+		rendered, err := renderer.renderTemplate("test", template, ctx)
+		if err != nil {
+			t.Fatalf("renderTemplate() error = %v", err)
+		}
+
+		expected := "name: test-hco"
+		if strings.TrimSpace(string(rendered)) != expected {
+			t.Errorf("renderTemplate() = %q, want %q", string(rendered), expected)
+		}
+	})
+
+	t.Run("uses safe functions", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"name": "test",
+					},
+				},
+			},
+		}
+
+		template := "name: {{ .HCO.Object.metadata.name | upper }}"
+		rendered, err := renderer.renderTemplate("test", template, ctx)
+		if err != nil {
+			t.Fatalf("renderTemplate() error = %v", err)
+		}
+
+		expected := "name: TEST"
+		if strings.TrimSpace(string(rendered)) != expected {
+			t.Errorf("renderTemplate() = %q, want %q", string(rendered), expected)
+		}
+	})
+
+	t.Run("uses custom dig function", func(t *testing.T) {
+		hcoObj := map[string]interface{}{
+			"spec": map[string]interface{}{
+				"nested": map[string]interface{}{
+					"field": "value",
+				},
+			},
+		}
+
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: hcoObj,
+			},
+		}
+
+		template := `value: {{ dig "spec" "nested" "field" "default" .HCO.Object }}`
+		rendered, err := renderer.renderTemplate("test", template, ctx)
+		if err != nil {
+			t.Fatalf("renderTemplate() error = %v", err)
+		}
+
+		if !strings.Contains(string(rendered), "value: value") {
+			t.Errorf("renderTemplate() did not use dig correctly: %s", string(rendered))
+		}
+	})
+
+	t.Run("handles hardware context", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+			Hardware: &pkgcontext.HardwareContext{
+				GPUPresent: true,
+			},
+		}
+
+		template := "{{ if .Hardware.GPUPresent }}gpu-enabled{{ else }}no-gpu{{ end }}"
+		rendered, err := renderer.renderTemplate("test", template, ctx)
+		if err != nil {
+			t.Fatalf("renderTemplate() error = %v", err)
+		}
+
+		if !strings.Contains(string(rendered), "gpu-enabled") {
+			t.Errorf("renderTemplate() did not handle hardware context: %s", string(rendered))
+		}
+	})
+
+	t.Run("returns error for invalid template", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+		}
+
+		template := "{{ .InvalidSyntax"
+		_, err := renderer.renderTemplate("test", template, ctx)
+		if err == nil {
+			t.Error("renderTemplate() should return error for invalid template")
+		}
+	})
+
+	t.Run("returns error for undefined function", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+		}
+
+		template := `{{ env "PATH" }}`
+		_, err := renderer.renderTemplate("test", template, ctx)
+		if err == nil {
+			t.Error("renderTemplate() should return error for dangerous function 'env'")
+		}
+	})
+}
+
+func TestRenderAsset(t *testing.T) {
+	t.Run("identifies template vs static files", func(t *testing.T) {
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+
+		// Test with a template file extension
+		assetMeta := &assets.AssetMetadata{
+			Name: "test",
+			Path: "test.yaml.tpl",
+		}
+
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+		}
+
+		// This will fail because file doesn't exist, but we're testing the path logic
+		_, err := renderer.RenderAsset(assetMeta, ctx)
+		if err == nil {
+			t.Error("Expected error for non-existent template file")
+		}
+		if !strings.Contains(err.Error(), "failed to load template") {
+			t.Errorf("Expected template loading error, got: %v", err)
+		}
+	})
+
+	t.Run("handles static YAML path", func(t *testing.T) {
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+
+		assetMeta := &assets.AssetMetadata{
+			Name: "static",
+			Path: "static.yaml",
+		}
+
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+		}
+
+		// This will fail because file doesn't exist, but we're testing the path logic
+		_, err := renderer.RenderAsset(assetMeta, ctx)
+		if err == nil {
+			t.Error("Expected error for non-existent static file")
+		}
+		if !strings.Contains(err.Error(), "failed to read asset") {
+			t.Errorf("Expected asset loading error, got: %v", err)
+		}
+	})
+}
+
+func TestRenderMultiAsset(t *testing.T) {
+	t.Run("identifies template vs static files for multi-doc", func(t *testing.T) {
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+
+		assetMeta := &assets.AssetMetadata{
+			Name: "multi",
+			Path: "multi.yaml.tmpl",
+		}
+
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+		}
+
+		// This will fail because file doesn't exist, but we're testing the path logic
+		_, err := renderer.RenderMultiAsset(assetMeta, ctx)
+		if err == nil {
+			t.Error("Expected error for non-existent template file")
+		}
+		if !strings.Contains(err.Error(), "failed to load template") {
+			t.Errorf("Expected template loading error, got: %v", err)
+		}
+	})
+
+	t.Run("handles static multi-doc YAML path", func(t *testing.T) {
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+
+		assetMeta := &assets.AssetMetadata{
+			Name: "static-multi",
+			Path: "static-multi.yaml",
+		}
+
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]interface{}{},
+			},
+		}
+
+		// This will fail because file doesn't exist, but we're testing the path logic
+		_, err := renderer.RenderMultiAsset(assetMeta, ctx)
+		if err == nil {
+			t.Error("Expected error for non-existent static file")
+		}
+		if !strings.Contains(err.Error(), "failed to read asset") {
+			t.Errorf("Expected asset loading error, got: %v", err)
+		}
+	})
 }

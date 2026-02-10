@@ -17,11 +17,17 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/kubevirt/virt-platform-operator/pkg/util"
 )
 
 func TestHasPCIDevices(t *testing.T) {
@@ -304,4 +310,120 @@ func TestHasGPU(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNewRenderContextBuilder(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	t.Run("creates builder successfully", func(t *testing.T) {
+		builder := NewRenderContextBuilder(fakeClient)
+
+		if builder == nil {
+			t.Fatal("NewRenderContextBuilder() returned nil")
+		}
+
+		if builder.client != fakeClient {
+			t.Error("NewRenderContextBuilder() did not set client correctly")
+		}
+	})
+}
+
+func TestRenderContextBuilder_SetEventRecorder(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	builder := NewRenderContextBuilder(fakeClient)
+
+	t.Run("sets event recorder", func(t *testing.T) {
+		recorder := &util.EventRecorder{}
+		builder.SetEventRecorder(recorder)
+
+		if builder.eventRecorder != recorder {
+			t.Error("SetEventRecorder() did not set event recorder")
+		}
+	})
+}
+
+func TestRenderContextBuilder_Build(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("builds context successfully with hardware detection", func(t *testing.T) {
+		scheme := runtime.NewScheme()
+		_ = corev1.AddToScheme(scheme)
+
+		node := &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-node",
+				Labels: map[string]string{
+					"feature.node.kubernetes.io/pci-present": "true",
+				},
+			},
+			Status: corev1.NodeStatus{
+				Capacity: corev1.ResourceList{
+					"nvidia.com/gpu": resource.MustParse("1"),
+				},
+			},
+		}
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(node).
+			Build()
+
+		builder := NewRenderContextBuilder(fakeClient)
+
+		hco := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "hco.kubevirt.io/v1beta1",
+				"kind":       "HyperConverged",
+				"metadata": map[string]interface{}{
+					"name":      "test-hco",
+					"namespace": "test-namespace",
+				},
+			},
+		}
+
+		renderCtx, err := builder.Build(ctx, hco)
+
+		if err != nil {
+			t.Fatalf("Build() error = %v", err)
+		}
+
+		if renderCtx == nil {
+			t.Fatal("Build() returned nil context")
+		}
+
+		if renderCtx.HCO != hco {
+			t.Error("Build() did not set HCO correctly")
+		}
+
+		if renderCtx.Hardware == nil {
+			t.Fatal("Build() did not set hardware context")
+		}
+
+		if !renderCtx.Hardware.GPUPresent {
+			t.Error("Build() did not detect GPU hardware")
+		}
+
+		if !renderCtx.Hardware.PCIDevicesPresent {
+			t.Error("Build() did not detect PCI devices")
+		}
+	})
+
+	t.Run("returns error when HCO is nil", func(t *testing.T) {
+		scheme := runtime.NewScheme()
+		_ = corev1.AddToScheme(scheme)
+		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		builder := NewRenderContextBuilder(fakeClient)
+
+		_, err := builder.Build(ctx, nil)
+
+		if err == nil {
+			t.Error("Build() should return error when HCO is nil")
+		}
+	})
 }
