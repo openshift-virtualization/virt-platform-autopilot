@@ -12,8 +12,13 @@ fmt: ## Run go fmt against code
 vet: ## Run go vet against code
 	go vet ./...
 
+.PHONY: goimport
+goimport:
+	go install golang.org/x/tools/cmd/goimports@latest
+	goimports -w -local="kubevirt.io,github.com/kubevirt,github.com/kubevirt/hyperconverged-cluster-operator"  $(shell find . -type f -name '*.go' ! -path "*/vendor/*" ! -path "./_kubevirtci/*" ! -path "*zz_generated*" )
+
 .PHONY: test
-test: fmt vet ## Run unit tests
+test: fmt vet goimport ## Run unit tests
 	go test ./pkg/... -coverprofile cover.out
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
