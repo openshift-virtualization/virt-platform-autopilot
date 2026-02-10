@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -281,15 +282,20 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 // ReconcileAssets reconciles multiple assets in order
 func (p *Patcher) ReconcileAssets(ctx context.Context, assetMetas []assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) (int, error) {
 	appliedCount := 0
-	var lastErr error
+	var failedAssets []string
+	var errors []error
 
 	for i := range assetMetas {
 		applied, err := p.ReconcileAsset(ctx, &assetMetas[i], renderCtx)
 		if err != nil {
-			lastErr = err
+			// Collect error and failed asset name
+			errors = append(errors, err)
+			failedAssets = append(failedAssets, assetMetas[i].Name)
+
 			// Continue with other assets even if one fails
-			log.FromContext(ctx).Error(err, "Failed to reconcile asset, continuing",
+			log.FromContext(ctx).Error(err, "Failed to reconcile asset, continuing with others",
 				"asset", assetMetas[i].Name,
+				"failedSoFar", len(failedAssets),
 			)
 			continue
 		}
@@ -299,7 +305,23 @@ func (p *Patcher) ReconcileAssets(ctx context.Context, assetMetas []assets.Asset
 		}
 	}
 
-	return appliedCount, lastErr
+	// Return aggregated error if any assets failed
+	// This ensures reconciliation fails and retries, but only after attempting all assets
+	if len(errors) > 0 {
+		// Build detailed error message with all failures
+		var errMsgs []string
+		for i, err := range errors {
+			errMsgs = append(errMsgs, fmt.Sprintf("[%s: %v]", failedAssets[i], err))
+		}
+
+		return appliedCount, fmt.Errorf("failed to reconcile %d/%d assets: %s",
+			len(failedAssets),
+			len(assetMetas),
+			strings.Join(errMsgs, "; "),
+		)
+	}
+
+	return appliedCount, nil
 }
 
 // countJSONPatchOperations counts the number of operations in a JSON patch string
