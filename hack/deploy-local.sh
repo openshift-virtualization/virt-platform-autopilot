@@ -48,7 +48,8 @@ detect_runtime() {
 
 # Build the operator image
 build_image() {
-    local runtime=$(detect_runtime)
+    local runtime
+    runtime=$(detect_runtime)
     log_info "Building operator image with $runtime: $IMAGE_NAME"
 
     if [ "$runtime" = "podman" ]; then
@@ -123,8 +124,7 @@ deploy_operator() {
     fi
 
     # Update image in deployment manifest and apply
-    cat config/manager/manager.yaml | \
-        sed "s|image:.*|image: $deploy_image|" | \
+    sed "s|image:.*|image: $deploy_image|" config/manager/manager.yaml | \
         sed "s|imagePullPolicy:.*|imagePullPolicy: Never|" | \
         kubectl apply --context "kind-$CLUSTER_NAME" -f -
 

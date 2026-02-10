@@ -25,7 +25,6 @@ if [ "$1" = "--verify" ]; then
 fi
 
 # Track verification results
-declare -A VERIFICATION_RESULTS
 OUTDATED_COUNT=0
 MISSING_COUNT=0
 FETCH_FAILED_COUNT=0
@@ -43,7 +42,8 @@ fetch_github_file() {
     local output_path=$4
 
     local url="https://raw.githubusercontent.com/${repo}/${branch}/${file_path}"
-    local temp_file="${TEMP_DIR}/$(basename "$output_path")"
+    local temp_file
+    temp_file="${TEMP_DIR}/$(basename "$output_path")"
 
     if $VERIFY_MODE; then
         echo "Checking: $url"
@@ -58,17 +58,14 @@ fetch_github_file() {
             if [ -f "$output_path" ]; then
                 if ! cmp -s "$temp_file" "$output_path"; then
                     echo "  ✗ OUT OF SYNC with upstream" >&2
-                    VERIFICATION_RESULTS["$output_path"]="outdated"
                     OUTDATED_COUNT=$((OUTDATED_COUNT + 1))
                     return 1
                 else
                     echo "  ✓ Up to date"
-                    VERIFICATION_RESULTS["$output_path"]="ok"
                     return 0
                 fi
             else
                 echo "  ✗ MISSING (exists upstream but not locally)" >&2
-                VERIFICATION_RESULTS["$output_path"]="missing"
                 MISSING_COUNT=$((MISSING_COUNT + 1))
                 return 1
             fi
@@ -82,7 +79,6 @@ fetch_github_file() {
         # Fetch failed
         if $VERIFY_MODE; then
             echo "  ⚠ Cannot verify (fetch failed)" >&2
-            VERIFICATION_RESULTS["$output_path"]="fetch-failed"
             FETCH_FAILED_COUNT=$((FETCH_FAILED_COUNT + 1))
         else
             if [ -f "$output_path" ]; then
@@ -260,9 +256,11 @@ HEADER
 
         # Print category header if changed
         if [ "$category" != "$current_category" ]; then
-            echo "" >> "$CRDS_DIR/README.md"
-            echo "### $category" >> "$CRDS_DIR/README.md"
-            echo "" >> "$CRDS_DIR/README.md"
+            {
+                echo ""
+                echo "### $category"
+                echo ""
+            } >> "$CRDS_DIR/README.md"
             current_category="$category"
         fi
 

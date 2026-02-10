@@ -46,8 +46,10 @@ check_kind() {
 
 # Function to install kind
 install_kind() {
-    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
+    local os
+    local arch
+    os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    arch=$(uname -m)
 
     case $arch in
         x86_64)

@@ -130,6 +130,20 @@ lint: ## Run golangci-lint
 	fi
 	$(GOLANGCI_LINT) run
 
+SHELLCHECK ?= $(shell which shellcheck)
+
+.PHONY: shellcheck
+shellcheck: ## Run shellcheck on all shell scripts
+	@if ! command -v shellcheck >/dev/null 2>&1; then \
+		echo "shellcheck not found. Please install it:"; \
+		echo "  On Fedora/RHEL: sudo dnf install shellcheck"; \
+		echo "  On Ubuntu/Debian: sudo apt-get install shellcheck"; \
+		echo "  On macOS: brew install shellcheck"; \
+		exit 1; \
+	fi
+	@echo "Running shellcheck on hack/ scripts..."
+	@find hack -name '*.sh' -type f -exec shellcheck -x {} +
+
 ##@ Local Development (Kind)
 
 CLUSTER_NAME ?= virt-platform-operator
