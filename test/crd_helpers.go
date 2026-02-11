@@ -134,7 +134,9 @@ func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string)
 		key := client.ObjectKey{Name: crdName}
 
 		if err := c.Get(callCtx, key, crd); err != nil {
-			return false, err
+			// Treat all errors as transient - keep retrying until timeout
+			// This handles temporary API server issues, network blips, etc.
+			return false, nil
 		}
 
 		// Check if CRD is established
@@ -184,7 +186,9 @@ func waitForCRDDeletion(ctx context.Context, c client.Client, crdName string) er
 			if client.IgnoreNotFound(err) == nil {
 				return true, nil // CRD is deleted
 			}
-			return false, err // Some other error occurred
+			// Treat all other errors as transient - keep retrying until timeout
+			// This handles temporary API server issues, network blips, etc.
+			return false, nil
 		}
 		// CRD still exists
 		return false, nil
@@ -236,9 +240,19 @@ func UninstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
 // IsCRDInstalled checks if a specific CRD is installed in the cluster
 // Returns false if CRD is being deleted
 func IsCRDInstalled(ctx context.Context, c client.Client, crdName string) bool {
+	// Check if parent context is cancelled
+	if err := ctx.Err(); err != nil {
+		return false
+	}
+
+	// Use fresh context with short timeout for each API call
+	// This prevents rate limiter blocking when called repeatedly in Eventually loops
+	callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	key := client.ObjectKey{Name: crdName}
-	err := c.Get(ctx, key, crd)
+	err := c.Get(callCtx, key, crd)
 	if err != nil {
 		return false
 	}
