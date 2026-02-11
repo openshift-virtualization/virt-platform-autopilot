@@ -70,6 +70,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
+	// Increase rate limits for CI environments
+	// Default QPS=5, Burst=10 is too restrictive for CRD operations in tests
+	// These values allow for more frequent API calls without hitting rate limiter
+	cfg.QPS = 50
+	cfg.Burst = 100
+
 	// Create client
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
