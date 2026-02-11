@@ -36,10 +36,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/assets"
-	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 const (

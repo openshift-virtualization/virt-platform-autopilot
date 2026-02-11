@@ -2,8 +2,8 @@
 
 set -e
 
-CLUSTER_NAME="${CLUSTER_NAME:-virt-platform-operator}"
-IMAGE_NAME="${IMAGE_NAME:-virt-platform-operator:latest}"
+CLUSTER_NAME="${CLUSTER_NAME:-virt-platform-autopilot}"
+IMAGE_NAME="${IMAGE_NAME:-virt-platform-autopilot:latest}"
 NAMESPACE="${NAMESPACE:-openshift-cnv}"
 
 # Colors for output
@@ -156,7 +156,7 @@ wait_for_operator() {
     log_info "Waiting for operator to be ready..."
 
     kubectl wait --for=condition=available --timeout=120s \
-        deployment/virt-platform-operator \
+        deployment/virt-platform-autopilot \
         -n "$NAMESPACE" \
         --context "kind-$CLUSTER_NAME" || {
         log_warn "Operator did not become ready in time"
@@ -214,7 +214,7 @@ redeploy() {
     load_image
 
     log_info "Restarting operator pods"
-    kubectl rollout restart deployment/virt-platform-operator \
+    kubectl rollout restart deployment/virt-platform-autopilot \
         -n "$NAMESPACE" \
         --context "kind-$CLUSTER_NAME"
 

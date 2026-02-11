@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 func TestExtractFeatureGates(t *testing.T) {

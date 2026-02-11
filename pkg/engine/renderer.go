@@ -24,8 +24,8 @@ import (
 	sprig "github.com/Masterminds/sprig/v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/assets"
-	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 )
 
 // Renderer handles template rendering with RenderContext

@@ -84,7 +84,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 					Name:      testConfigMapName,
 					Namespace: operatorNamespace,
 					Labels: map[string]string{
-						managedByLabel: "virt-platform-operator",
+						managedByLabel: "virt-platform-autopilot",
 					},
 				},
 				Data: map[string]string{
@@ -95,7 +95,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 
 			By("simulating external actor repeatedly modifying the resource")
 			// In a real E2E scenario, another controller or script would repeatedly
-			// modify this ConfigMap, triggering throttling in the operator
+			// modify this ConfigMap, triggering throttling in the autopilot
 			for i := 0; i < 15; i++ {
 				Eventually(func() error {
 					fresh := &corev1.ConfigMap{}
@@ -166,7 +166,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 					Name:      testConfigMapName,
 					Namespace: operatorNamespace,
 					Labels: map[string]string{
-						managedByLabel: "virt-platform-operator",
+						managedByLabel: "virt-platform-autopilot",
 					},
 					Annotations: map[string]string{
 						pauseAnnotation: "true",
@@ -226,7 +226,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 				"Pause annotation should be removed")
 
 			By("verifying operator resumes reconciliation")
-			// In a real E2E scenario, we would verify that the operator
+			// In a real E2E scenario, we would verify that the autopilot
 			// has resumed reconciling this resource by checking:
 			// - Resource is being updated to match desired state
 			// - Events are being recorded for reconciliation

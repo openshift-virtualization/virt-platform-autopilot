@@ -25,9 +25,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
-	"github.com/kubevirt/virt-platform-operator/pkg/observability"
-	"github.com/kubevirt/virt-platform-operator/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 )
 
 var _ = Describe("Metrics Integration", func() {

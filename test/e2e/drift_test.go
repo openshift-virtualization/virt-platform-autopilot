@@ -17,12 +17,12 @@ const (
 	// Expected resource name created by operator asset
 	driftMcName = "50-virt-swap-enable"
 
-	// Expected spec field value from the operator's asset
+	// Expected spec field value from the autopilot's asset
 	driftExpectedIgnitionVersion = "3.2.0"
 
 	// Managed-by label
 	driftManagedByLabel = "platform.kubevirt.io/managed-by"
-	driftManagedByValue = "virt-platform-operator"
+	driftManagedByValue = "virt-platform-autopilot"
 )
 
 var (

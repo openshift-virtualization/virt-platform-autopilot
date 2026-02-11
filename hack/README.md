@@ -80,7 +80,7 @@ Manages Kind clusters with support for Docker and Podman.
 - `create-mock-hco` - Create a mock HyperConverged instance
 
 **Environment Variables:**
-- `CLUSTER_NAME` - Name of the cluster (default: `virt-platform-operator`)
+- `CLUSTER_NAME` - Name of the cluster (default: `virt-platform-autopilot`)
 - `KIND_VERSION` - Version of Kind to install (default: `v0.20.0`)
 - `KUBERNETES_VERSION` - Kubernetes version (default: `v1.28.0`)
 
@@ -114,9 +114,9 @@ Builds, loads, and deploys the operator to Kind cluster.
 - `load` - Load image into cluster only
 
 **Environment Variables:**
-- `CLUSTER_NAME` - Name of the cluster (default: `virt-platform-operator`)
-- `IMAGE_NAME` - Operator image name (default: `virt-platform-operator:latest`)
-- `NAMESPACE` - Operator namespace (default: `virt-platform-operator-system`)
+- `CLUSTER_NAME` - Name of the cluster (default: `virt-platform-autopilot`)
+- `IMAGE_NAME` - Operator image name (default: `virt-platform-autopilot:latest`)
+- `NAMESPACE` - Operator namespace (default: `virt-platform-autopilot-system`)
 
 **Examples:**
 ```bash
@@ -204,7 +204,7 @@ make kind-setup
 **Image not loading:**
 ```bash
 # Verify image exists
-docker images | grep virt-platform-operator
+docker images | grep virt-platform-autopilot
 
 # Manually load image
 make kind-load
@@ -213,13 +213,13 @@ make kind-load
 **Operator not starting:**
 ```bash
 # Check pod status
-kubectl get pods -n virt-platform-operator-system
+kubectl get pods -n virt-platform-autopilot-system
 
 # View events
-kubectl get events -n virt-platform-operator-system --sort-by='.lastTimestamp'
+kubectl get events -n virt-platform-autopilot-system --sort-by='.lastTimestamp'
 
 # Describe pod
-kubectl describe pod -n virt-platform-operator-system -l app=virt-platform-operator
+kubectl describe pod -n virt-platform-autopilot-system -l app=virt-platform-autopilot
 
 # Check logs
 make logs-local

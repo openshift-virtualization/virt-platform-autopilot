@@ -15,8 +15,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-CLUSTER_NAME="${CLUSTER_NAME:-virt-platform-operator-e2e}"
-IMAGE_NAME="${IMAGE_NAME:-virt-platform-operator:latest}"
+CLUSTER_NAME="${CLUSTER_NAME:-virt-platform-autopilot-e2e}"
+IMAGE_NAME="${IMAGE_NAME:-virt-platform-autopilot:latest}"
 CLEANUP="${CLEANUP:-true}"
 CONTAINER_TOOL="${CONTAINER_TOOL:-$(command -v docker 2>/dev/null || command -v podman 2>/dev/null)}"
 
@@ -58,7 +58,7 @@ main() {
     # Wait for operator to be ready
     log_info "Waiting for operator to be ready..."
     kubectl wait --for=condition=available --timeout=2m \
-        deployment/virt-platform-operator \
+        deployment/virt-platform-autopilot \
         -n openshift-cnv \
         --context "kind-${CLUSTER_NAME}" || {
         log_error "Operator deployment failed to become ready"

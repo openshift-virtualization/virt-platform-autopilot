@@ -44,7 +44,7 @@ var (
 
 	// ThrashingTotal counts reconciliation throttling events (token bucket exhaustion).
 	// Increments when the "Reconcile Gate" is hit (update budget exhausted).
-	// Indicates an active "Edit War" between the operator and external changes.
+	// Indicates an active "Edit War" between the autopilot and external changes.
 	ThrashingTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Subsystem: subsystem,

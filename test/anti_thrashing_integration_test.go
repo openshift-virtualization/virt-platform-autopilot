@@ -26,9 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/observability"
-	"github.com/kubevirt/virt-platform-operator/pkg/overrides"
-	"github.com/kubevirt/virt-platform-operator/pkg/throttling"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
 )
 
 var _ = Describe("Anti-Thrashing Integration", func() {
@@ -206,7 +206,7 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 						"name":      "paused-cm",
 						"namespace": testNs,
 						"labels": map[string]interface{}{
-							"platform.kubevirt.io/managed-by": "virt-platform-operator",
+							"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
 						},
 						"annotations": map[string]interface{}{
 							overrides.AnnotationReconcilePaused: "true",
@@ -234,7 +234,7 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 						"name":      "recoverable-cm",
 						"namespace": testNs,
 						"labels": map[string]interface{}{
-							"platform.kubevirt.io/managed-by": "virt-platform-operator",
+							"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
 						},
 						"annotations": map[string]interface{}{
 							overrides.AnnotationReconcilePaused: "true",
@@ -355,7 +355,7 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 						"name":      "fight-cm",
 						"namespace": testNs,
 						"labels": map[string]interface{}{
-							"platform.kubevirt.io/managed-by": "virt-platform-operator",
+							"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
 						},
 					},
 					"data": map[string]interface{}{

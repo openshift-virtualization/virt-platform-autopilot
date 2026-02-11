@@ -27,12 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/assets"
-	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
-	"github.com/kubevirt/virt-platform-operator/pkg/observability"
-	"github.com/kubevirt/virt-platform-operator/pkg/overrides"
-	"github.com/kubevirt/virt-platform-operator/pkg/throttling"
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 // Patcher implements the Patched Baseline algorithm

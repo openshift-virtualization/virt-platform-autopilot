@@ -54,7 +54,7 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
-// getOperatorPod returns the operator pod by app label.
+// getOperatorPod returns the autopilot pod by app label.
 func getOperatorPod() *corev1.Pod {
 	podList := &corev1.PodList{}
 	ExpectWithOffset(1, k8sClient.List(ctx, podList,
@@ -65,7 +65,7 @@ func getOperatorPod() *corev1.Pod {
 	return &podList.Items[0]
 }
 
-// getManagerRestartCount returns the restart count for the "manager" container in the operator pod.
+// getManagerRestartCount returns the restart count for the "manager" container in the autopilot pod.
 func getManagerRestartCount() int32 {
 	pod := getOperatorPod()
 	for _, cs := range pod.Status.ContainerStatuses {
@@ -77,11 +77,11 @@ func getManagerRestartCount() int32 {
 	if len(pod.Status.ContainerStatuses) == 1 {
 		return pod.Status.ContainerStatuses[0].RestartCount
 	}
-	Fail("manager container not found in operator pod")
+	Fail("manager container not found in autopilot pod")
 	return -1
 }
 
-// waitForOperatorRestart polls until the operator container restart count
+// waitForOperatorRestart polls until the autopilot container restart count
 // exceeds prevCount, then waits for the pod to become Ready.
 func waitForOperatorRestart(prevCount int32) {
 	By(fmt.Sprintf("waiting for operator restart count to exceed %d", prevCount))
@@ -93,9 +93,9 @@ func waitForOperatorRestart(prevCount int32) {
 	waitForOperatorHealthy()
 }
 
-// waitForOperatorHealthy waits for the operator pod to be Running with container Ready.
+// waitForOperatorHealthy waits for the autopilot pod to be Running with container Ready.
 func waitForOperatorHealthy() {
-	By("waiting for operator pod to become healthy")
+	By("waiting for autopilot pod to become healthy")
 	Eventually(func() bool {
 		pod := getOperatorPod()
 		if pod.Status.Phase != corev1.PodRunning {

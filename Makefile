@@ -69,11 +69,11 @@ run: fmt vet ## Run from your host
 
 .PHONY: docker-build
 docker-build: ## Build container image
-	$(CONTAINER_TOOL) build -t virt-platform-operator:latest .
+	$(CONTAINER_TOOL) build -t virt-platform-autopilot:latest .
 
 .PHONY: docker-push
 docker-push: ## Push container image
-	$(CONTAINER_TOOL) push virt-platform-operator:latest
+	$(CONTAINER_TOOL) push virt-platform-autopilot:latest
 
 ##@ Deployment
 
@@ -167,8 +167,8 @@ shellcheck: ## Run shellcheck on all shell scripts
 
 ##@ Local Development (Kind)
 
-CLUSTER_NAME ?= virt-platform-operator
-IMAGE_NAME ?= virt-platform-operator:latest
+CLUSTER_NAME ?= virt-platform-autopilot
+IMAGE_NAME ?= virt-platform-autopilot:latest
 
 .PHONY: kind-setup
 kind-setup: ## Setup local Kind cluster with CRDs and mock HCO
@@ -213,7 +213,7 @@ undeploy-local: ## Undeploy operator from Kind cluster
 .PHONY: logs-local
 logs-local: ## Tail operator logs from Kind cluster
 	kubectl logs -f -n openshift-cnv \
-		-l app=virt-platform-operator \
+		-l app=virt-platform-autopilot \
 		--context kind-$(CLUSTER_NAME) \
 		--tail=100
 

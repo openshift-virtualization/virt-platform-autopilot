@@ -43,7 +43,7 @@ type Metadata struct {
 	Name string `yaml:"name"`
 }
 
-// staticRules returns the operator infrastructure RBAC rules
+// staticRules returns the autopilot infrastructure RBAC rules
 // IMPORTANT: Order must be stable for deterministic output
 func staticRules() []RBACRule {
 	return []RBACRule{
@@ -380,7 +380,7 @@ func main() {
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: virt-platform-operator-role
+  name: virt-platform-autopilot-role
 rules:
 `
 

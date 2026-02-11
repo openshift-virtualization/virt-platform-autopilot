@@ -16,9 +16,9 @@ import (
 
 const (
 	operatorNamespace     = "openshift-cnv"
-	operatorDeployment    = "virt-platform-operator"
-	operatorAppLabel      = "virt-platform-operator"
-	operatorComponentName = "virt-platform-operator"
+	operatorDeployment    = "virt-platform-autopilot"
+	operatorAppLabel      = "virt-platform-autopilot"
+	operatorComponentName = "virt-platform-autopilot"
 	hcoName               = "kubevirt-hyperconverged"
 	timeout               = 2 * time.Minute
 	interval              = 2 * time.Second
@@ -123,7 +123,7 @@ var _ = Describe("Controller E2E Tests", func() {
 					return false
 				}
 				labels := fetched.GetLabels()
-				return labels != nil && labels["platform.kubevirt.io/managed-by"] == "virt-platform-operator"
+				return labels != nil && labels["platform.kubevirt.io/managed-by"] == "virt-platform-autopilot"
 			}, timeout, interval).Should(BeTrue(), "Operator should have labeled HCO with managed-by label")
 		})
 

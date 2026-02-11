@@ -26,11 +26,11 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/assets"
-	pkgcontext "github.com/kubevirt/virt-platform-operator/pkg/context"
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
-	"github.com/kubevirt/virt-platform-operator/pkg/overrides"
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 // FakeEventRecorder captures events for testing

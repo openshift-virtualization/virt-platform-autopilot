@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/observability"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
 )
 
 // ComponentKindMapping maps asset components to their CRD names
