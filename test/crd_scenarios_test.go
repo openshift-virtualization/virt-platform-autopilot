@@ -30,10 +30,17 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			obj.SetName("test-mc")
 			obj.SetNamespace("default")
 
-			By("expecting the create to fail with 'no matches for kind' error")
+			By("expecting the create to fail with missing CRD error")
 			err := k8sClient.Create(ctx, obj)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no matches for kind"))
+			// Kubernetes API can return different error messages for missing CRDs:
+			// - "no matches for kind" - when API discovery is up-to-date
+			// - "could not find the requested resource" - when discovery cache is stale
+			// Both indicate the CRD is missing, so we accept either
+			Expect(err.Error()).To(Or(
+				ContainSubstring("no matches for kind"),
+				ContainSubstring("could not find the requested resource"),
+			))
 		})
 	})
 
