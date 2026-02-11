@@ -27,7 +27,7 @@ const (
 )
 
 // InstallCRDs installs a CRD set dynamically during test execution
-// This simulates the scenario where CRDs are installed after the operator starts
+// This simulates the scenario where CRDs are installed after startup
 // This function is idempotent - it's safe to call multiple times
 func InstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
 	crdDir := filepath.Join("..", "assets", "crds", string(crdSet))

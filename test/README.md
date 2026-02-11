@@ -1,6 +1,6 @@
 # Integration Tests with envtest
 
-This directory contains integration tests for virt-platform-operator using [envtest](https://book.kubebuilder.io/reference/envtest.html), which provides a real Kubernetes API server for testing.
+This directory contains integration tests for virt-platform-autopilot using [envtest](https://book.kubebuilder.io/reference/envtest.html), which provides a real Kubernetes API server for testing.
 
 ## Why envtest instead of fake client?
 
@@ -99,7 +99,7 @@ Tests verify Server-Side Apply tracks field ownership correctly:
 It("should track field ownership via managedFields", func() {
     // Apply resource with SSA
     err := k8sClient.Patch(ctx, obj, client.Apply,
-        client.FieldOwner("virt-platform-operator"),
+        client.FieldOwner("virt-platform-autopilot"),
         client.ForceOwnership)
 
     // Verify managedFields are set

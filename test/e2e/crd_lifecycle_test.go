@@ -16,7 +16,7 @@ import (
 const (
 	lifecycleMachineConfigCRDName = "machineconfigs.machineconfiguration.openshift.io"
 	lifecycleManagedByLabel       = "platform.kubevirt.io/managed-by"
-	lifecycleManagedByValue       = "virt-platform-operator"
+	lifecycleManagedByValue       = "virt-platform-autopilot"
 )
 
 var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
@@ -103,7 +103,7 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		// Ensure CRD is cleaned up in case of test failure
 		removeCRD(lifecycleMachineConfigCRDName)
 
-		// Give the operator time to stabilize after potential restart
+		// Give the autopilot time to stabilize after potential restart
 		Eventually(func() bool {
 			pod := getOperatorPod()
 			for _, cs := range pod.Status.ContainerStatuses {

@@ -28,13 +28,13 @@ import (
 
 const (
 	// FieldManager is the field manager name used for SSA
-	FieldManager = "virt-platform-operator"
+	FieldManager = "virt-platform-autopilot"
 
 	// ManagedByLabel is the label key used to mark managed objects
 	ManagedByLabel = "platform.kubevirt.io/managed-by"
 
-	// ManagedByValue is the label value for objects managed by this operator
-	ManagedByValue = "virt-platform-operator"
+	// ManagedByValue is the label value for objects managed by this autopilot
+	ManagedByValue = "virt-platform-autopilot"
 )
 
 // Applier handles Server-Side Apply operations

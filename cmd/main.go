@@ -38,9 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/controller"
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/controller"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 var (
@@ -85,7 +85,7 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// Create label selector for cache filtering
-	// Only cache resources managed by this operator (reduces memory in large clusters)
+	// Only cache resources managed by this autopilot (reduces memory in large clusters)
 	managedByRequirement, err := labels.NewRequirement(
 		engine.ManagedByLabel,
 		selection.Equals,
@@ -109,7 +109,7 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "virt-platform-operator.kubevirt.io",
+		LeaderElectionID:       "virt-platform-autopilot.kubevirt.io",
 		Cache: cache.Options{
 			// By default, only cache objects with our managed-by label
 			// This dramatically reduces memory usage in large clusters
@@ -146,7 +146,7 @@ func main() {
 		os.Exit(1)
 	}
 	if !hcoCRDInstalled {
-		setupLog.Error(nil, "HyperConverged CRD not found - this operator requires the HCO CRD to be installed by OLM")
+		setupLog.Error(nil, "HyperConverged CRD not found - this component requires the HCO CRD to be installed by OLM")
 		os.Exit(1)
 	}
 	setupLog.Info("HCO CRD validation passed")
@@ -165,7 +165,7 @@ func main() {
 
 	// Setup event recorder
 	eventRecorder := util.NewEventRecorder(
-		mgr.GetEventRecorder("virt-platform-operator"),
+		mgr.GetEventRecorder("virt-platform-autopilot"),
 	)
 	reconciler.SetEventRecorder(eventRecorder)
 

@@ -6,28 +6,28 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: virt-platform-operator
+  name: virt-platform-autopilot
   namespace: openshift-cnv
   labels:
-    app: virt-platform-operator
+    app: virt-platform-autopilot
     control-plane: controller-manager
 spec:
   selector:
     matchLabels:
-      app: virt-platform-operator
+      app: virt-platform-autopilot
       control-plane: controller-manager
   replicas: 1
   template:
     metadata:
       labels:
-        app: virt-platform-operator
+        app: virt-platform-autopilot
         control-plane: controller-manager
     spec:
       securityContext:
         runAsNonRoot: true
       containers:
         - name: manager
-          image: virt-platform-operator:latest
+          image: virt-platform-autopilot:latest
           imagePullPolicy: IfNotPresent
           command:
             - /manager
@@ -58,5 +58,5 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
-      serviceAccountName: virt-platform-operator
+      serviceAccountName: virt-platform-autopilot
       terminationGracePeriodSeconds: 10

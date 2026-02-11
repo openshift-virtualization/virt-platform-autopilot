@@ -1,6 +1,6 @@
 # Local Development Guide
 
-This guide covers setting up a local development environment for virt-platform-operator using Kind (Kubernetes in Docker).
+This guide covers setting up a local development environment for virt-platform-autopilot using Kind (Kubernetes in Docker).
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ This guide covers setting up a local development environment for virt-platform-o
 ### 1. Clone and Setup
 
 ```bash
-cd virt-platform-operator
+cd virt-platform-autopilot
 go mod tidy
 ```
 
@@ -210,7 +210,7 @@ The operator detects hardware capabilities and conditionally applies assets:
 
 ```bash
 # Label a node to simulate GPU presence
-kubectl label node kind-virt-platform-operator-worker feature.node.kubernetes.io/pci-present=true
+kubectl label node kind-virt-platform-autopilot-worker feature.node.kubernetes.io/pci-present=true
 
 # Watch operator reconcile PCI passthrough MachineConfig
 make logs-local
@@ -241,13 +241,13 @@ kubectl get kubedeschedulers
 
 ```bash
 # Check pod status
-kubectl get pods -n virt-platform-operator-system
+kubectl get pods -n virt-platform-autopilot-system
 
 # Describe the pod
-kubectl describe pod -n virt-platform-operator-system -l app=virt-platform-operator
+kubectl describe pod -n virt-platform-autopilot-system -l app=virt-platform-autopilot
 
 # Check events
-kubectl get events -n virt-platform-operator-system --sort-by='.lastTimestamp'
+kubectl get events -n virt-platform-autopilot-system --sort-by='.lastTimestamp'
 
 # View logs
 make logs-local
@@ -257,9 +257,9 @@ make logs-local
 
 ```bash
 # Verify image exists locally
-docker images | grep virt-platform-operator
+docker images | grep virt-platform-autopilot
 # or
-podman images | grep virt-platform-operator
+podman images | grep virt-platform-autopilot
 
 # Rebuild and reload
 make kind-load
@@ -282,7 +282,7 @@ kubectl get crds | grep -E "hyperconverged|machineconfig|nodehealthcheck"
 make kind-status
 
 # View cluster info
-kubectl cluster-info --context kind-virt-platform-operator
+kubectl cluster-info --context kind-virt-platform-autopilot
 
 # If cluster is broken, recreate it
 make kind-delete
@@ -331,10 +331,10 @@ kubectl config use-context kind-virt-platform-test
 
 ```bash
 # Get kubeconfig
-kind export kubeconfig --name virt-platform-operator
+kind export kubeconfig --name virt-platform-autopilot
 
 # Or use context directly
-kubectl --context kind-virt-platform-operator get nodes
+kubectl --context kind-virt-platform-autopilot get nodes
 ```
 
 ## Clean Up
@@ -369,7 +369,7 @@ make kind-delete
 4. **Multiple Terminals**: Run these in separate terminals:
    - Terminal 1: `make logs-local` (watch logs)
    - Terminal 2: Code editing and `make redeploy-local`
-   - Terminal 3: `kubectl get pods -n virt-platform-operator-system -w` (watch pods)
+   - Terminal 3: `kubectl get pods -n virt-platform-autopilot-system -w` (watch pods)
 
 5. **Resource Cleanup**: Kind clusters are ephemeral - don't worry about breaking things
 

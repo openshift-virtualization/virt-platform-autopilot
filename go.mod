@@ -1,4 +1,4 @@
-module github.com/kubevirt/virt-platform-operator
+module github.com/kubevirt/virt-platform-autopilot
 
 go 1.25.0
 

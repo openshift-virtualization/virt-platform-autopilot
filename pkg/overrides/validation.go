@@ -26,7 +26,7 @@ const (
 	// AnnotationMode is the annotation key for management mode (managed/unmanaged)
 	AnnotationMode = "platform.kubevirt.io/mode"
 
-	// ModeUnmanaged indicates the operator should not manage this resource
+	// ModeUnmanaged indicates the autopilot should not manage this resource
 	ModeUnmanaged = "unmanaged"
 
 	// AnnotationReconcilePaused is set when an edit war is detected
@@ -96,7 +96,7 @@ func IsUnmanaged(obj *unstructured.Unstructured) bool {
 }
 
 // IsPaused checks if a resource has the reconcile-paused annotation
-// This annotation is set by the operator when an edit war is detected
+// This annotation is set when an edit war is detected
 func IsPaused(obj *unstructured.Unstructured) bool {
 	if obj == nil {
 		return false

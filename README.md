@@ -1,10 +1,10 @@
-# virt-platform-operator
+# virt-platform-autopilot
 
-The **virt-platform-operator** transforms OpenShift Virtualization from a software toolkit into a "Managed Platform Experience" by automatically managing the platform substrate required for virtualization at production scale.
+The **virt-platform-autopilot** transforms OpenShift Virtualization from a software toolkit into a "Managed Platform Experience" by automatically managing the platform substrate required for virtualization at production scale.
 
 ## Overview
 
-This operator embraces a **"Zero API Surface"** philosophy:
+This autopilot embraces a **"Zero API Surface"** philosophy:
 - **No new CRDs**: No custom resource definitions to manage
 - **No API modifications**: No new fields added to existing APIs
 - **Consistent management**: ALL resources (including HCO) managed the same way
@@ -83,7 +83,7 @@ metadata:
     platform.kubevirt.io/ignore-fields: "/spec/liveMigrationConfig/parallelMigrationsPerCluster,/spec/featureGates"
 ```
 
-The operator will not manage these fields, allowing manual control.
+These fields will not be managed, allowing manual control.
 
 ### Full Opt-Out
 ```yaml
@@ -92,7 +92,7 @@ metadata:
     platform.kubevirt.io/mode: unmanaged
 ```
 
-The operator will stop managing this resource entirely.
+This resource will not be managed entirely.
 
 ## Getting Started
 
@@ -104,7 +104,7 @@ The operator will stop managing this resource entirely.
 
 ### Installation
 
-1. Build and push the operator image:
+1. Build and push the image:
 ```bash
 make docker-build docker-push
 ```
@@ -116,8 +116,8 @@ make deploy
 
 3. Verify installation:
 ```bash
-kubectl get deployment -n virt-platform-operator-system
-kubectl logs -n virt-platform-operator-system deployment/virt-platform-operator
+kubectl get deployment -n virt-platform-autopilot-system
+kubectl logs -n virt-platform-autopilot-system deployment/virt-platform-autopilot
 ```
 
 ### Local Development (Kind)
@@ -129,7 +129,7 @@ For local development and testing with Kind (Kubernetes in Docker):
 # Setup local cluster with CRDs and mock HCO
 make kind-setup
 
-# Deploy operator
+# Deploy autopilot
 make deploy-local
 
 # View logs
@@ -169,7 +169,7 @@ make dev-cycle
 ## Project Structure
 
 ```
-virt-platform-operator/
+virt-platform-autopilot/
 ├── cmd/
 │   ├── main.go                    # Manager entrypoint
 │   └── rbac-gen/                  # RBAC generation tool

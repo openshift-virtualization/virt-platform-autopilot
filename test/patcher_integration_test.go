@@ -25,9 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
-	"github.com/kubevirt/virt-platform-operator/pkg/overrides"
-	"github.com/kubevirt/virt-platform-operator/pkg/throttling"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
 )
 
 var _ = Describe("Patched Baseline Algorithm Integration", func() {
@@ -364,7 +364,7 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 			// Find our manager
 			found := false
 			for _, mf := range managedFields {
-				if mf.Manager == "virt-platform-operator" {
+				if mf.Manager == "virt-platform-autopilot" {
 					found = true
 					Expect(mf.Operation).To(Equal(metav1.ManagedFieldsOperationApply))
 					break

@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 
-	embeddedassets "github.com/kubevirt/virt-platform-operator/assets"
+	embeddedassets "github.com/kubevirt/virt-platform-autopilot/assets"
 )
 
 const (

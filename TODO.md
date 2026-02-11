@@ -1,4 +1,4 @@
-# virt-platform-operator TODO
+# virt-platform-autopilot TODO
 
 This document tracks implementation progress against the original plan in `claude_assets/claude_plan.md`.
 

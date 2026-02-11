@@ -40,7 +40,7 @@ The generator walks `assets/` directory and:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: virt-platform-operator-role
+  name: virt-platform-autopilot-role
 rules:
   # ========================================
   # Operator Infrastructure (Static)

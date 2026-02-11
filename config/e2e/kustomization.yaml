@@ -16,7 +16,7 @@ patches:
   # Remove --leader-elect flag and add fast-startup flag
   - target:
       kind: Deployment
-      name: virt-platform-operator
+      name: virt-platform-autopilot
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/args

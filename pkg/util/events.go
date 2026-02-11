@@ -22,7 +22,7 @@ import (
 	"k8s.io/client-go/tools/events"
 )
 
-// Event types for the operator
+// Event types for the autopilot
 const (
 	// EventTypeNormal represents normal, informational events
 	EventTypeNormal = corev1.EventTypeNormal

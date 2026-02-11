@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 func TestHasPCIDevices(t *testing.T) {

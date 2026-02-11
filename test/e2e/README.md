@@ -1,6 +1,6 @@
 # E2E Tests
 
-End-to-end tests for the virt-platform-operator running on a real Kubernetes cluster (kind).
+End-to-end tests for the virt-platform-autopilot running on a real Kubernetes cluster (kind).
 
 ## What E2E Tests Cover
 
@@ -139,7 +139,7 @@ You can override the container tool: `CONTAINER_TOOL=podman make test-e2e`
 
 ### View operator logs
 ```bash
-kubectl logs -n openshift-cnv -l app=virt-platform-operator --tail=100
+kubectl logs -n openshift-cnv -l app=virt-platform-autopilot --tail=100
 ```
 
 ### Check HCO status
@@ -156,7 +156,7 @@ kubectl get events -n openshift-cnv
 ```bash
 CLEANUP=false ./hack/run-e2e.sh
 # Tests fail, cluster stays up for debugging
-# Cleanup manually: CLUSTER_NAME=virt-platform-operator-e2e ./hack/kind-cluster.sh delete
+# Cleanup manually: CLUSTER_NAME=virt-platform-autopilot-e2e ./hack/kind-cluster.sh delete
 ```
 
 ## Architecture

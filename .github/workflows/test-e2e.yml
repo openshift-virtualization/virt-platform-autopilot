@@ -34,5 +34,5 @@ jobs:
       - name: Run E2E tests on kind cluster
         run: ./hack/run-e2e.sh
         env:
-          CLUSTER_NAME: virt-platform-operator-ci
+          CLUSTER_NAME: virt-platform-autopilot-ci
           CLEANUP: true

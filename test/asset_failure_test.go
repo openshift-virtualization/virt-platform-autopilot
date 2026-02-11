@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 )
 
 var _ = Describe("Asset Failure Handling", func() {
@@ -243,7 +243,7 @@ var _ = Describe("Asset Failure Handling", func() {
 			By("This ensures:")
 			By("  - One throttled resource doesn't block others")
 			By("  - Each (namespace, name, kind) has independent rate limiting")
-			By("  - A misbehaving resource can't DoS the operator")
+			By("  - A misbehaving resource can't DoS the system")
 			By("")
 			By("Validation:")
 			By("  - pkg/throttling/token_bucket_test.go validates MakeResourceKey uniqueness")

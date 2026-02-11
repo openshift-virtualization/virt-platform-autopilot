@@ -9,12 +9,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 )
 
 var _ = Describe("Real-Time Drift Detection", func() {
 	// These tests verify that changes to managed resources trigger immediate reconciliation
-	// This is critical for the operator to maintain desired state without waiting for periodic sync
+	// This is critical for the system to maintain desired state without waiting for periodic sync
 
 	Context("when a managed resource is modified", func() {
 		It("should detect drift on MachineConfig immediately", func() {

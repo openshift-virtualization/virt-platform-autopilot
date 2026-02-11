@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Kind cluster management script for virt-platform-operator
+# Kind cluster management script for virt-platform-autopilot
 #
 # This script works with both Docker and Podman out of the box.
 # No special configuration or workarounds needed - Kind v1.34.0
@@ -9,7 +9,7 @@
 
 set -e
 
-CLUSTER_NAME="${CLUSTER_NAME:-virt-platform-operator}"
+CLUSTER_NAME="${CLUSTER_NAME:-virt-platform-autopilot}"
 KIND_VERSION="${KIND_VERSION:-v0.31.0}"
 KUBERNETES_VERSION="${KUBERNETES_VERSION:-v1.35.0}"
 
@@ -232,7 +232,7 @@ case "${1:-}" in
         echo "  create-mock-hco     Create a mock HyperConverged instance"
         echo ""
         echo "Environment variables:"
-        echo "  CLUSTER_NAME        Name of the cluster (default: virt-platform-operator)"
+        echo "  CLUSTER_NAME        Name of the cluster (default: virt-platform-autopilot)"
         echo "  KIND_VERSION        Version of Kind to install (default: v0.20.0)"
         echo "  KUBERNETES_VERSION  Kubernetes version (default: v1.28.0)"
         exit 1

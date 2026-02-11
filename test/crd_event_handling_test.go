@@ -8,11 +8,11 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/kubevirt/virt-platform-operator/pkg/util"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 var _ = Describe("CRD Event Handling", func() {
-	// These tests verify that the operator correctly handles CRD lifecycle events
+	// These tests verify that the system correctly handles CRD lifecycle events
 	// In the running controller, these events would trigger watch configuration changes
 
 	Context("when CRDs are dynamically installed and removed", func() {

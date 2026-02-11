@@ -11,7 +11,7 @@ import (
 )
 
 var _ = Describe("RBAC Permissions Validation", func() {
-	// These tests verify that the static RBAC role has core permissions needed by the operator
+	// These tests verify that the static RBAC role has core permissions needed by the autopilot
 	// Note: Permissions for managed resource types (MachineConfig, MetalLB, etc.) will be
 	// generated dynamically in the future, so we only test truly static permissions here
 
