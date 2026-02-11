@@ -122,10 +122,18 @@ func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string)
 
 	// Poll less frequently to reduce rate limiter pressure
 	return wait.PollUntilContextTimeout(timeoutCtx, 500*time.Millisecond, 180*time.Second, true, func(ctx context.Context) (bool, error) {
+		// Use fresh context with short timeout for each API call
+		// At QPS=500, acquiring tokens takes ~2ms even when bucket is empty
+		// API Get operation takes <10ms, so 5s is very generous
+		// This prevents "rate: Wait(n=1) would exceed context deadline" errors
+		// that occur when the polling context has diminishing time remaining
+		callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 
-		if err := c.Get(ctx, key, crd); err != nil {
+		if err := c.Get(callCtx, key, crd); err != nil {
 			return false, err
 		}
 
@@ -158,9 +166,17 @@ func waitForCRDDeletion(ctx context.Context, c client.Client, crdName string) er
 
 	// Poll less frequently to reduce rate limiter pressure (1 second intervals)
 	return wait.PollUntilContextTimeout(timeoutCtx, 1*time.Second, 180*time.Second, true, func(ctx context.Context) (bool, error) {
+		// Use fresh context with short timeout for each API call
+		// At QPS=500, acquiring tokens takes ~2ms even when bucket is empty
+		// API Get operation takes <10ms, so 5s is very generous
+		// This prevents "rate: Wait(n=1) would exceed context deadline" errors
+		// that occur when the polling context has diminishing time remaining
+		callCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
-		err := c.Get(ctx, key, crd)
+		err := c.Get(callCtx, key, crd)
 		// CRD is fully deleted when we get a NotFound error
 		// Return true to stop polling when the CRD is gone
 		if err != nil {
