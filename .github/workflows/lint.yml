@@ -61,3 +61,15 @@ jobs:
 
       - name: Run shellcheck
         run: make shellcheck
+
+      - name: Install promtool
+        run: |
+          PROMETHEUS_VERSION="3.9.1"
+          OS_ARCH="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          wget -q https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.${OS_ARCH}.tar.gz
+          tar xzf prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz
+          sudo mv prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool /usr/local/bin/
+          promtool --version
+
+      - name: Test Prometheus alert rules
+        run: make test-alerts

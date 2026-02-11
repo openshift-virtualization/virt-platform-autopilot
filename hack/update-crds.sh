@@ -32,7 +32,7 @@ FETCH_FAILED_COUNT=0
 echo "Updating CRDs in $CRDS_DIR"
 
 # Create directory structure
-mkdir -p "$CRDS_DIR"/{kubevirt,openshift,remediation,oadp,observability,operators}
+mkdir -p "$CRDS_DIR"/{kubevirt,openshift,remediation,oadp,observability,operators,prometheus}
 
 # Function to fetch a file from GitHub (with safety: fetch to temp, move on success)
 fetch_github_file() {
@@ -105,6 +105,12 @@ declare -a CRD_METADATA=(
     "OpenShift Platform|KubeletConfig|openshift/api|master|machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_kubeletconfigs.crd.yaml|openshift/kubeletconfig-crd.yaml"
     "OpenShift Platform|KubeDescheduler|openshift/cluster-kube-descheduler-operator|main|manifests/kube-descheduler-operator.crd.yaml|openshift/operator.openshift.io_kubedeschedulers.yaml"
 
+    # OpenShift Monitoring
+    "OpenShift Monitoring|AlertingRule|openshift/api|master|monitoring/v1/zz_generated.crd-manifests/0000_50_monitoring_01_alertingrules.crd.yaml|openshift/alertingrules-crd.yaml"
+
+    # Prometheus
+    "Prometheus|PrometheusRule|prometheus-operator/kube-prometheus|main|manifests/setup/0prometheusruleCustomResourceDefinition.yaml|prometheus/monitoring.coreos.com_prometheusrules.yaml"
+
     # Medik8s Remediation
     "Medik8s Remediation|NodeHealthCheck|medik8s/node-healthcheck-operator|main|config/crd/bases/remediation.medik8s.io_nodehealthchecks.yaml|remediation/nodehealthchecks.remediation.medik8s.io.yaml"
     "Medik8s Remediation|Self Node Remediation|medik8s/self-node-remediation|main|config/crd/bases/self-node-remediation.medik8s.io_selfnoderemediations.yaml|remediation/selfnoderemediations.self-node-remediation.medik8s.io.yaml"
@@ -120,24 +126,24 @@ declare -a CRD_METADATA=(
 
 # Cluster Observability Operator CRDs (multiple files)
 declare -a COO_CRDS=(
-    "perses.dev_persesglobaldatasources.yaml"
+    # "perses.dev_persesglobaldatasources.yaml"
     "perses.dev_persesdatasources.yaml"
     "perses.dev_persesdashboards.yaml"
-    "perses.dev_perses.yaml"
-    "observability.openshift.io_uiplugins.yaml"
-    "observability.openshift.io_observabilityinstallers.yaml"
-    "monitoring.rhobs_thanosrulers.yaml"
-    "monitoring.rhobs_thanosqueriers.yaml"
+    # "perses.dev_perses.yaml"
+    # "observability.openshift.io_uiplugins.yaml"
+    # "observability.openshift.io_observabilityinstallers.yaml"
+    # "monitoring.rhobs_thanosrulers.yaml"
+    # "monitoring.rhobs_thanosqueriers.yaml"
     "monitoring.rhobs_servicemonitors.yaml"
-    "monitoring.rhobs_scrapeconfigs.yaml"
+    # "monitoring.rhobs_scrapeconfigs.yaml"
     "monitoring.rhobs_prometheusrules.yaml"
-    "monitoring.rhobs_prometheuses.yaml"
-    "monitoring.rhobs_prometheusagents.yaml"
-    "monitoring.rhobs_probes.yaml"
+    # "monitoring.rhobs_prometheuses.yaml"
+    # "monitoring.rhobs_prometheusagents.yaml"
+    # "monitoring.rhobs_probes.yaml"
     "monitoring.rhobs_podmonitors.yaml"
     "monitoring.rhobs_monitoringstacks.yaml"
-    "monitoring.rhobs_alertmanagers.yaml"
-    "monitoring.rhobs_alertmanagerconfigs.yaml"
+    # "monitoring.rhobs_alertmanagers.yaml"
+    # "monitoring.rhobs_alertmanagerconfigs.yaml"
 )
 
 # OADP CRDs (multiple files)

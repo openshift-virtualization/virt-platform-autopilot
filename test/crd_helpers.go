@@ -20,10 +20,12 @@ type CRDSet string
 
 const (
 	// CRD sets for testing different scenarios
-	CRDSetCore        CRDSet = "kubevirt"    // HCO CRD (always loaded in BeforeSuite)
-	CRDSetOpenShift   CRDSet = "openshift"   // MachineConfig CRDs
-	CRDSetRemediation CRDSet = "remediation" // NodeHealthCheck, SNR, FAR CRDs
-	CRDSetOperators   CRDSet = "operators"   // MTV, MetalLB CRDs
+	CRDSetCore          CRDSet = "kubevirt"      // HCO CRD (always loaded in BeforeSuite)
+	CRDSetOpenShift     CRDSet = "openshift"     // MachineConfig CRDs
+	CRDSetRemediation   CRDSet = "remediation"   // NodeHealthCheck, SNR, FAR CRDs
+	CRDSetOperators     CRDSet = "operators"     // MTV, MetalLB CRDs
+	CRDSetObservability CRDSet = "observability" // Cluster Monitoring Operator CRDs
+	CRDSetPrometheus    CRDSet = "prometheus"    // Prometheus CRDs
 )
 
 // InstallCRDs installs a CRD set dynamically during test execution
@@ -113,12 +115,13 @@ func waitForCRDEstablished(ctx context.Context, c client.Client, crdName string)
 	// Create a fresh context with generous timeout to handle rate limiting
 	// We don't use the parent context here to avoid inheriting its deadline,
 	// which could be too short when combined with rate limiter delays
-	// Increased to 90s to handle CI rate limiting (was 30s, caused flakes)
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	// Increased to 180s to handle CI rate limiting when installing multiple CRD sets
+	// sequentially (each CRD can take 30-60s to establish under rate limiting)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	// Poll less frequently to reduce rate limiter pressure
-	return wait.PollUntilContextTimeout(timeoutCtx, 500*time.Millisecond, 90*time.Second, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(timeoutCtx, 500*time.Millisecond, 180*time.Second, true, func(ctx context.Context) (bool, error) {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 
@@ -148,12 +151,13 @@ func waitForCRDDeletion(ctx context.Context, c client.Client, crdName string) er
 	// Create a fresh context with generous timeout to handle rate limiting
 	// We don't use the parent context here to avoid inheriting its deadline,
 	// which could be too short when combined with rate limiter delays
-	// Increased to 120s to handle CI rate limiting (was 60s, caused flakes)
-	timeoutCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// Increased to 180s to handle CI rate limiting when installing multiple CRD sets
+	// sequentially (CRD deletion with finalizers can take 30-90s under rate limiting)
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	// Poll less frequently to reduce rate limiter pressure (1 second intervals)
-	return wait.PollUntilContextTimeout(timeoutCtx, 1*time.Second, 120*time.Second, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(timeoutCtx, 1*time.Second, 180*time.Second, true, func(ctx context.Context) (bool, error) {
 		crd := &apiextensionsv1.CustomResourceDefinition{}
 		key := client.ObjectKey{Name: crdName}
 		err := c.Get(ctx, key, crd)

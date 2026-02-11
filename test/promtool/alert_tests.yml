@@ -1,0 +1,188 @@
+# Promtool unit tests for virt-platform-autopilot alert rules
+# Run with: promtool test rules test/promtool/alert_tests.yml
+#
+# This validates:
+# - Alert rule syntax is correct (rules can be loaded and parsed)
+# - Alert expressions evaluate without errors
+# - Alerts fire at the correct time (testing "for" durations)
+# - Alert firing logic works correctly (thresholds, ranges)
+# - Alert labels are correctly set
+#
+# Note: We only test labels, not annotations, because Prometheus template
+# rendering can produce subtle whitespace differences (trailing spaces, newlines)
+# that are hard to match exactly in tests. The PrometheusRule integration test
+# (test/prometheus_rules_test.go) validates the full alert structure including annotations.
+
+rule_files:
+  - prometheus-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ============================================================================
+  # Test: VirtPlatformSyncFailed - Critical Alert
+  # Tests the "for: 15m" duration works correctly
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      # Scenario: Resource fails and stays failed for >15min
+      # Time 0: value=1 (synced)
+      # Time 1: value=0 (failed) - start counting
+      # Time 16: value=0 - been failing for 15 minutes -> ALERT FIRES
+      - series: 'virt_platform_compliance_status{kind="MachineConfig",name="50-virt-platform-hugepages",namespace=""}'
+        values: '1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
+
+    alert_rule_test:
+      # Before 15min: Alert should NOT be firing
+      - eval_time: 14m
+        alertname: VirtPlatformSyncFailed
+        exp_alerts: []
+
+      # At exactly 15min: Alert still should NOT be firing (for: 15m means > 15m)
+      - eval_time: 15m
+        alertname: VirtPlatformSyncFailed
+        exp_alerts: []
+
+      # After 15min: Alert SHOULD be firing with correct labels
+      - eval_time: 16m
+        alertname: VirtPlatformSyncFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              operator: virt-platform-autopilot
+              kind: MachineConfig
+              name: 50-virt-platform-hugepages
+              namespace: ""
+
+  # ============================================================================
+  # Test: VirtPlatformThrashingDetected - Warning Alert
+  # Tests the increase() function with 10m range
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      # Scenario: High thrashing - counter increases by >5 in 10min window
+      # Time 0-10: counter goes 0->9, increase(10m) = 9 (> 5 threshold)
+      - series: 'virt_platform_thrashing_total{kind="NodeHealthCheck",name="virt-workers",namespace="openshift-operators"}'
+        values: '0 0 1 2 3 4 5 6 7 8 9 10 11 12 13'
+
+    alert_rule_test:
+      # At 5min: increase[10m] would look at [0,5] = only 5 events, not enough
+      - eval_time: 5m
+        alertname: VirtPlatformThrashingDetected
+        exp_alerts: []
+
+      # At 10min: increase[10m] looks at [0,10] = 9 events (> 5 threshold)
+      - eval_time: 10m
+        alertname: VirtPlatformThrashingDetected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              operator: virt-platform-autopilot
+              kind: NodeHealthCheck
+              name: virt-workers
+              namespace: openshift-operators
+
+  # ============================================================================
+  # Test: VirtPlatformDependencyMissing - Warning Alert
+  # Tests the "for: 5m" duration works correctly
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      # Scenario: Dependency missing for >5min
+      # Time 0: value=0 (present)
+      # Time 1: value=1 (missing) - start counting
+      # Time 6: value=1 - been missing for 5 minutes -> ALERT FIRES
+      - series: 'virt_platform_missing_dependency{group="remediation.medik8s.io",version="v1alpha1",kind="NodeHealthCheck"}'
+        values: '0 1 1 1 1 1 1 1 1 1 1 1'
+
+    alert_rule_test:
+      # Before 5min: Alert should NOT be firing
+      - eval_time: 4m
+        alertname: VirtPlatformDependencyMissing
+        exp_alerts: []
+
+      # At exactly 5min: Alert still should NOT be firing
+      - eval_time: 5m
+        alertname: VirtPlatformDependencyMissing
+        exp_alerts: []
+
+      # After 5min: Alert SHOULD be firing with correct labels
+      - eval_time: 6m
+        alertname: VirtPlatformDependencyMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              operator: virt-platform-autopilot
+              group: remediation.medik8s.io
+              version: v1alpha1
+              kind: NodeHealthCheck
+
+  # ============================================================================
+  # Test: Transient Failures Should NOT Trigger Alerts
+  # Tests that "for" durations prevent flapping alerts
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      # Scenario: Resource fails then recovers within 15min threshold
+      # Should NOT fire alert (transient failure)
+      - series: 'virt_platform_compliance_status{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"}'
+        values: '1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1'
+
+    alert_rule_test:
+      # At 10min: Still failing but < 15min, should NOT alert
+      - eval_time: 10m
+        alertname: VirtPlatformSyncFailed
+        exp_alerts: []
+
+      # At 15min: Recovered, definitely should NOT alert
+      - eval_time: 15m
+        alertname: VirtPlatformSyncFailed
+        exp_alerts: []
+
+  # ============================================================================
+  # Test: Low Thrashing Should NOT Trigger Alert
+  # Tests the threshold logic (must be > 5 events)
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      # Scenario: Only 3 thrashing events in 10min window (< 5 threshold)
+      - series: 'virt_platform_thrashing_total{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"}'
+        values: '0 0 0 1 1 1 1 2 2 2 3 3 3 3 3'
+
+    alert_rule_test:
+      # At 10min: increase[10m] = 3 events (< 5 threshold), should NOT alert
+      - eval_time: 10m
+        alertname: VirtPlatformThrashingDetected
+        exp_alerts: []
+
+  # ============================================================================
+  # Test: Alert Expressions Are Syntactically Valid
+  # Tests that all alert rules can be loaded and evaluated
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      # Minimal test data - just ensuring expressions don't error
+      - series: 'virt_platform_compliance_status{kind="Test",name="test",namespace="test"}'
+        values: '1 1 1'
+      - series: 'virt_platform_thrashing_total{kind="Test",name="test",namespace="test"}'
+        values: '0 0 0'
+      - series: 'virt_platform_missing_dependency{group="test",version="v1",kind="Test"}'
+        values: '0 0 0'
+
+    alert_rule_test:
+      # All alerts should evaluate without errors (even if not firing)
+      - eval_time: 1m
+        alertname: VirtPlatformSyncFailed
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: VirtPlatformThrashingDetected
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: VirtPlatformDependencyMissing
+        exp_alerts: []

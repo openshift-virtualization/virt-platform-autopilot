@@ -165,6 +165,12 @@ shellcheck: ## Run shellcheck on all shell scripts
 	@echo "Running shellcheck on hack/ scripts..."
 	@find hack -name '*.sh' -type f -exec shellcheck -x {} +
 
+##@ Observability
+
+.PHONY: test-alerts
+test-alerts: ## Test Prometheus alert rules with promtool
+	@hack/test-alert-rules.sh
+
 ##@ Local Development (Kind)
 
 CLUSTER_NAME ?= virt-platform-autopilot

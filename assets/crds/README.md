@@ -49,6 +49,24 @@ assets/crds/
 - Local: `openshift/operator.openshift.io_kubedeschedulers.yaml`
 
 
+### OpenShift Monitoring
+
+**AlertingRule**
+- Repository: https://github.com/openshift/api
+- Branch: `master`
+- Path: `monitoring/v1/zz_generated.crd-manifests/0000_50_monitoring_01_alertingrules.crd.yaml`
+- Local: `openshift/alertingrules-crd.yaml`
+
+
+### Prometheus
+
+**PrometheusRule**
+- Repository: https://github.com/prometheus-operator/kube-prometheus
+- Branch: `main`
+- Path: `manifests/setup/0prometheusruleCustomResourceDefinition.yaml`
+- Local: `prometheus/monitoring.coreos.com_prometheusrules.yaml`
+
+
 ### Medik8s Remediation
 
 **NodeHealthCheck**
@@ -110,7 +128,7 @@ assets/crds/
 - Branch: `main`
 - Path: `bundle/manifests/*.yaml`
 - Local: `observability/`
-- Count: 18 files
+- Count: 6 files
 
 
 ### OADP (OpenShift API for Data Protection)

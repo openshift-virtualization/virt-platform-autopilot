@@ -160,13 +160,13 @@ This document tracks implementation progress against the original plan in `claud
 - [x] 14 unit tests + 5 integration tests
 - [x] Nil-safe (graceful degradation)
 
-### ✅ Metrics & Alerting (COMPLETE - Critical Observability Pillar)
+### ✅ Metrics & Alerting (✅ COMPLETE - Critical Observability Pillar)
 
-**Status**: ✅ Fully implemented and tested! Metrics infrastructure complete.
+**Status**: ✅ Fully implemented and tested! Complete observability stack with metrics, alerts, and runbooks.
 
-**Context**: The operator doesn't use conditions or status reporting. **Metrics are the primary reporting and monitoring mechanism**, following "Silent when fine, precise when broken" philosophy.
+**Context**: The operator doesn't use conditions or status reporting. **Metrics and alerts are the primary reporting and monitoring mechanism**, following "Silent when fine, precise when broken" philosophy.
 
-**Implemented** (Commits: 55de367, 2e6ea6f):
+**Metrics Infrastructure** (Commits: 55de367, 2e6ea6f):
 - [x] `pkg/observability/metrics.go` - Custom metrics package (5 metrics)
   - virt_platform_compliance_status (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
   - virt_platform_thrashing_total (Counter) - Anti-thrashing gate hits
@@ -180,21 +180,30 @@ This document tracks implementation progress against the original plan in `claud
   - pkg/engine/patcher.go - Compliance status, duration, customization tracking
   - pkg/util/crd_checker.go - Missing dependency metrics
 
-**Test Coverage**: 35 observability tests (14 unit + 4 label + 17 integration)
-
-**Still Needed** (Phase 2):
-- [ ] `assets/observability/prometheus-rules.yaml.tpl` - PrometheusRule with alerts
+**Alert Definitions** (Commits: bd0eedf, 8afeaf8):
+- [x] `assets/observability/prometheus-rules.yaml.tpl` - PrometheusRule with 3 alerts
   - VirtPlatformSyncFailed (Critical) - Asset failed >15min
-  - VirtPlatformThrashingDetected (Warning) - Edit war detected
-  - VirtPlatformDependencyMissing (Warning) - Optional CRD missing
-- [ ] `promtool test rules` for alert expression validation
-- [ ] Runbooks for each alert in `docs/runbooks/`
+  - VirtPlatformThrashingDetected (Warning) - Edit war detected (>5 events in 10min)
+  - VirtPlatformDependencyMissing (Warning) - Optional CRD missing >5min
+- [x] `test/promtool/alert_tests.yml` - Promtool unit tests for alert expressions
+- [x] `test/prometheus_rules_test.go` - Integration tests with envtest
+- [x] `hack/test-alert-rules.sh` - Smart test wrapper with auto-generation
+- [x] Runbooks for each alert in `docs/runbooks/`
+  - VirtPlatformSyncFailed.md - Sync failure diagnostics
+  - VirtPlatformThrashingDetected.md - Edit war resolution
+  - VirtPlatformDependencyMissing.md - Missing CRD guidance
+  - README.md - Index and quick diagnostic commands
+- [x] CI integration - `make test-alerts` in lint workflow
+- [x] Enhanced metric queries - Filtered output showing only problematic resources
+
+**Test Coverage**: 39 observability tests (14 unit + 4 label + 17 integration + 4 alert structure)
 
 **Why This Matters:**
-- **Primary monitoring** - Metrics are how we report operator health (no status/conditions)
+- **Primary monitoring** - Metrics and alerts are how we report operator health (no status/conditions)
 - **Precise failure reporting** - Know exactly which asset failed and why
 - **Proactive detection** - Catch thrashing, missing deps, performance issues
-- **Foundation for alerts** - Metrics power Prometheus alerting (PrometheusRule next step)
+- **Production ready** - All alerts have detailed runbooks with troubleshooting procedures
+- **Operator-friendly** - Filtered metric queries show only resources needing attention
 
 ### ✅ Soft Dependency Handling
 
@@ -549,6 +558,7 @@ All critical phases have been completed:
 - [x] **GitOps labeling and object adoption** ✅ **COMPLETE** (cache optimization)
 - [x] **Event recording for observability** ✅ **COMPLETE** (comprehensive)
 - [x] **Metrics infrastructure for monitoring** ✅ **COMPLETE** (5 metrics, 35 tests)
+- [x] **Alert definitions for production monitoring** ✅ **COMPLETE** (3 alerts, promtool tests, runbooks)
 - [x] **Build-time RBAC generation from assets** ✅ **COMPLETE** (cmd/rbac-gen + CI verification)
 - [x] Soft dependency handling ✅ **COMPLETE** (CRD checker with caching)
 - [x] **>80% integration test coverage with envtest** ✅ **EXCEEDED** (80 integration tests, 0 flaky)
@@ -564,23 +574,22 @@ All critical phases have been completed:
 ### 📊 Current Status
 **Phase 1**: ✅ 100% complete (all core features implemented)
 **Phase 2**: ✅ 100% complete (user override system fully functional)
-**Phase 3**: ✅ 100% complete (safety, events, soft dependencies, metrics)
-**Phase 4**: ✅ 95% complete
+**Phase 3**: ✅ 100% complete (safety, events, soft dependencies, metrics, alerts)
+**Phase 4**: ✅ 98% complete
   - ✅ Comprehensive testing (350 tests, 0 flaky, 3 skipped)
   - ✅ CRD automation (update-crds, verify-crds)
   - ✅ RBAC automation (generate-rbac, verify-rbac)
   - ✅ CI/CD infrastructure (lint, test, e2e, verify-generated)
   - ✅ Shell script quality (shellcheck)
   - ✅ Metrics infrastructure (5 metrics, 35 tests)
+  - ✅ Alert definitions (PrometheusRule, promtool tests, runbooks, CI integration)
   - ❌ Documentation (user guides, architecture)
-  - ❌ Alert definitions (PrometheusRule, runbooks)
 
-**Overall**: ~96% complete against original plan!
+**Overall**: ~98% complete against original plan!
 
 **Remaining high-value work**:
-1. **Alert definitions** (PrometheusRule + runbooks for observability)
-2. **Asset expansion** (production readiness)
-3. **User documentation** (adoption enablement)
+1. **Asset expansion** (production readiness - complete Phase 1/2/3 assets)
+2. **User documentation** (adoption enablement - user guide, architecture docs)
 
 ---
 
@@ -590,84 +599,7 @@ All critical phases have been completed:
 
 ### Recommended Next Steps (Prioritized):
 
-#### 1. **Alert Definitions** (Observability - Complete the Pillar)
-**Goal**: Production-ready alerting following "Silent when fine, precise when broken" philosophy.
-
-**Context**: Metrics infrastructure is ✅ COMPLETE (5 metrics, 35 tests). Now need PrometheusRule definitions and runbooks. We don't use conditions or status reporting - metrics and OpenShift alerts are our primary monitoring and reporting mechanism.
-
-**✅ Metrics (COMPLETE)**:
-- ✅ `virt_platform_compliance_status` (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
-- ✅ `virt_platform_thrashing_total` (Counter) - Reconciliation throttling events
-- ✅ `virt_platform_customization_info` (Gauge) - Tracks intentional deviations
-- ✅ `virt_platform_missing_dependency` (Gauge) - Missing CRD tracking
-- ✅ `virt_platform_reconcile_duration_seconds` (Histogram) - Performance monitoring
-
-**✅ Integration Points (COMPLETE)**:
-- ✅ `pkg/engine/patcher.go` - Compliance status, duration, customization tracking
-- ✅ `pkg/util/crd_checker.go` - Missing dependency metrics
-- ✅ Test coverage: 14 unit + 4 label + 17 integration tests
-
-**Alert Definitions** (Next Step): `assets/observability/prometheus-rules.yaml.tpl`
-- [ ] **VirtPlatformSyncFailed** (Critical) - Asset failed to apply for >15min
-  - Expr: `virt_platform_compliance_status == 0` for >15m
-  - Runbook: Check logs, webhook errors, resource locks
-- [ ] **VirtPlatformThrashingDetected** (Warning) - Edit war detected
-  - Expr: `increase(virt_platform_thrashing_total[10m]) > 5`
-  - Runbook: Check audit logs, consider unmanaged mode
-- [ ] **VirtPlatformDependencyMissing** (Warning) - Optional CRD missing
-  - Expr: `virt_platform_missing_dependency == 1`
-  - Runbook: Verify operator installation status
-
-**Testing Strategy** (Hybrid Approach):
-
-**Unit Tests** (Fast, No Prometheus Operator):
-- [ ] `pkg/observability/metrics_test.go` - Test metric values with `prometheus/testutil`
-  - Verify SetCompliance() changes gauge value
-  - Verify IncThrashing() increments counter
-  - Verify SetCustomization() sets info metric
-  - No Prometheus operator needed
-- [ ] `test/promtool/` - Prometheus alert rule unit tests
-  - Use `promtool test rules` to validate alert expressions
-  - Test alert firing conditions (time series scenarios)
-  - Test alert annotations and labels
-  - Format: YAML test files with input_series and expected alerts
-  - Run via `promtool test rules test/*.yml`
-
-**Integration Tests** (With envtest, No Prometheus Operator):
-- [ ] `test/metrics_integration_test.go` - Verify metrics change during reconciliation
-  - Test compliance metric changes after drift detection
-  - Test thrashing counter increases when throttled
-  - Test customization info metric for patch/ignore/unmanaged
-  - Use `prometheus/testutil.CollectAndCompare()` to verify values
-- [ ] `test/prometheus_rules_test.go` - Verify PrometheusRule YAML validity
-  - Render alert template
-  - Apply to envtest (with PrometheusRule CRD installed)
-  - Verify rule syntax is valid
-  - No operator needed - just validate YAML structure
-
-**E2E Tests** (Future - Real Cluster with Prometheus):
-- [ ] Test actual alert firing (VirtPlatformSyncFailed after 15min)
-- [ ] Test alert resolution when drift corrected
-- [ ] Query Prometheus API to verify metrics scraped
-- [ ] Validate runbook procedures
-
-**Runbooks:**
-- [ ] `docs/runbooks/VirtPlatformSyncFailed.md` - Troubleshooting sync failures
-- [ ] `docs/runbooks/VirtPlatformThrashingDetected.md` - Resolving edit wars
-- [ ] `docs/runbooks/VirtPlatformDependencyMissing.md` - Missing CRD guidance
-
-**Why This Approach:**
-- ✅ **Fast integration tests** - No Prometheus operator startup time (currently 157s suite)
-- ✅ **Test what we own** - Metric values, alert expressions, PrometheusRule validity
-- ✅ **promtool** - Industry standard for alert rule testing (offline, no cluster needed)
-- ✅ **Fits existing suite** - Extends envtest without heavyweight dependencies
-- ✅ **Save E2E for behavior** - Real alert firing tested later with full stack
-
-**Reference:**
-- Metrics specification: `claude_assets/metrics_plan.md`
-- Prometheus rule testing: https://prometheus.io/docs/prometheus/latest/configuration/unit_testing_rules/
-
-#### 2. **Add missing asset templates** (Production Readiness)
+#### 1. **Add missing asset templates** (Production Readiness)
 **Phase 1 Always-On** (Missing 4/8):
 - [ ] `assets/machine-config/02-pci-passthrough.yaml.tpl` - IOMMU for PCI passthrough
 - [ ] `assets/machine-config/03-numa.yaml.tpl` - NUMA topology configuration
@@ -686,7 +618,7 @@ All critical phases have been completed:
 **Phase 3**:
 - [ ] `assets/machine-config/05-usb-passthrough.yaml.tpl` - USB passthrough
 
-#### 3. **Write user documentation** (User Adoption)
+#### 2. **Write user documentation** (User Adoption)
 - [ ] `README.md` - Project overview, quick start, architecture summary
 - [ ] `docs/user-guide.md` - Annotation-based customization guide
   - How to use `platform.kubevirt.io/patch`
@@ -704,20 +636,18 @@ All critical phases have been completed:
 
 ### Why This Priority Order?
 
-1. **Alert definitions** - Complete observability pillar (metrics ✅ done, RBAC ✅ done, alerts next)
-2. **Asset templates** - Enable production use cases (virtualization at scale)
-3. **Documentation** - Enable user adoption and customization
+1. **Asset templates** - Enable production use cases (virtualization at scale)
+2. **Documentation** - Enable user adoption and customization
 
 The platform now has all core differentiating features:
 - ✅ Annotation-based user control (Zero API Surface)
 - ✅ Anti-thrashing protection (token bucket + pause-with-annotation)
 - ✅ Complete Patched Baseline algorithm
 - ✅ GitOps best practices (labeling, adoption)
-- ✅ Comprehensive observability (events + metrics)
+- ✅ Comprehensive observability (events + metrics + alerts)
 - ✅ Asset failure handling (error aggregation)
 - ✅ Production-ready quality (350 tests, 0 flaky, 3 skipped)
 - ✅ Automated CRD management
 - ✅ Automated RBAC generation
 - ✅ CI/CD infrastructure with code quality gates
-- ✅ Metrics infrastructure (5 metrics, 35 tests)
-- ⏳ Alert definitions (PrometheusRule + runbooks next)
+- ✅ Complete observability stack (5 metrics, 3 alerts, comprehensive runbooks)

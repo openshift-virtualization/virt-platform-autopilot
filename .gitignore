@@ -110,3 +110,6 @@ release/
 .claude/
 claude_assets/
 PROGRESS.md
+
+# Generated Prometheus rules for promtool testing
+test/promtool/prometheus-rules.yml

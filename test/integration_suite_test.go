@@ -70,11 +70,14 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	// Increase rate limits for CI environments
-	// Default QPS=5, Burst=10 is too restrictive for CRD operations in tests
-	// These values allow for more frequent API calls without hitting rate limiter
-	cfg.QPS = 100
-	cfg.Burst = 200
+	// Increase rate limits for CI environments with heavy CRD operations
+	// Default QPS=5, Burst=10 is too restrictive for tests that install multiple CRD sets
+	// Tests like "invalidate all cache entries" install multiple CRDs sequentially,
+	// each requiring ~300 API calls (deletion wait + establishment wait)
+	// With multiple CRDs, this can easily exceed 1000 API calls in a short period
+	// In envtest we control the API server so we can be very aggressive with limits
+	cfg.QPS = 500
+	cfg.Burst = 1000
 
 	// Create client
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
