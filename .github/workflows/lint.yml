@@ -28,6 +28,15 @@ jobs:
             exit 1
           fi
 
+      - name: Run goimports
+        run: |
+          make goimport
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Import ordering is incorrect. Please run 'make goimport' locally and commit the changes."
+            git diff
+            exit 1
+          fi
+
       - name: Run go vet
         run: make vet
 
