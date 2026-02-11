@@ -17,10 +17,22 @@ var _ = Describe("Real-Time Drift Detection", func() {
 	// This is critical for the system to maintain desired state without waiting for periodic sync
 
 	Context("when a managed resource is modified", func() {
+		BeforeEach(func() {
+			// Install OpenShift CRDs (MachineConfig)
+			err := InstallCRDs(ctx, k8sClient, CRDSetOpenShift)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Install Remediation CRDs (NodeHealthCheck)
+			err = InstallCRDs(ctx, k8sClient, CRDSetRemediation)
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func() {
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetOpenShift)
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetRemediation)
+			})
+		})
+
 		It("should detect drift on MachineConfig immediately", func() {
-			if !IsCRDInstalled(ctx, k8sClient, "machineconfigs.machineconfiguration.openshift.io") {
-				Skip("MachineConfig CRD not installed")
-			}
 
 			testNs := "test-drift-mc-" + randString()
 
@@ -106,10 +118,6 @@ var _ = Describe("Real-Time Drift Detection", func() {
 		})
 
 		It("should detect drift on NodeHealthCheck immediately", func() {
-			if !IsCRDInstalled(ctx, k8sClient, "nodehealthchecks.remediation.medik8s.io") {
-				Skip("NodeHealthCheck CRD not installed")
-			}
-
 			testNs := "test-drift-nhc-" + randString()
 
 			// Create namespace
@@ -276,10 +284,17 @@ var _ = Describe("Real-Time Drift Detection", func() {
 	})
 
 	Context("drift detection performance", func() {
+		BeforeEach(func() {
+			// Install OpenShift CRDs (MachineConfig)
+			err := InstallCRDs(ctx, k8sClient, CRDSetOpenShift)
+			Expect(err).NotTo(HaveOccurred())
+
+			DeferCleanup(func() {
+				_ = UninstallCRDs(ctx, k8sClient, CRDSetOpenShift)
+			})
+		})
+
 		It("should detect drift within reasonable time", func() {
-			if !IsCRDInstalled(ctx, k8sClient, "machineconfigs.machineconfiguration.openshift.io") {
-				Skip("MachineConfig CRD not installed")
-			}
 
 			testNs := "test-perf-" + randString()
 
