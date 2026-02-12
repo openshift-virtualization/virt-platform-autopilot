@@ -94,6 +94,46 @@ metadata:
 
 This resource will not be managed entirely.
 
+## Resource Lifecycle Management
+
+The autopilot provides two mechanisms for managing resource lifecycle during upgrades:
+
+### Tombstoning
+
+Safely delete obsolete resources when features are removed or resources are renamed:
+
+```bash
+# Move obsolete resource to tombstones directory
+git mv assets/active/config/old-resource.yaml assets/tombstones/v1.1-cleanup/
+
+# On next reconciliation, operator will delete the resource
+# (only if it has the platform.kubevirt.io/managed-by label)
+```
+
+**Safety features:**
+- Label verification prevents accidental deletion
+- Best-effort execution (continues even if some deletions fail)
+- Idempotent (already-deleted resources are skipped)
+
+### Root Exclusion
+
+Prevent specific resources from being created:
+
+```yaml
+apiVersion: hco.kubevirt.io/v1beta1
+kind: HyperConverged
+metadata:
+  annotations:
+    platform.kubevirt.io/disabled-resources: "KubeDescheduler/cluster, MachineConfig/50-swap-enable"
+```
+
+**Use cases:**
+- Disable features not needed in specific deployments
+- Temporary workarounds for known issues
+- Prevent resource creation in environments where it would fail
+
+For detailed documentation, see: [Resource Lifecycle Management](docs/LIFECYCLE_MANAGEMENT.md)
+
 ## Getting Started
 
 ### Prerequisites

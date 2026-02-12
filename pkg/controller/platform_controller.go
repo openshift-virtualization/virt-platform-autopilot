@@ -73,17 +73,18 @@ type PlatformReconciler struct {
 	client.Client
 	Namespace string
 
-	loader             *assets.Loader
-	registry           *assets.Registry
-	patcher            *engine.Patcher
-	contextBuilder     *RenderContextBuilder
-	conditionEvaluator *assets.DefaultConditionEvaluator
-	crdChecker         *util.CRDChecker
-	eventRecorder      *util.EventRecorder
-	watchedCRDs        map[string]bool    // Track CRDs we're watching to avoid restart loops
-	watchedCRDsMu      sync.RWMutex       // Protects watchedCRDs from concurrent access
-	shutdownFunc       context.CancelFunc // Graceful shutdown instead of os.Exit
-	shutdownMu         sync.Mutex         // Protects shutdownFunc
+	loader              *assets.Loader
+	registry            *assets.Registry
+	patcher             *engine.Patcher
+	tombstoneReconciler *engine.TombstoneReconciler
+	contextBuilder      *RenderContextBuilder
+	conditionEvaluator  *assets.DefaultConditionEvaluator
+	crdChecker          *util.CRDChecker
+	eventRecorder       *util.EventRecorder
+	watchedCRDs         map[string]bool    // Track CRDs we're watching to avoid restart loops
+	watchedCRDsMu       sync.RWMutex       // Protects watchedCRDs from concurrent access
+	shutdownFunc        context.CancelFunc // Graceful shutdown instead of os.Exit
+	shutdownMu          sync.Mutex         // Protects shutdownFunc
 }
 
 // NewPlatformReconciler creates a new platform reconciler
@@ -99,15 +100,16 @@ func NewPlatformReconciler(c client.Client, apiReader client.Reader, namespace s
 	}
 
 	return &PlatformReconciler{
-		Client:             c,
-		Namespace:          namespace,
-		loader:             loader,
-		registry:           registry,
-		patcher:            engine.NewPatcher(c, apiReader, loader),
-		contextBuilder:     NewRenderContextBuilder(c),
-		conditionEvaluator: &assets.DefaultConditionEvaluator{},
-		crdChecker:         util.NewCRDChecker(apiReader), // Use apiReader (not cache-dependent)
-		watchedCRDs:        make(map[string]bool),
+		Client:              c,
+		Namespace:           namespace,
+		loader:              loader,
+		registry:            registry,
+		patcher:             engine.NewPatcher(c, apiReader, loader),
+		tombstoneReconciler: engine.NewTombstoneReconciler(c, loader),
+		contextBuilder:      NewRenderContextBuilder(c),
+		conditionEvaluator:  &assets.DefaultConditionEvaluator{},
+		crdChecker:          util.NewCRDChecker(apiReader), // Use apiReader (not cache-dependent)
+		watchedCRDs:         make(map[string]bool),
 	}, nil
 }
 
@@ -117,6 +119,10 @@ func (r *PlatformReconciler) SetEventRecorder(recorder *util.EventRecorder) {
 	// Also set it on the patcher so it can emit events during reconciliation
 	if r.patcher != nil {
 		r.patcher.SetEventRecorder(recorder)
+	}
+	// Also set it on the tombstone reconciler for tombstone events
+	if r.tombstoneReconciler != nil {
+		r.tombstoneReconciler.SetEventRecorder(recorder)
 	}
 	// Also set it on the context builder for hardware detection events
 	if r.contextBuilder != nil {
@@ -164,6 +170,16 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Step 0: Process tombstones FIRST (before HCO reconciliation)
+	logger.Info("Processing tombstones")
+	deletedCount, err := r.tombstoneReconciler.ReconcileTombstones(ctx, hco)
+	if err != nil {
+		// Log error but don't fail reconciliation - tombstone cleanup is best-effort
+		logger.Error(err, "Failed to process tombstones (continuing with reconciliation)")
+	} else if deletedCount > 0 {
+		logger.Info("Tombstone processing completed", "deleted", deletedCount)
 	}
 
 	// Step 1: Apply HCO golden config FIRST (reconcile_order: 0)

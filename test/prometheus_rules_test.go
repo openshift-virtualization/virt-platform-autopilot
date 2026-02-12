@@ -25,7 +25,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		})
 
 		// Read and parse PrometheusRule template once for all tests
-		templatePath := filepath.Join("..", "assets", "observability", "prometheus-rules.yaml.tpl")
+		templatePath := filepath.Join("..", "assets", "active", "observability", "prometheus-rules.yaml.tpl")
 		data, err := os.ReadFile(templatePath)
 		Expect(err).NotTo(HaveOccurred(), "PrometheusRule template should exist")
 
@@ -76,7 +76,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		Expect(warningGroup["name"]).To(Equal("virt-platform-autopilot.warning"))
 
 		warningRules := warningGroup["rules"].([]interface{})
-		Expect(warningRules).To(HaveLen(2), "warning group should have 2 alerts")
+		Expect(warningRules).To(HaveLen(3), "warning group should have 3 alerts")
 
 		// Verify thrashing alert
 		thrashingAlert := warningRules[0].(map[string]interface{})
@@ -88,6 +88,12 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		Expect(dependencyAlert["alert"]).To(Equal("VirtPlatformDependencyMissing"))
 		Expect(dependencyAlert["expr"]).To(ContainSubstring("virt_platform_missing_dependency == 1"))
 		Expect(dependencyAlert["for"]).To(Equal("5m"))
+
+		// Verify tombstone alert
+		tombstoneAlert := warningRules[2].(map[string]interface{})
+		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformTombstoneStuck"))
+		Expect(tombstoneAlert["expr"]).To(ContainSubstring("virt_platform_tombstone_status < 0"))
+		Expect(tombstoneAlert["for"]).To(Equal("30m"))
 	})
 
 	It("should have proper labels and annotations on all alerts", func() {

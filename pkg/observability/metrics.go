@@ -90,6 +90,26 @@ var (
 		},
 		[]string{"kind", "name", "namespace"},
 	)
+
+	// TombstoneStatus tracks tombstone deletion status.
+	// 1 = exists (not yet deleted), 0 = deleted, -1 = error, -2 = skipped (label mismatch)
+	// Used by VirtPlatformTombstoneStuck alert to detect stuck tombstone deletions.
+	TombstoneStatus = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Subsystem: subsystem,
+			Name:      "tombstone_status",
+			Help:      "Tombstone deletion status (1=exists, 0=deleted, -1=error, -2=skipped)",
+		},
+		[]string{"kind", "name", "namespace"},
+	)
+)
+
+const (
+	// Tombstone status values
+	TombstoneExists  = 1.0
+	TombstoneDeleted = 0.0
+	TombstoneError   = -1.0
+	TombstoneSkipped = -2.0
 )
 
 func init() {
@@ -101,6 +121,7 @@ func init() {
 		CustomizationInfo,
 		MissingDependency,
 		ReconcileDuration,
+		TombstoneStatus,
 	)
 }
 
@@ -176,4 +197,14 @@ func ReconcileDurationTimer(obj *unstructured.Unstructured) *prometheus.Timer {
 		obj.GetName(),
 		obj.GetNamespace(),
 	))
+}
+
+// SetTombstoneStatus sets the tombstone deletion status for a resource.
+// status: TombstoneExists (1), TombstoneDeleted (0), TombstoneError (-1), TombstoneSkipped (-2)
+func SetTombstoneStatus(obj *unstructured.Unstructured, status float64) {
+	TombstoneStatus.WithLabelValues(
+		obj.GetKind(),
+		obj.GetName(),
+		obj.GetNamespace(),
+	).Set(status)
 }

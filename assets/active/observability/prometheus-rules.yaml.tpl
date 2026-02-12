@@ -87,3 +87,32 @@ spec:
               If the related operator is not installed intentionally, you can silence
               this alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation.
             runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformDependencyMissing.md"
+
+        - alert: VirtPlatformTombstoneStuck
+          # Tombstone cleanup indicator: Tombstone deletion failed or skipped
+          # Expr: virt_platform_tombstone_status < 0
+          # -1 = deletion error, -2 = label mismatch (not managed by autopilot)
+          # Manual intervention may be required to remove the resource
+          expr: |
+            virt_platform_tombstone_status < 0
+          for: 30m
+          labels:
+            severity: warning
+            operator: virt-platform-autopilot
+          annotations:
+            summary: "Tombstone deletion stuck for {{ $labels.kind }}/{{ $labels.name }}"
+            description: |-
+              virt-platform-autopilot cannot delete tombstoned resource
+              {{ $labels.kind }}/{{ $labels.name }} in namespace {{ $labels.namespace }}.
+
+              Status: {{ $value }}
+              (-1 = deletion error, -2 = label mismatch)
+
+              Label mismatch: Resource exists but lacks the required management label
+              (platform.kubevirt.io/managed-by=virt-platform-autopilot).
+              This is a safety check to prevent deleting user-created resources.
+
+              Deletion error: Resource deletion failed (check finalizers, webhooks, or RBAC).
+
+              Manual intervention may be required to remove this resource.
+            runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformTombstoneStuck.md"
