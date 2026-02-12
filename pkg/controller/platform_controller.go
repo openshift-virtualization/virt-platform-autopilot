@@ -42,32 +42,6 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
-const (
-	// HCOGroup is the API group for HyperConverged
-	HCOGroup = "hco.kubevirt.io"
-
-	// HCOVersion is the API version for HyperConverged
-	HCOVersion = "v1beta1"
-
-	// HCOKind is the kind for HyperConverged
-	HCOKind = "HyperConverged"
-
-	// HCOName is the expected name of the HCO instance
-	HCOName = "kubevirt-hyperconverged"
-
-	// DefaultHCONamespace is the default namespace for HCO
-	DefaultHCONamespace = "openshift-cnv"
-)
-
-var (
-	// HCOGVK is the GroupVersionKind for HyperConverged
-	HCOGVK = schema.GroupVersionKind{
-		Group:   HCOGroup,
-		Version: HCOVersion,
-		Kind:    HCOKind,
-	}
-)
-
 // PlatformReconciler reconciles the virt platform based on HCO state
 type PlatformReconciler struct {
 	client.Client
@@ -161,7 +135,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Get the HyperConverged instance
 	hco := &unstructured.Unstructured{}
-	hco.SetGroupVersionKind(HCOGVK)
+	hco.SetGroupVersionKind(pkgcontext.HCOGVK)
 
 	err := r.Get(ctx, req.NamespacedName, hco)
 	if err != nil {
@@ -405,7 +379,7 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      HCOName,
+					Name:      pkgcontext.HCOName,
 					Namespace: r.Namespace,
 				},
 			})
@@ -428,7 +402,7 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      HCOName,
+					Name:      pkgcontext.HCOName,
 					Namespace: r.Namespace,
 				},
 			})
@@ -446,7 +420,7 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      HCOName,
+					Name:      pkgcontext.HCOName,
 					Namespace: r.Namespace,
 				},
 			})
@@ -460,7 +434,7 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// Create unstructured object for HCO
 	hco := &unstructured.Unstructured{}
-	hco.SetGroupVersionKind(HCOGVK)
+	hco.SetGroupVersionKind(pkgcontext.HCOGVK)
 
 	// Build controller with HCO watch
 	builder := ctrl.NewControllerManagedBy(mgr).
@@ -535,7 +509,7 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				return []reconcile.Request{
 					{
 						NamespacedName: types.NamespacedName{
-							Name:      HCOName,
+							Name:      pkgcontext.HCOName,
 							Namespace: r.Namespace,
 						},
 					},

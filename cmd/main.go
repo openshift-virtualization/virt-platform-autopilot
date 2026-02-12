@@ -18,10 +18,12 @@ package main
 
 import (
 	"context"
-	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
 	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,7 +40,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/kubevirt/virt-platform-autopilot/cmd/render"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/controller"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/debug"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
@@ -55,33 +61,97 @@ func init() {
 
 	// Register Unstructured for HCO GVK so the manager can use it in ByObject cache config
 	// This avoids REST mapping queries that would fail if the CRD doesn't exist yet
-	hcoGV := schema.GroupVersion{Group: controller.HCOGroup, Version: controller.HCOVersion}
+	hcoGV := schema.GroupVersion{Group: pkgcontext.HCOGroup, Version: pkgcontext.HCOVersion}
 	scheme.AddKnownTypes(hcoGV, &unstructured.Unstructured{})
 }
 
 func main() {
+	rootCmd := &cobra.Command{
+		Use:   "virt-platform-autopilot",
+		Short: "Automated platform configuration for KubeVirt workloads",
+		Long: `virt-platform-autopilot automatically configures OpenShift/Kubernetes
+clusters for optimal virtualization workload performance by managing
+platform-level resources based on HyperConverged configuration.`,
+	}
+
+	// Add subcommands
+	rootCmd.AddCommand(newRunCommand())
+	rootCmd.AddCommand(render.NewRenderCommand())
+
+	// Default to run command if no subcommand specified (backward compatibility)
+	if len(os.Args) == 1 || (len(os.Args) > 1 && os.Args[1][0] == '-') {
+		// No subcommand or starts with flag - use run command
+		os.Args = append([]string{os.Args[0], "run"}, os.Args[1:]...)
+	}
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// newRunCommand creates the run subcommand for the controller
+func newRunCommand() *cobra.Command {
 	var metricsAddr string
+	var debugAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var namespace string
 	var crdValidationTimeout time.Duration
+	var enableDebugServer bool
+	var development bool
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run the platform autopilot controller",
+		Long:  `Start the controller manager that watches HyperConverged resources and manages platform configuration.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runController(
+				metricsAddr,
+				debugAddr,
+				probeAddr,
+				namespace,
+				enableLeaderElection,
+				enableDebugServer,
+				development,
+				crdValidationTimeout,
+			)
+		},
+	}
+
+	cmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	cmd.Flags().StringVar(&debugAddr, "debug-bind-address", "127.0.0.1:8081", "The address the debug endpoint binds to (localhost only for security).")
+	cmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
+	cmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&namespace, "namespace", "openshift-cnv",
+	cmd.Flags().StringVar(&namespace, "namespace", "openshift-cnv",
 		"The namespace where HyperConverged CR is located.")
-	flag.DurationVar(&crdValidationTimeout, "crd-validation-timeout", 10*time.Second,
+	cmd.Flags().DurationVar(&crdValidationTimeout, "crd-validation-timeout", 10*time.Second,
 		"Timeout for validating that required CRDs exist at startup.")
+	cmd.Flags().BoolVar(&enableDebugServer, "enable-debug-server", true,
+		"Enable debug HTTP server with /debug/render and /debug/exclusions endpoints.")
+	cmd.Flags().BoolVar(&development, "development", true,
+		"Enable development mode logging.")
 
+	return cmd
+}
+
+// runController starts the controller manager
+func runController(
+	metricsAddr string,
+	debugAddr string,
+	probeAddr string,
+	namespace string,
+	enableLeaderElection bool,
+	enableDebugServer bool,
+	development bool,
+	crdValidationTimeout time.Duration,
+) error {
+	// Setup logging
 	opts := zap.Options{
-		Development: true,
+		Development: development,
 	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
-
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	// Create label selector for cache filtering
@@ -93,14 +163,14 @@ func main() {
 	)
 	if err != nil {
 		setupLog.Error(err, "unable to create label selector")
-		os.Exit(1)
+		return err
 	}
 	managedBySelector := labels.NewSelector().Add(*managedByRequirement)
 
 	// Create unstructured object for HCO cache configuration
 	// We registered Unstructured with the HCO GVK in init(), so this won't require API queries
 	hcoForCache := &unstructured.Unstructured{}
-	hcoForCache.SetGroupVersionKind(controller.HCOGVK)
+	hcoForCache.SetGroupVersionKind(pkgcontext.HCOGVK)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
@@ -130,7 +200,7 @@ func main() {
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return err
 	}
 
 	// Validate HCO CRD exists before proceeding
@@ -143,11 +213,11 @@ func main() {
 	hcoCRDInstalled, err := crdChecker.IsCRDInstalled(validateCtx, "hyperconvergeds.hco.kubevirt.io")
 	if err != nil {
 		setupLog.Error(err, "failed to check for HCO CRD")
-		os.Exit(1)
+		return err
 	}
 	if !hcoCRDInstalled {
 		setupLog.Error(nil, "HyperConverged CRD not found - this component requires the HCO CRD to be installed by OLM")
-		os.Exit(1)
+		return fmt.Errorf("HCO CRD not found")
 	}
 	setupLog.Info("HCO CRD validation passed")
 
@@ -160,7 +230,7 @@ func main() {
 	)
 	if err != nil {
 		setupLog.Error(err, "unable to create platform reconciler")
-		os.Exit(1)
+		return err
 	}
 
 	// Setup event recorder
@@ -177,22 +247,60 @@ func main() {
 
 	if err = reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to setup platform controller")
-		os.Exit(1)
+		return err
+	}
+
+	// Setup debug server if enabled
+	if enableDebugServer {
+		setupLog.Info("Starting debug server", "address", debugAddr)
+		loader := assets.NewLoader()
+		registry, err := assets.NewRegistry(loader)
+		if err != nil {
+			setupLog.Error(err, "unable to load asset registry for debug server")
+			return err
+		}
+
+		debugServer := debug.NewServer(mgr.GetClient(), loader, registry)
+		debugMux := http.NewServeMux()
+		debugServer.InstallHandlers(debugMux)
+
+		httpServer := &http.Server{
+			Addr:    debugAddr,
+			Handler: debugMux,
+		}
+
+		go func() {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				setupLog.Error(err, "debug server failed")
+			}
+		}()
+
+		// Shutdown debug server on context cancellation
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer shutdownCancel()
+			if err := httpServer.Shutdown(shutdownCtx); err != nil {
+				setupLog.Error(err, "debug server shutdown failed")
+			}
+		}()
 	}
 
 	// Setup health checks
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+		return err
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		return err
 	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		return err
 	}
+
+	return nil
 }

@@ -57,6 +57,34 @@ For each asset:
 7. Record update for throttling
 ```
 
+### Controller Endpoints
+
+The controller exposes three HTTP endpoints on separate ports:
+
+| Port | Endpoint | Purpose | Access |
+|------|----------|---------|--------|
+| `8080` | `/metrics` | Prometheus metrics | Public (service) |
+| `8081` | `/debug/*` | Debug/render endpoints | Localhost only |
+| `8082` | `/healthz`, `/readyz` | Health probes | Kubernetes probes |
+
+**Debug Endpoints** (localhost-only, access via port-forward):
+- `/debug/render` - Render all assets based on current HCO
+- `/debug/render/{asset}` - Render specific asset
+- `/debug/exclusions` - List excluded/filtered assets with reasons
+- `/debug/tombstones` - List tombstones
+- `/debug/health` - Health check
+
+See [Debug Endpoints Documentation](docs/debug-endpoints.md) for detailed usage.
+
+**Render Command** (offline CLI):
+```bash
+# Render assets offline without cluster
+virt-platform-autopilot render --hco-file=hco.yaml --output=status
+
+# Or use HCO from cluster
+virt-platform-autopilot render --kubeconfig=/path/to/config
+```
+
 ## User Control Annotations
 
 Users can customize ANY managed resource (including HCO) via annotations:

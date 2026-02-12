@@ -29,7 +29,7 @@ patches:
         value:
           httpGet:
             path: /readyz
-            port: 8081
+            port: 8082
           initialDelaySeconds: 1
           periodSeconds: 1
           timeoutSeconds: 1
@@ -41,7 +41,7 @@ patches:
         value:
           httpGet:
             path: /healthz
-            port: 8081
+            port: 8082
           initialDelaySeconds: 3
           periodSeconds: 5
           timeoutSeconds: 1
