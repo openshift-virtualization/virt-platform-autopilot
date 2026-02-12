@@ -16,7 +16,36 @@ limitations under the License.
 
 package context
 
-import "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+)
+
+const (
+	// HCOGroup is the API group for HyperConverged
+	HCOGroup = "hco.kubevirt.io"
+
+	// HCOVersion is the API version for HyperConverged
+	HCOVersion = "v1beta1"
+
+	// HCOKind is the kind for HyperConverged
+	HCOKind = "HyperConverged"
+
+	// HCOName is the expected name of the HCO instance
+	HCOName = "kubevirt-hyperconverged"
+
+	// DefaultHCONamespace is the default namespace for HCO
+	DefaultHCONamespace = "openshift-cnv"
+)
+
+var (
+	// HCOGVK is the GroupVersionKind for HyperConverged
+	HCOGVK = schema.GroupVersionKind{
+		Group:   HCOGroup,
+		Version: HCOVersion,
+		Kind:    HCOKind,
+	}
+)
 
 // RenderContext contains all data needed for rendering asset templates
 type RenderContext struct {
@@ -42,4 +71,27 @@ func (h *HardwareContext) AsMap() map[string]bool {
 		"usbDevicesPresent": h.USBDevicesPresent,
 		"gpuPresent":        h.GPUPresent,
 	}
+}
+
+// NewRenderContext creates a new render context from an HCO object
+func NewRenderContext(hco *unstructured.Unstructured) *RenderContext {
+	return &RenderContext{
+		HCO:      hco,
+		Hardware: &HardwareContext{
+			// Hardware detection would populate these
+			// For now, all false (requires node inspection)
+		},
+	}
+}
+
+// NewMockHCO creates a mock HyperConverged object for testing
+func NewMockHCO(name, namespace string) *unstructured.Unstructured {
+	hco := &unstructured.Unstructured{}
+	hco.SetGroupVersionKind(HCOGVK)
+	hco.SetName(name)
+	hco.SetNamespace(namespace)
+	hco.SetLabels(map[string]string{
+		"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
+	})
+	return hco
 }
