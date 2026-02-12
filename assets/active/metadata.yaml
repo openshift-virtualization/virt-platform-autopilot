@@ -3,7 +3,7 @@
 assets:
   # Phase 0: HCO Golden Reference (Always, managed first!)
   - name: hco-golden-config
-    path: hco/golden-config.yaml.tpl
+    path: active/hco/golden-config.yaml.tpl
     phase: 0
     install: always
     component: HyperConverged
@@ -12,7 +12,7 @@ assets:
 
   # Phase 1: MachineConfig (requires MachineConfig CRD)
   - name: swap-enable
-    path: machine-config/01-swap-enable.yaml
+    path: active/machine-config/01-swap-enable.yaml
     phase: 1
     install: always
     component: MachineConfig
@@ -20,7 +20,7 @@ assets:
     conditions: []
 
   - name: pci-passthrough
-    path: machine-config/02-pci-passthrough.yaml.tpl
+    path: active/machine-config/02-pci-passthrough.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
@@ -33,7 +33,7 @@ assets:
         detector: pciDevicesPresent
 
   - name: numa-topology
-    path: machine-config/03-numa.yaml.tpl
+    path: active/machine-config/03-numa.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
@@ -47,7 +47,7 @@ assets:
 
   # Phase 1: OpenShift Kubelet (opt-in for non-OpenShift clusters)
   - name: kubelet-perf-settings
-    path: kubelet/perf-settings.yaml.tpl
+    path: active/kubelet/perf-settings.yaml.tpl
     phase: 1
     install: opt-in
     component: KubeletConfig
@@ -55,7 +55,7 @@ assets:
 
   # Phase 1: Always installed - NodeHealthCheck
   - name: node-health-check
-    path: node-health/standard-remediation.yaml
+    path: active/node-health/standard-remediation.yaml
     phase: 1
     install: always
     component: NodeHealthCheck
@@ -64,7 +64,7 @@ assets:
 
   # Phase 1: Optional Operators (opt-in for clusters with CRDs)
   - name: mtv-operator
-    path: operators/mtv.yaml.tpl
+    path: active/operators/mtv.yaml.tpl
     phase: 1
     install: opt-in
     component: ForkliftController
@@ -75,7 +75,7 @@ assets:
         value: "true"
 
   - name: metallb-operator
-    path: operators/metallb.yaml.tpl
+    path: active/operators/metallb.yaml.tpl
     phase: 1
     install: opt-in
     component: MetalLB
@@ -86,7 +86,7 @@ assets:
         value: "true"
 
   - name: observability-operator
-    path: operators/observability.yaml.tpl
+    path: active/operators/observability.yaml.tpl
     phase: 1
     install: opt-in
     component: UIPlugin
@@ -98,7 +98,7 @@ assets:
 
   # Phase 1: Opt-in - Descheduler
   - name: descheduler-loadaware
-    path: descheduler/recommended.yaml.tpl
+    path: active/descheduler/recommended.yaml.tpl
     phase: 1
     install: opt-in
     component: KubeDescheduler
@@ -110,7 +110,7 @@ assets:
 
   # Phase 1: Opt-in - CPU Manager
   - name: kubelet-cpu-manager
-    path: kubelet/cpu-manager.yaml.tpl
+    path: active/kubelet/cpu-manager.yaml.tpl
     phase: 1
     install: opt-in
     component: KubeletConfig

@@ -55,6 +55,11 @@ const (
 	EventReasonApplyFailed             = "ApplyFailed"
 	EventReasonRenderFailed            = "RenderFailed"
 	EventReasonHardwareDetectionFailed = "HardwareDetectionFailed"
+
+	// Tombstone events
+	EventReasonTombstoneDeleted = "TombstoneDeleted"
+	EventReasonTombstoneFailed  = "TombstoneFailed"
+	EventReasonTombstoneSkipped = "TombstoneSkipped"
 )
 
 // EventRecorder wraps the Kubernetes event recorder with helper methods
@@ -175,4 +180,22 @@ func (e *EventRecorder) NoDriftDetected(object runtime.Object, kind, namespace, 
 func (e *EventRecorder) HardwareDetectionFailed(object runtime.Object, reason string) {
 	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonHardwareDetectionFailed, "HardwareDetectionFailed",
 		"Hardware detection failed, using defaults: %s", reason)
+}
+
+// TombstoneDeleted records that a tombstoned resource was successfully deleted
+func (e *EventRecorder) TombstoneDeleted(object runtime.Object, kind, namespace, name, path string) {
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonTombstoneDeleted, "TombstoneDeleted",
+		"Deleted tombstoned resource %s/%s/%s (from %s)", kind, namespace, name, path)
+}
+
+// TombstoneFailed records that tombstone deletion failed
+func (e *EventRecorder) TombstoneFailed(object runtime.Object, kind, namespace, name, reason string) {
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonTombstoneFailed, "TombstoneFailed",
+		"Failed to delete tombstoned resource %s/%s/%s: %s", kind, namespace, name, reason)
+}
+
+// TombstoneSkipped records that tombstone deletion was skipped (label mismatch)
+func (e *EventRecorder) TombstoneSkipped(object runtime.Object, kind, namespace, name, reason string) {
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonTombstoneSkipped, "TombstoneSkipped",
+		"Skipped tombstone deletion for %s/%s/%s: %s", kind, namespace, name, reason)
 }

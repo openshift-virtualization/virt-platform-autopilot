@@ -31,7 +31,7 @@ import sys
 
 try:
     # Read the PrometheusRule CRD
-    with open('assets/observability/prometheus-rules.yaml.tpl') as f:
+    with open('assets/active/observability/prometheus-rules.yaml.tpl') as f:
         crd = yaml.safe_load(f)
 
     # Extract just the groups (what promtool expects)

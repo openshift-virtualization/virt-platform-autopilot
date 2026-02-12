@@ -14,9 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package assets
+package engine
 
-import "embed"
+import (
+	"testing"
 
-//go:embed all:active all:crds all:tombstones
-var EmbeddedFS embed.FS
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+func TestEngine(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Engine Suite")
+}

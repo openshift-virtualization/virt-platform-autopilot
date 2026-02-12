@@ -20,8 +20,9 @@ const (
 
 // Resource represents a Kubernetes resource GVK
 type Resource struct {
-	APIVersion string
-	Kind       string
+	APIVersion  string
+	Kind        string
+	NeedsDelete bool // True if found in tombstones directory
 }
 
 // RBACRule represents a ClusterRole rule
@@ -127,7 +128,7 @@ func preprocessTemplate(content []byte) []byte {
 }
 
 // processAssetFile extracts resources from a single asset file
-func processAssetFile(content []byte, seen map[string]bool, resources *[]Resource) {
+func processAssetFile(content []byte, seen map[string]bool, resources *[]Resource, needsDelete bool) {
 	// Parse YAML - sigs.k8s.io/yaml doesn't support streaming, so split on ---
 	docs := strings.Split(string(content), "\n---\n")
 	for _, docStr := range docs {
@@ -156,9 +157,18 @@ func processAssetFile(content []byte, seen map[string]bool, resources *[]Resourc
 			if !seen[key] {
 				seen[key] = true
 				*resources = append(*resources, Resource{
-					APIVersion: apiVersion,
-					Kind:       kind,
+					APIVersion:  apiVersion,
+					Kind:        kind,
+					NeedsDelete: needsDelete,
 				})
+			} else if needsDelete {
+				// Resource already exists but now found in tombstones - mark as needing delete
+				for i := range *resources {
+					if (*resources)[i].APIVersion == apiVersion && (*resources)[i].Kind == kind {
+						(*resources)[i].NeedsDelete = true
+						break
+					}
+				}
 			}
 		}
 	}
@@ -169,17 +179,38 @@ func extractResources(assetsPath string) ([]Resource, error) {
 	var resources []Resource
 	seen := make(map[string]bool)
 
-	err := filepath.WalkDir(assetsPath, func(path string, d fs.DirEntry, err error) error {
+	// Scan active assets directory
+	activeDir := filepath.Join(assetsPath, "active")
+	err := scanDirectory(activeDir, seen, &resources, false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan active directory: %w", err)
+	}
+
+	// Scan tombstones directory (best-effort - ignore NotFound)
+	tombstonesDir := filepath.Join(assetsPath, "tombstones")
+	if err := scanDirectory(tombstonesDir, seen, &resources, true); err != nil {
+		// Only fail if it's not a NotFound error
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to scan tombstones directory: %w", err)
+		}
+	}
+
+	return resources, nil
+}
+
+// scanDirectory walks a directory and processes asset files
+func scanDirectory(dir string, seen map[string]bool, resources *[]Resource, needsDelete bool) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			// If directory doesn't exist, return the error so caller can handle
+			if os.IsNotExist(err) {
+				return err
+			}
 			return err
 		}
 
 		// Skip directories and non-YAML files
 		if d.IsDir() {
-			// Skip assets/crds directory entirely
-			if d.Name() == "crds" && filepath.Dir(path) == assetsPath {
-				return filepath.SkipDir
-			}
 			return nil
 		}
 
@@ -200,23 +231,34 @@ func extractResources(assetsPath string) ([]Resource, error) {
 		}
 
 		// Process file content
-		processAssetFile(content, seen, &resources)
+		processAssetFile(content, seen, resources, needsDelete)
 
 		return nil
 	})
-
-	return resources, err
 }
 
 // generateDynamicRules creates RBAC rules from discovered resources
 // IMPORTANT: Output must be deterministic for CI verification
 func generateDynamicRules(resources []Resource) []RBACRule {
-	// Group resources by API group
-	groupedResources := make(map[string][]string)
+	// Group resources by API group and track if any needs delete
+	type groupInfo struct {
+		resources   []string
+		needsDelete bool
+	}
+	groupedResources := make(map[string]*groupInfo)
 
 	for _, res := range resources {
 		group, _, resource := parseGVK(res.APIVersion, res.Kind)
-		groupedResources[group] = append(groupedResources[group], resource)
+		if groupedResources[group] == nil {
+			groupedResources[group] = &groupInfo{
+				resources:   []string{},
+				needsDelete: false,
+			}
+		}
+		groupedResources[group].resources = append(groupedResources[group].resources, resource)
+		if res.NeedsDelete {
+			groupedResources[group].needsDelete = true
+		}
 	}
 
 	// Sort groups alphabetically for deterministic output
@@ -228,15 +270,13 @@ func generateDynamicRules(resources []Resource) []RBACRule {
 
 	// Generate rules with deterministic ordering
 	var rules []RBACRule
-	// Verbs in alphabetical order for consistency
-	standardVerbs := []string{"create", "get", "list", "patch", "update", "watch"}
 
 	for _, group := range groups {
-		resourceList := groupedResources[group]
+		info := groupedResources[group]
 
 		// Deduplicate and sort resources alphabetically for deterministic output
 		resourceMap := make(map[string]bool)
-		for _, r := range resourceList {
+		for _, r := range info.resources {
 			resourceMap[r] = true
 		}
 
@@ -245,6 +285,13 @@ func generateDynamicRules(resources []Resource) []RBACRule {
 			uniqueResources = append(uniqueResources, r)
 		}
 		sort.Strings(uniqueResources) // Critical for deterministic output
+
+		// Build verbs list (alphabetical order for consistency)
+		verbs := []string{"create", "get", "list", "patch", "update", "watch"}
+		if info.needsDelete {
+			// Prepend delete for alphabetical order
+			verbs = append([]string{"delete"}, verbs...)
+		}
 
 		// Create rule
 		apiGroup := group
@@ -255,7 +302,7 @@ func generateDynamicRules(resources []Resource) []RBACRule {
 		rules = append(rules, RBACRule{
 			APIGroups: []string{apiGroup},
 			Resources: uniqueResources,
-			Verbs:     standardVerbs,
+			Verbs:     verbs,
 		})
 	}
 
@@ -290,8 +337,22 @@ func formatRulesWithComments(rules []RBACRule) string {
 		// Add comment based on API group
 		rule := &rules[i]
 		comment := getCommentForAPIGroup(rule.APIGroups[0])
+
+		// Check if this rule includes delete verb (tombstone cleanup)
+		hasDelete := false
+		for _, verb := range rule.Verbs {
+			if verb == "delete" {
+				hasDelete = true
+				break
+			}
+		}
+
 		if comment != "" {
-			builder.WriteString(fmt.Sprintf("  # %s\n", comment))
+			if hasDelete {
+				builder.WriteString(fmt.Sprintf("  # %s (includes tombstone cleanup)\n", comment))
+			} else {
+				builder.WriteString(fmt.Sprintf("  # %s\n", comment))
+			}
 		}
 		writeRule(&builder, rule)
 	}

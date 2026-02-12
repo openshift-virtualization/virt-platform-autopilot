@@ -92,6 +92,20 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		return false, nil
 	}
 
+	// Root Exclusion: Check if this resource is explicitly disabled via annotation
+	disabledAnnotation := renderCtx.HCO.GetAnnotations()[DisabledResourcesAnnotation]
+	if disabledAnnotation != "" {
+		disabledMap := ParseDisabledResources(disabledAnnotation)
+		if IsResourceExcluded(desired.GetKind(), desired.GetName(), disabledMap) {
+			logger.Info("Skipping resource due to Root Exclusion",
+				"kind", desired.GetKind(),
+				"name", desired.GetName(),
+				"annotation", DisabledResourcesAnnotation,
+			)
+			return false, nil
+		}
+	}
+
 	// Start reconciliation duration timer (will be observed at function exit)
 	timer := observability.ReconcileDurationTimer(desired)
 	defer timer.ObserveDuration()

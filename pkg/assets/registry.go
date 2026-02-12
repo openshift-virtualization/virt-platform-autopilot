@@ -76,7 +76,7 @@ type Registry struct {
 // NewRegistry creates a new asset registry
 func NewRegistry(loader *Loader) (*Registry, error) {
 	// Load metadata.yaml
-	data, err := loader.LoadAsset("metadata.yaml")
+	data, err := loader.LoadAsset("active/metadata.yaml")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load asset catalog: %w", err)
 	}
