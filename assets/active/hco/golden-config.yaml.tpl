@@ -27,9 +27,7 @@ spec:
     disableMDevConfiguration: false
     downwardMetrics: false
     enableMultiArchBootImageImport: false
-    objectGraph: false
     persistentReservation: false
-    videoConfig: true
 
   # Certificate rotation configuration
   certConfig:
