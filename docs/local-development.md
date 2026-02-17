@@ -241,13 +241,13 @@ kubectl get kubedeschedulers
 
 ```bash
 # Check pod status
-kubectl get pods -n virt-platform-autopilot-system
+kubectl get pods -n openshift-cnv
 
 # Describe the pod
-kubectl describe pod -n virt-platform-autopilot-system -l app=virt-platform-autopilot
+kubectl describe pod -n openshift-cnv -l app=virt-platform-autopilot
 
 # Check events
-kubectl get events -n virt-platform-autopilot-system --sort-by='.lastTimestamp'
+kubectl get events -n openshift-cnv --sort-by='.lastTimestamp'
 
 # View logs
 make logs-local
@@ -369,7 +369,7 @@ make kind-delete
 4. **Multiple Terminals**: Run these in separate terminals:
    - Terminal 1: `make logs-local` (watch logs)
    - Terminal 2: Code editing and `make redeploy-local`
-   - Terminal 3: `kubectl get pods -n virt-platform-autopilot-system -w` (watch pods)
+   - Terminal 3: `kubectl get pods -n openshift-cnv -w` (watch pods)
 
 5. **Resource Cleanup**: Kind clusters are ephemeral - don't worry about breaking things
 

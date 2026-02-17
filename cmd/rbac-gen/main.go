@@ -122,9 +122,23 @@ func pluralize(kind string) string {
 
 // preprocessTemplate replaces template variables with dummy values for parsing
 func preprocessTemplate(content []byte) []byte {
-	// Replace {{ .* }} with "dummy-value" for parsing
-	re := regexp.MustCompile(`\{\{[^}]+\}\}`)
-	return re.ReplaceAll(content, []byte(`"dummy-value"`))
+	// Remove lines that ONLY contain template directives (control flow, variables, etc.)
+	// These would break YAML structure if replaced with dummy values
+	lines := strings.Split(string(content), "\n")
+	var filtered []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		// Skip lines that are purely template directives
+		if strings.HasPrefix(trimmed, "{{") && strings.HasSuffix(trimmed, "}}") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	content = []byte(strings.Join(filtered, "\n"))
+
+	// Replace remaining {{ .* }} expressions with "dummy-value" for parsing
+	exprRe := regexp.MustCompile(`\{\{[^}]+\}\}`)
+	return exprRe.ReplaceAll(content, []byte(`"dummy-value"`))
 }
 
 // processAssetFile extracts resources from a single asset file

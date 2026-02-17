@@ -184,8 +184,8 @@ make deploy
 
 3. Verify installation:
 ```bash
-kubectl get deployment -n virt-platform-autopilot-system
-kubectl logs -n virt-platform-autopilot-system deployment/virt-platform-autopilot
+kubectl get deployment -n openshift-cnv
+kubectl logs -n openshift-cnv deployment/virt-platform-autopilot
 ```
 
 ### Local Development (Kind)

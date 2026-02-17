@@ -116,7 +116,7 @@ Builds, loads, and deploys the operator to Kind cluster.
 **Environment Variables:**
 - `CLUSTER_NAME` - Name of the cluster (default: `virt-platform-autopilot`)
 - `IMAGE_NAME` - Operator image name (default: `virt-platform-autopilot:latest`)
-- `NAMESPACE` - Operator namespace (default: `virt-platform-autopilot-system`)
+- `NAMESPACE` - Operator namespace (default: `openshift-cnv`)
 
 **Examples:**
 ```bash
@@ -213,13 +213,13 @@ make kind-load
 **Operator not starting:**
 ```bash
 # Check pod status
-kubectl get pods -n virt-platform-autopilot-system
+kubectl get pods -n openshift-cnv
 
 # View events
-kubectl get events -n virt-platform-autopilot-system --sort-by='.lastTimestamp'
+kubectl get events -n openshift-cnv --sort-by='.lastTimestamp'
 
 # Describe pod
-kubectl describe pod -n virt-platform-autopilot-system -l app=virt-platform-autopilot
+kubectl describe pod -n openshift-cnv -l app=virt-platform-autopilot
 
 # Check logs
 make logs-local
