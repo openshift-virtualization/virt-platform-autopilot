@@ -264,7 +264,9 @@ func assertFunctionsNotExist(t *testing.T, funcMap map[string]interface{}, dange
 }
 
 func TestCustomFuncMap(t *testing.T) {
-	funcMap := customFuncMap()
+	loader := assets.NewLoader()
+	renderer := NewRenderer(loader)
+	funcMap := renderer.customFuncMap()
 
 	t.Run("includes dig function", func(t *testing.T) {
 		if _, exists := funcMap["dig"]; !exists {
@@ -275,6 +277,30 @@ func TestCustomFuncMap(t *testing.T) {
 	t.Run("includes has function", func(t *testing.T) {
 		if _, exists := funcMap["has"]; !exists {
 			t.Error("customFuncMap() missing 'has' function")
+		}
+	})
+
+	t.Run("includes crdEnum function", func(t *testing.T) {
+		if _, exists := funcMap["crdEnum"]; !exists {
+			t.Error("customFuncMap() missing 'crdEnum' function")
+		}
+	})
+
+	t.Run("includes crdHasEnum function", func(t *testing.T) {
+		if _, exists := funcMap["crdHasEnum"]; !exists {
+			t.Error("customFuncMap() missing 'crdHasEnum' function")
+		}
+	})
+
+	t.Run("includes objectExists function", func(t *testing.T) {
+		if _, exists := funcMap["objectExists"]; !exists {
+			t.Error("customFuncMap() missing 'objectExists' function")
+		}
+	})
+
+	t.Run("includes prometheusRuleHasRecordingRule function", func(t *testing.T) {
+		if _, exists := funcMap["prometheusRuleHasRecordingRule"]; !exists {
+			t.Error("customFuncMap() missing 'prometheusRuleHasRecordingRule' function")
 		}
 	})
 }

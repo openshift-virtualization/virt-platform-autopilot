@@ -27,7 +27,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: manager
-          image: virt-platform-autopilot:latest
+          image: quay.io/tiraboschi/virt-platform-autopilot:test-descheduler-20260217-171253
           imagePullPolicy: IfNotPresent
           command:
             - /manager

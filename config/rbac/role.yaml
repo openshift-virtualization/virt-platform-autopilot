@@ -50,11 +50,20 @@ rules:
       - patch
       - update
       - watch
-  # CRD Discovery (for soft dependency detection)
+  # CRD Discovery (for soft dependency detection and template introspection)
   - apiGroups:
       - apiextensions.k8s.io
     resources:
       - customresourcedefinitions
+    verbs:
+      - get
+      - list
+      - watch
+  # PrometheusRule (for template introspection - read-only)
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - prometheusrules
     verbs:
       - get
       - list

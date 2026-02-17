@@ -72,10 +72,16 @@ func staticRules() []RBACRule {
 			Resources: []string{"leases"},
 			Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
 		},
-		// Rule 5: CRD Discovery (for soft dependency detection)
+		// Rule 5: CRD Discovery (for soft dependency detection and template introspection)
 		{
 			APIGroups: []string{"apiextensions.k8s.io"},
 			Resources: []string{"customresourcedefinitions"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		// Rule 6: PrometheusRule (for template introspection - read-only)
+		{
+			APIGroups: []string{"monitoring.coreos.com"},
+			Resources: []string{"prometheusrules"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
 	}
@@ -339,15 +345,17 @@ func formatRulesWithComments(rules []RBACRule) string {
 	writeRule(&builder, &rules[2])
 	builder.WriteString("  # Leader Election\n")
 	writeRule(&builder, &rules[3])
-	builder.WriteString("  # CRD Discovery (for soft dependency detection)\n")
+	builder.WriteString("  # CRD Discovery (for soft dependency detection and template introspection)\n")
 	writeRule(&builder, &rules[4])
+	builder.WriteString("  # PrometheusRule (for template introspection - read-only)\n")
+	writeRule(&builder, &rules[5])
 
 	// Dynamic rules from assets
 	builder.WriteString("  # ========================================\n")
 	builder.WriteString("  # Managed Resources (Dynamic - from assets/)\n")
 	builder.WriteString("  # ========================================\n")
 
-	for i := 5; i < len(rules); i++ {
+	for i := 6; i < len(rules); i++ {
 		// Add comment based on API group
 		rule := &rules[i]
 		comment := getCommentForAPIGroup(rule.APIGroups[0])

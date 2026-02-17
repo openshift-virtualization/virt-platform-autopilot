@@ -45,6 +45,13 @@ assets:
       - type: hardware-detection
         detector: numaNodesPresent
 
+  - name: psi-enable
+    path: active/machine-config/04-psi-enable.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+
   # Phase 1: OpenShift Kubelet (opt-in for non-OpenShift clusters)
   - name: kubelet-perf-settings
     path: active/kubelet/perf-settings.yaml.tpl
@@ -103,10 +110,6 @@ assets:
     install: opt-in
     component: KubeDescheduler
     reconcile_order: 1
-    conditions:
-      - type: annotation
-        key: platform.kubevirt.io/enable-loadaware
-        value: "true"
 
   # Phase 1: Opt-in - CPU Manager
   - name: kubelet-cpu-manager

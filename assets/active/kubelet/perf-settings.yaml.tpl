@@ -5,7 +5,7 @@ metadata:
 spec:
   kubeletConfig:
     nodeStatusMaxImages: -1
-    {{- $maxPods := dig "spec" "infra" "nodePlacement" "maxPods" 500 .HCO }}
+    {{- $maxPods := dig "spec" "infra" "nodePlacement" "maxPods" 500 .HCO.Object }}
     maxPods: {{ $maxPods }}
   machineConfigPoolSelector:
     matchLabels:

@@ -50,8 +50,11 @@ type Patcher struct {
 // The apiReader enables object adoption (detecting and labeling unlabeled objects)
 // For tests with fake clients, pass nil for apiReader
 func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader) *Patcher {
+	renderer := NewRenderer(loader)
+	renderer.SetClient(c) // Enable CRD introspection and object queries in templates
+
 	return &Patcher{
-		renderer:          NewRenderer(loader),
+		renderer:          renderer,
 		applier:           NewApplier(c, apiReader),
 		driftDetector:     NewDriftDetector(c),
 		throttle:          throttling.NewTokenBucket(),
