@@ -9,6 +9,9 @@ metadata:
 spec:
   # Opinionated defaults for production virtualization workloads
 
+  # Control plane tuning - HighBurst for better control plane performance (CNV-69442)
+  tuningPolicy: highBurst
+
   # Live migration configuration optimized for stability
   liveMigrationConfig:
     allowAutoConverge: false
@@ -44,3 +47,7 @@ spec:
 
   # Uninstall strategy
   uninstallStrategy: BlockUninstallIfWorkloadsExist
+
+  # Note: VM-level performance defaults (networkInterfaceMultiqueue, ioThreadsPolicy, etc.)
+  # should be configured via instanceTypes/templates or VirtualMachine specs.
+  # See CNV performance recommendations for details.
