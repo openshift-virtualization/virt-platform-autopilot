@@ -41,11 +41,12 @@ spec:
       rules:
         - alert: VirtPlatformThrashingDetected
           # Edit war indicator: Another controller or user is fighting our configuration
-          # Expr: increase(virt_platform_thrashing_total[10m]) > 5
-          # More than 5 thrashing events in 10 minutes indicates an active conflict
+          # Expr: virt_platform_paused_resources > 0
+          # Any resource currently paused indicates an active conflict
           # The operator has paused automation to protect the API server
+          # This metric is set to 1 when pause annotation is added, 0 when removed
           expr: |
-            increase(virt_platform_thrashing_total[10m]) > 5
+            virt_platform_paused_resources > 0
           labels:
             severity: warning
             operator: virt-platform-autopilot
@@ -57,10 +58,13 @@ spec:
 
               Automation has been paused to protect the API server from thrashing.
 
-              Thrashing events in last 10 minutes: {{`{{ $value }}`}}
+              Paused status: {{`{{ $value }}`}} (1=paused, 0=active)
 
               This indicates another controller or user is modifying the resource,
               conflicting with the autopilot's desired state.
+
+              To resume reconciliation, remove the annotation:
+              platform.kubevirt.io/reconcile-paused="true"
             runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformThrashingDetected.md"
 
         - alert: VirtPlatformDependencyMissing

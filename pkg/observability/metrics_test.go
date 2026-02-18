@@ -86,6 +86,42 @@ func TestIncThrashing(t *testing.T) {
 	}
 }
 
+func TestSetPaused(t *testing.T) {
+	// Reset metrics before test
+	PausedResources.Reset()
+
+	obj := &unstructured.Unstructured{}
+	obj.SetKind("KubeDescheduler")
+	obj.SetName("cluster")
+	obj.SetNamespace("openshift-kube-descheduler-operator")
+
+	// Set paused to true
+	SetPaused(obj, true)
+
+	expected := `
+		# HELP virt_platform_paused_resources Resources currently paused due to edit war detection (1=paused, 0=active)
+		# TYPE virt_platform_paused_resources gauge
+		virt_platform_paused_resources{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"} 1
+	`
+
+	if err := testutil.CollectAndCompare(PausedResources, strings.NewReader(expected)); err != nil {
+		t.Errorf("unexpected metric value when paused: %v", err)
+	}
+
+	// Set paused to false (resume)
+	SetPaused(obj, false)
+
+	expected = `
+		# HELP virt_platform_paused_resources Resources currently paused due to edit war detection (1=paused, 0=active)
+		# TYPE virt_platform_paused_resources gauge
+		virt_platform_paused_resources{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"} 0
+	`
+
+	if err := testutil.CollectAndCompare(PausedResources, strings.NewReader(expected)); err != nil {
+		t.Errorf("unexpected metric value when unpaused: %v", err)
+	}
+}
+
 func TestSetCustomization(t *testing.T) {
 	// Reset metrics before test
 	CustomizationInfo.Reset()

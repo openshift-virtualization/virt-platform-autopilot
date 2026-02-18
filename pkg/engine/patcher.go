@@ -330,6 +330,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 					if err := p.setPauseAnnotation(ctx, live); err != nil {
 						logger.Error(err, "Failed to set pause annotation", "key", resourceKey)
 						// Continue anyway - operator will retry
+					} else {
+						// Record that this resource is now paused
+						observability.SetPaused(desired, true)
 					}
 				}
 
@@ -390,6 +393,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 		// Reset thrashing detector - successful reconciliation resolves edit war
 		p.thrashingDetector.RecordSuccess(resourceKey)
+
+		// Clear paused state - resource is now active
+		observability.SetPaused(desired, false)
 
 		// Record successful asset application
 		if p.eventRecorder != nil && renderCtx.HCO != nil {

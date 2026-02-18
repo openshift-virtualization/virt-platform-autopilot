@@ -97,7 +97,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		// Verify thrashing alert
 		thrashingAlert := warningRules[0].(map[string]interface{})
 		Expect(thrashingAlert["alert"]).To(Equal("VirtPlatformThrashingDetected"))
-		Expect(thrashingAlert["expr"]).To(ContainSubstring("increase(virt_platform_thrashing_total[10m]) > 5"))
+		Expect(thrashingAlert["expr"]).To(ContainSubstring("virt_platform_paused_resources > 0"))
 
 		// Verify dependency alert
 		dependencyAlert := warningRules[1].(map[string]interface{})

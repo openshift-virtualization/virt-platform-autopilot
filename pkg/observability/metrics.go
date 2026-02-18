@@ -54,6 +54,18 @@ var (
 		[]string{"kind", "name", "namespace"},
 	)
 
+	// PausedResources tracks resources currently paused due to edit wars.
+	// 1 = paused (reconcile-paused annotation set), 0 = active (annotation removed)
+	// This gauge provides a stable signal for alerting on ongoing edit wars.
+	PausedResources = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Subsystem: subsystem,
+			Name:      "paused_resources",
+			Help:      "Resources currently paused due to edit war detection (1=paused, 0=active)",
+		},
+		[]string{"kind", "name", "namespace"},
+	)
+
 	// CustomizationInfo tracks intentional deviations from the Golden State.
 	// Always set to 1 when customization exists. Type indicates: patch, ignore, or unmanaged.
 	// Useful for Support to see "Is this cluster stock or customized?" without digging into YAML.
@@ -118,6 +130,7 @@ func init() {
 	metrics.Registry.MustRegister(
 		ComplianceStatus,
 		ThrashingTotal,
+		PausedResources,
 		CustomizationInfo,
 		MissingDependency,
 		ReconcileDuration,
@@ -207,4 +220,18 @@ func SetTombstoneStatus(obj *unstructured.Unstructured, status float64) {
 		obj.GetName(),
 		obj.GetNamespace(),
 	).Set(status)
+}
+
+// SetPaused sets the paused state for a resource.
+// Called when edit war is detected (paused=true) or when annotation is removed (paused=false).
+func SetPaused(obj *unstructured.Unstructured, paused bool) {
+	value := 0.0
+	if paused {
+		value = 1.0
+	}
+	PausedResources.WithLabelValues(
+		obj.GetKind(),
+		obj.GetName(),
+		obj.GetNamespace(),
+	).Set(value)
 }
