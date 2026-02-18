@@ -160,7 +160,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info("Applying HCO golden configuration")
 	if err := r.reconcileHCO(ctx, hco); err != nil {
 		logger.Error(err, "Failed to reconcile HCO golden config")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{}, err
 	}
 
 	// Re-fetch HCO to get effective state after applying golden config
@@ -173,7 +173,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	renderCtx, err := r.contextBuilder.Build(ctx, hco)
 	if err != nil {
 		logger.Error(err, "Failed to build render context")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{}, err
 	}
 
 	// Update condition evaluator with current context
@@ -183,7 +183,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info("Reconciling platform assets")
 	if err := r.reconcileAssets(ctx, renderCtx); err != nil {
 		logger.Error(err, "Failed to reconcile assets")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{}, err
 	}
 
 	logger.Info("Successfully reconciled virt platform")
