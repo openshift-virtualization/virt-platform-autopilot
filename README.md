@@ -17,13 +17,12 @@ Traditional virtualization platform setup requires:
 ## The Solution
 
 The autopilot applies opinionated best practices and manages your platform automatically:
-
-✅ **Production defaults** - Optimized HCO, platform configurations, kubelet settings
-✅ **Operational excellence** - Auto-remediation, intelligent workload placement
-✅ **Zero API surface** - No new CRDs, no status fields to check
-✅ **Silent operation** - Alerts only when user intervention is required
-✅ **GitOps-friendly** - Declarative control via annotations, fully customizable
-✅ **Convention over Configuration** - Opinionated entry point, flexible when needed
+* **Production defaults** - Optimized HCO, platform configurations, kubelet settings
+* **Operational excellence** - Auto-remediation, intelligent workload placement
+* **Zero API surface** - No new CRDs, no status fields to check
+* **Silent operation** - Alerts only when user intervention is required
+* **GitOps-friendly** - Declarative control via annotations, fully customizable
+* **Convention over Configuration** - Opinionated entry point, flexible when needed
 
 **Install once. Run VMs. Customize via GitOps when needed.**
 
@@ -166,7 +165,7 @@ make redeploy-local    # Redeploy after changes
 make dev-cycle
 ```
 
-See [Local Development Guide](docs/local-development.md) for complete instructions.
+See [Local Development Guide](docs/local-development.md) for complete instructions, including deploying custom builds to OpenShift clusters.
 
 ## License
 
