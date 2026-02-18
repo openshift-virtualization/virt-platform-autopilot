@@ -380,6 +380,7 @@ make kind-delete
 
 ## Next Steps
 
-- Read [User Guide](user-guide.md) for annotation usage
-- Read [Assets Documentation](assets.md) for asset catalog reference
-- Check [hack/README.md](../hack/README.md) for detailed script documentation
+- Read [README](../README.md) for overview and quick start
+- Read [Adding Assets Guide](adding-assets.md) for extending the platform
+- Read [Architecture Documentation](ARCHITECTURE.md) for technical details
+- Read [Debug Endpoints](debug-endpoints.md) for debugging and inspection tools
