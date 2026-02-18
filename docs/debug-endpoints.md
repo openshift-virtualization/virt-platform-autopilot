@@ -382,7 +382,11 @@ metadata:
   name: kubevirt-hyperconverged
   namespace: openshift-cnv
   annotations:
-    platform.kubevirt.io/disabled-resources: "KubeDescheduler/cluster, MachineConfig/50-swap-enable"
+    platform.kubevirt.io/disabled-resources: |
+      - kind: KubeDescheduler
+        name: cluster
+      - kind: MachineConfig
+        name: 50-swap-enable
 EOF
 
 # Verify exclusions work
