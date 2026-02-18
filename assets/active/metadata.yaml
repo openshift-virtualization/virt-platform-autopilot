@@ -10,6 +10,16 @@ assets:
     reconcile_order: 0
     conditions: []
 
+  # Phase 1: Critical monitoring - PrometheusRule for alerts (reconciled first after HCO)
+  # Soft dependency: Will be skipped gracefully if Prometheus Operator CRD is not installed
+  - name: prometheus-alerts
+    path: active/observability/prometheus-rules.yaml.tpl
+    phase: 1
+    install: always
+    component: PrometheusRule
+    reconcile_order: 1
+    conditions: []
+
   # Phase 1: MachineConfig (requires MachineConfig CRD)
   - name: swap-enable
     path: active/machine-config/01-swap-enable.yaml
@@ -66,15 +76,6 @@ assets:
     phase: 1
     install: always
     component: NodeHealthCheck
-    reconcile_order: 1
-    conditions: []
-
-  # Phase 1: Always installed - PrometheusRule for alerts (soft dependency on Prometheus Operator CRD)
-  - name: prometheus-alerts
-    path: active/observability/prometheus-rules.yaml.tpl
-    phase: 1
-    install: always
-    component: PrometheusRule
     reconcile_order: 1
     conditions: []
 
