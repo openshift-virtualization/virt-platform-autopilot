@@ -467,3 +467,30 @@ func testAnnotationConditions(ctx context.Context, t *testing.T) {
 		})
 	}
 }
+
+// TestOptInAssetsHaveConditions validates that all opt-in assets in metadata.yaml
+// have at least one condition. Opt-in assets without conditions will never be applied
+// (see pkg/assets/registry.go:140-142), which is likely a configuration error.
+func TestOptInAssetsHaveConditions(t *testing.T) {
+	loader := NewLoader()
+	registry, err := NewRegistry(loader)
+	if err != nil {
+		t.Fatalf("Failed to create registry: %v", err)
+	}
+
+	allAssets := registry.catalog.Assets
+	var violations []string
+
+	for _, asset := range allAssets {
+		if asset.Install == InstallModeOptIn && len(asset.Conditions) == 0 {
+			violations = append(violations, asset.Name)
+		}
+	}
+
+	if len(violations) > 0 {
+		t.Errorf("Found %d opt-in asset(s) without conditions (will never be applied): %v\n"+
+			"Opt-in assets require at least one condition to be activated.\n"+
+			"Either add a condition or change install mode to 'always'.",
+			len(violations), violations)
+	}
+}

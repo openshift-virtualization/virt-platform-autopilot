@@ -425,8 +425,8 @@ func TestAssetMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get kubelet-perf-settings: %v", err)
 	}
-	if asset.Install != "opt-in" {
-		t.Errorf("kubelet-perf-settings Install = %s, want opt-in", asset.Install)
+	if asset.Install != "always" {
+		t.Errorf("kubelet-perf-settings Install = %s, want always", asset.Install)
 	}
 
 	// Test kubelet-cpu-manager

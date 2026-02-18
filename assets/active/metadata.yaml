@@ -58,15 +58,15 @@ assets:
   - name: psi-enable
     path: active/machine-config/04-psi-enable.yaml
     phase: 1
-    install: opt-in
+    install: always
     component: MachineConfig
     reconcile_order: 1
 
-  # Phase 1: OpenShift Kubelet (opt-in for non-OpenShift clusters)
+  # Phase 1: OpenShift Kubelet (soft dependency on KubeletConfig CRD)
   - name: kubelet-perf-settings
     path: active/kubelet/perf-settings.yaml.tpl
     phase: 1
-    install: opt-in
+    install: always
     component: KubeletConfig
     reconcile_order: 1
 
@@ -113,13 +113,14 @@ assets:
         key: platform.kubevirt.io/enable-observability
         value: "true"
 
-  # Phase 1: Opt-in - Descheduler
+  # Phase 1: Auto-enabled when Descheduler CRD is present (soft dependency)
   - name: descheduler-loadaware
     path: active/descheduler/recommended.yaml.tpl
     phase: 1
-    install: opt-in
+    install: always
     component: KubeDescheduler
     reconcile_order: 1
+    conditions: []
 
   # Phase 1: Opt-in - CPU Manager
   - name: kubelet-cpu-manager
