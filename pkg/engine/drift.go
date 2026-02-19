@@ -82,6 +82,7 @@ func (d *DriftDetector) DetectDrift(ctx context.Context, desired, live *unstruct
 			"kind", desired.GetKind(),
 			"namespace", desired.GetNamespace(),
 			"name", desired.GetName(),
+			"diff", structuredDiff(sanitizedLive, sanitizedDryRun),
 		)
 	}
 
@@ -136,6 +137,38 @@ func sanitizeObject(obj *unstructured.Unstructured) map[string]interface{} {
 	delete(sanitized, "status")
 
 	return sanitized
+}
+
+// structuredDiff returns a map containing only the fields that differ between
+// live and desired. Leaf differences are represented as {"live": <v>, "desired": <v>},
+// so the result can be logged directly as a structured value.
+func structuredDiff(live, desired map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	for k, liveVal := range live {
+		desiredVal, ok := desired[k]
+		if !ok {
+			result[k] = map[string]interface{}{"live": liveVal, "desired": nil}
+			continue
+		}
+		liveMap, liveIsMap := liveVal.(map[string]interface{})
+		desiredMap, desiredIsMap := desiredVal.(map[string]interface{})
+		if liveIsMap && desiredIsMap {
+			if sub := structuredDiff(liveMap, desiredMap); len(sub) > 0 {
+				result[k] = sub
+			}
+		} else if !equality.Semantic.DeepEqual(liveVal, desiredVal) {
+			result[k] = map[string]interface{}{"live": liveVal, "desired": desiredVal}
+		}
+	}
+
+	for k, desiredVal := range desired {
+		if _, ok := live[k]; !ok {
+			result[k] = map[string]interface{}{"live": nil, "desired": desiredVal}
+		}
+	}
+
+	return result
 }
 
 // CompareSpecs compares only the spec sections of two objects
