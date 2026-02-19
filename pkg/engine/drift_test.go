@@ -22,6 +22,101 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
+func makeObj(labels map[string]string, spec map[string]interface{}) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "ConfigMap",
+			"metadata": map[string]interface{}{
+				"name":      "test",
+				"namespace": "default",
+			},
+		},
+	}
+	if labels != nil {
+		obj.SetLabels(labels)
+	}
+	if spec != nil {
+		obj.Object["spec"] = spec
+	}
+	return obj
+}
+
+func TestSimpleDriftCheck(t *testing.T) {
+	dd := &DriftDetector{} // no client needed for SimpleDriftCheck
+
+	tests := []struct {
+		name    string
+		desired *unstructured.Unstructured
+		live    *unstructured.Unstructured
+		want    bool // true = drift detected
+	}{
+		{
+			name:    "identical objects, no labels",
+			desired: makeObj(nil, map[string]interface{}{"key": "value"}),
+			live:    makeObj(nil, map[string]interface{}{"key": "value"}),
+			want:    false,
+		},
+		{
+			name:    "both have managed-by label, spec equal",
+			desired: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			want:    false,
+		},
+		{
+			name:    "spec differs",
+			desired: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "a"}),
+			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "b"}),
+			want:    true,
+		},
+		{
+			// Regression: templates do not emit the managed-by label; Applier.Apply()
+			// injects it just before the SSA call. If ReconcileAsset does not call
+			// ensureManagedByLabel(desired) before drift detection, the label that is
+			// always present on the live object will show up as spurious drift on
+			// every reconciliation cycle, causing unnecessary applies and events.
+			name:    "regression: managed-by label only on live causes false drift when desired not labeled",
+			desired: makeObj(nil, map[string]interface{}{"key": "value"}),
+			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			want:    true, // this is the bug: drift is wrongly detected
+		},
+		{
+			// Mirror of the regression case above: after ensureManagedByLabel(desired)
+			// is called in ReconcileAsset (the fix), the comparison is fair and no
+			// spurious drift is reported.
+			name: "fix: no spurious drift when desired is labeled before comparison",
+			desired: func() *unstructured.Unstructured {
+				obj := makeObj(nil, map[string]interface{}{"key": "value"})
+				ensureManagedByLabel(obj) // what ReconcileAsset now does before drift check
+				return obj
+			}(),
+			live: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			want: false,
+		},
+		{
+			name:    "nil desired",
+			desired: nil,
+			live:    makeObj(nil, nil),
+			want:    true,
+		},
+		{
+			name:    "nil live",
+			desired: makeObj(nil, nil),
+			live:    nil,
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dd.SimpleDriftCheck(tt.desired, tt.live)
+			if got != tt.want {
+				t.Errorf("SimpleDriftCheck() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCompareSpecs(t *testing.T) {
 	tests := []struct {
 		name string

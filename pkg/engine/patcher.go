@@ -264,6 +264,11 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	}
 
 	// Step 5: Drift detection
+	// Ensure the managed-by label is present on desired before comparison,
+	// mirroring what Applier.Apply() does before the actual SSA apply.
+	// Without this the label would always appear as a spurious diff.
+	ensureManagedByLabel(desired)
+
 	hasDrift := false
 	if liveExists {
 		hasDrift, err = p.driftDetector.DetectDrift(ctx, desired, live)
