@@ -83,10 +83,10 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		waitForOperatorRestart(prevCount)
 
 		Eventually(func() error {
-			_, err := getUnstructuredResource(lifecycleMachineConfigGVK, "99-kubevirt-swap-optimization", "")
+			_, err := getUnstructuredResource(lifecycleMachineConfigGVK, "90-worker-swap-online", "")
 			return err
 		}, timeout, interval).Should(Succeed(),
-			"Operator should create the 99-kubevirt-swap-optimization MachineConfig after CRD installation")
+			"Operator should create the 90-worker-swap-online MachineConfig after CRD installation")
 	})
 
 	It("should restart when managed CRD is deleted", func() {

@@ -15,10 +15,10 @@ const (
 	driftMachineConfigCRDName = "machineconfigs.machineconfiguration.openshift.io"
 
 	// Expected resource name created by operator asset
-	driftMcName = "99-kubevirt-swap-optimization"
+	driftMcName = "90-worker-swap-online"
 
 	// Expected spec field value from the autopilot's asset
-	driftExpectedIgnitionVersion = "3.4.0"
+	driftExpectedIgnitionVersion = "3.5.0"
 
 	// Managed-by label
 	driftManagedByLabel = "platform.kubevirt.io/managed-by"
@@ -85,12 +85,12 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 		waitForOperatorRestart(prevCount)
 	})
 
-	It("should create the 99-kubevirt-swap-optimization MachineConfig with managed-by label", func() {
+	It("should create the 90-worker-swap-online MachineConfig with managed-by label", func() {
 		Eventually(func() error {
 			_, err := getUnstructuredResource(driftMachineConfigGVK, driftMcName, "")
 			return err
 		}, timeout, interval).Should(Succeed(),
-			"Operator should create the 99-kubevirt-swap-optimization MachineConfig")
+			"Operator should create the 90-worker-swap-online MachineConfig")
 
 		mc, err := getUnstructuredResource(driftMachineConfigGVK, driftMcName, "")
 		Expect(err).NotTo(HaveOccurred())

@@ -1,386 +1,40 @@
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
-  name: 99-kubevirt-swap-optimization
   labels:
     machineconfiguration.openshift.io/role: worker
-    platform.kubevirt.io/managed-by: virt-platform-autopilot
-
+  name: 90-worker-swap-online
 spec:
   config:
     ignition:
-      version: 3.4.0
-
-    storage:
-      files:
-        # Adaptive watermark tuning script
-        - path: /usr/local/bin/kubevirt-tune-watermarks.py
-          mode: 0755
-          overwrite: true
-          contents:
-            inline: |
-              #!/usr/bin/env python3
-              """Adaptive watermark tuning for Kubernetes NodeSwap.
-
-              Computes and applies vm.watermark_scale_factor so that:
-                HIGH > LOW > eviction_threshold > MIN > OOM
-              """
-
-              import os
-              import sys
-              import time
-              import yaml
-              from collections import namedtuple
-
-              KUBELET_CONFIG_PATHS = [
-                  "/var/lib/kubelet/config.json",
-                  "/var/lib/kubelet/config.yaml",
-                  "/etc/kubernetes/kubelet.conf",
-              ]
-              DEFAULT_EVICTION_KB = 100 * 1024  # 100Mi
-              MAX_KUBELET_RETRIES = 5
-              KUBELET_RETRY_DELAY_SEC = 10
-              SCALE_MIN = 10
-              SCALE_MAX = 1000
-
-              Watermarks = namedtuple("Watermarks", "min low high managed")
-
-
-              def parse_memory_kb(val, total_ram_kb):
-                  """Convert a Kubernetes memory quantity to KB."""
-                  suffixes = {"Ti": 1024**4, "Gi": 1024**3, "Mi": 1024**2, "Ki": 1024,
-                              "T": 10**12, "G": 10**9, "M": 10**6, "k": 10**3}
-                  for suffix, mult in suffixes.items():
-                      if val.endswith(suffix):
-                          return int(val[:-len(suffix)]) * mult // 1024
-                  if val.endswith("%"):
-                      return int(total_ram_kb * float(val[:-1]) / 100)
-                  if val.isdigit():
-                      kb = int(val) // 1024
-                      if kb == 0:
-                          print(f"WARNING: memory quantity '{val}' rounds to 0 KB, using 1 KB")
-                          kb = 1
-                      return kb
-                  sys.exit(f"ERROR: cannot parse memory quantity: {val}")
-
-
-              def _find_kubelet_config():
-                  """Search known kubelet config paths, with retries for boot race."""
-                  for attempt in range(MAX_KUBELET_RETRIES):
-                      for path in KUBELET_CONFIG_PATHS:
-                          if os.path.isfile(path):
-                              print(f"Found kubelet config at {path}")
-                              return path
-                      print(f"Kubelet config not found (attempt {attempt + 1}/{MAX_KUBELET_RETRIES}), retrying...")
-                      time.sleep(KUBELET_RETRY_DELAY_SEC)
-                  return None
-
-
-              def get_eviction_kb(total_ram_kb):
-                  """Read eviction threshold from kubelet config, with retries."""
-                  path = _find_kubelet_config()
-                  if not path:
-                      sys.exit("ERROR: Kubelet config not found after retries")
-
-                  try:
-                      with open(path) as f:
-                          data = yaml.safe_load(f)
-                      raw = data.get("evictionHard", {}).get("memory.available", "") if isinstance(data, dict) else ""
-                  except Exception as e:
-                      print(f"WARNING: failed to read kubelet config: {e}")
-                      raw = ""
-
-                  if not raw:
-                      print("Eviction threshold not found in config, using default: 100Mi")
-                      return DEFAULT_EVICTION_KB
-
-                  print(f"Eviction threshold from config: {raw}")
-                  return parse_memory_kb(raw, total_ram_kb)
-
-
-              def read_zoneinfo(page_size_kb):
-                  """Sum per-zone fields from /proc/zoneinfo, return Watermarks in KB."""
-                  fields = {"min", "low", "high", "managed"}
-                  sums = dict.fromkeys(fields, 0)
-                  with open("/proc/zoneinfo") as f:
-                      for line in f:
-                          parts = line.split()
-                          if len(parts) == 2 and parts[0] in fields:
-                              sums[parts[0]] += int(parts[1])
-                  return Watermarks(*(sums[k] * page_size_kb for k in ("min", "low", "high", "managed")))
-
-
-              def read_total_ram_kb():
-                  with open("/proc/meminfo") as f:
-                      for line in f:
-                          if line.startswith("MemTotal:"):
-                              return int(line.split()[1])
-                  sys.exit("ERROR: could not read MemTotal from /proc/meminfo")
-
-
-              def main():
-                  try:
-                      page_size_kb = os.sysconf("SC_PAGE_SIZE") // 1024
-                  except (ValueError, OSError):
-                      page_size_kb = 4  # safe default for x86_64/aarch64
-                      print("WARNING: could not determine page size, defaulting to 4 KB")
-
-                  total_ram_kb = read_total_ram_kb()
-                  wm = read_zoneinfo(page_size_kb)
-                  eviction_kb = get_eviction_kb(total_ram_kb)
-
-                  if wm.managed == 0:
-                      sys.exit("ERROR: managed pages is 0, cannot compute scale factor")
-
-                  print(f"Total RAM: {total_ram_kb // 1024} MiB, managed: {wm.managed // 1024} MiB")
-                  print(f"Kernel MIN watermark: {wm.min // 1024} MiB")
-                  print(f"Eviction threshold: {eviction_kb // 1024} MiB")
-
-                  if wm.min >= eviction_kb:
-                      print(f"WARNING: MIN watermark ({wm.min // 1024} MiB) >= eviction threshold "
-                            f"({eviction_kb // 1024} MiB). Direct reclaim will stall allocations before "
-                            f"kubelet can evict pods. Consider raising the eviction threshold.")
-
-                  runway_kb = max(256 * 1024, total_ram_kb // 100)  # max(256 MiB, 1% of RAM)
-                  target_low_kb = eviction_kb + runway_kb
-
-                  if wm.low >= target_low_kb:
-                      print(f"LOW watermark ({wm.low // 1024} MiB) already exceeds target "
-                            f"({target_low_kb // 1024} MiB), no tuning needed.")
-                      return
-
-                  # Always positive: if MIN >= target, then LOW > MIN >= target, and the early exit above fires.
-                  gap_needed_kb = target_low_kb - wm.min
-                  scale = gap_needed_kb * 10000 // wm.managed
-                  scale = max(SCALE_MIN, min(SCALE_MAX, scale))
-
-                  if scale == SCALE_MAX:
-                      print("WARNING: scale_factor clamped to maximum")
-
-                  print(f"Runway: {runway_kb // 1024} MiB, computed scale_factor: {scale}")
-
-                  try:
-                      with open("/proc/sys/vm/watermark_scale_factor", "w") as f:
-                          f.write(str(scale))
-                  except PermissionError:
-                      sys.exit("ERROR: must run as root to set watermark_scale_factor")
-
-                  wm = read_zoneinfo(page_size_kb)
-                  print(f"Result: MIN={wm.min // 1024}Mi  LOW={wm.low // 1024}Mi  HIGH={wm.high // 1024}Mi")
-
-                  if wm.low <= eviction_kb:
-                      sys.exit(f"ERROR: LOW ({wm.low // 1024}Mi) <= Eviction ({eviction_kb // 1024}Mi) "
-                               f"after setting scale_factor={scale}")
-
-                  if wm.low < target_low_kb:
-                      print(f"WARNING: LOW ({wm.low // 1024}Mi) < target ({target_low_kb // 1024}Mi), "
-                            f"runway is shorter than desired due to scale_factor clamping")
-
-                  print(f"Done. scale_factor={scale}, "
-                        f"HIGH({wm.high // 1024}Mi) > LOW({wm.low // 1024}Mi) > Eviction({eviction_kb // 1024}Mi), "
-                        f"gap: {(wm.low - eviction_kb) // 1024} MiB")
-
-
-              if __name__ == "__main__":
-                  main()
-
-        # IO latency device discovery script
-        - path: /usr/local/bin/kubevirt-io-latency-setup.py
-          mode: 0755
-          overwrite: true
-          contents:
-            inline: |
-              #!/usr/bin/env python3
-              """Set up io.latency protection so system services (kubelet, CRI-O) are not
-              starved by swap IO from workload pods.
-
-              How it works:
-                - The kernel's io.latency controller can throttle one cgroup when a sibling
-                  cgroup's IO latency exceeds its target. We give system.slice a tight target
-                  (5ms) and kubepods.slice a loose one (50ms). When swap IO from kubepods
-                  pushes system.slice past 5ms, the kernel throttles kubepods automatically.
-                - io.latency targets are per block device, so we need to discover which
-                  physical disks actually back swap and root, then write the targets into
-                  systemd drop-in files.
-                - Drop-ins go under /run/ (tmpfs), so they're cleared on reboot and
-                  re-created by this script on next boot.
-              """
-
-              import os
-              import subprocess
-
-              SYSTEM_LATENCY_MS = 5
-              KUBEPODS_LATENCY_MS = 50
-              SYSTEM_DROPIN_DIR = "/run/systemd/system/system.slice.d"
-              KUBEPODS_DROPIN_DIR = "/run/systemd/system/kubepods.slice.d"
-              DROPIN_NAME = "20-io-latency.conf"
-
-
-              def resolve_to_physical(dev):
-                  """Given a device path like /dev/dm-3 or /dev/sda2, return the set of
-                  physical whole-disk devices (e.g. {"/dev/sda"}).
-
-                  Why: io.latency must target the physical disk where IO actually contends.
-                  /proc/swaps and /proc/mounts report higher-level devices that may be
-                  LVM/DM volumes or partitions, not the physical disk itself.
-
-                  Resolution walks sysfs:
-                    /dev/dm-3  -> /sys/class/block/dm-3/slaves/sda2  -> recurse
-                    /dev/sda2  -> /sys/class/block/sda2/partition exists -> parent is sda
-                    /dev/sda   -> no slaves, no partition marker -> this is the physical disk
-                  """
-                  devname = os.path.basename(dev)
-                  sysdir = f"/sys/class/block/{devname}"
-                  if not os.path.exists(sysdir):
-                      return set()
-
-                  # DM/LVM/LUKS: follow the slave chain to the underlying device(s)
-                  slaves_dir = os.path.join(sysdir, "slaves")
-                  if os.path.isdir(slaves_dir):
-                      slaves = os.listdir(slaves_dir)
-                      if slaves:
-                          result = set()
-                          for slave in slaves:
-                              result |= resolve_to_physical(f"/dev/{slave}")
-                          return result
-
-                  # Partition (e.g. sda2): go up to the whole disk (sda)
-                  if os.path.exists(os.path.join(sysdir, "partition")):
-                      parent = os.path.basename(os.path.realpath(os.path.join(sysdir, "..")))
-                      return {f"/dev/{parent}"}
-
-                  # Already a whole disk
-                  return {f"/dev/{devname}"}
-
-
-              def discover_devices():
-                  """Find all physical disks that back swap and root.
-
-                  We need both because:
-                    - Swap disk: where swap IO happens (the main source of contention).
-                    - Root disk: where kubelet/CRI-O do their IO (what we're protecting).
-                  If they're on the same disk, deduplication handles it.
-                  """
-                  devices = set()
-
-                  # Swap devices: parse /proc/swaps, skip zram (RAM-backed, no real IO)
-                  try:
-                      with open("/proc/swaps") as f:
-                          for line in f:
-                              parts = line.split()
-                              if len(parts) < 2 or parts[0] == "Filename":
-                                  continue
-                              if parts[1] != "partition":
-                                  continue
-                              if os.path.basename(parts[0]).startswith("zram"):
-                                  continue
-                              for phys in resolve_to_physical(parts[0]):
-                                  print(f"Swap backing device: {phys}")
-                                  devices.add(phys)
-                  except FileNotFoundError:
-                      print("WARNING: /proc/swaps not found")
-
-                  # Root device: parse /proc/mounts for the "/" mountpoint
-                  try:
-                      with open("/proc/mounts") as f:
-                          for line in f:
-                              parts = line.split()
-                              if len(parts) >= 2 and parts[1] == "/":
-                                  for phys in resolve_to_physical(parts[0]):
-                                      print(f"Root backing device: {phys}")
-                                      devices.add(phys)
-                                  break
-                  except FileNotFoundError:
-                      print("WARNING: /proc/mounts not found")
-
-                  return devices
-
-
-              def write_dropin(directory, lines):
-                  os.makedirs(directory, exist_ok=True)
-                  path = os.path.join(directory, DROPIN_NAME)
-                  with open(path, "w") as f:
-                      f.write("\n".join(lines) + "\n")
-
-
-              def main():
-                  devices = discover_devices()
-                  if not devices:
-                      print("WARNING: no block devices discovered, skipping io.latency setup")
-                      return
-
-                  # Write a systemd drop-in for each slice with IODeviceLatencyTargetSec
-                  # for every discovered device
-                  sys_lines = ["[Slice]"]
-                  kp_lines = ["[Slice]"]
-                  for dev in sorted(devices):
-                      sys_lines.append(f"IODeviceLatencyTargetSec={dev} {SYSTEM_LATENCY_MS}ms")
-                      kp_lines.append(f"IODeviceLatencyTargetSec={dev} {KUBEPODS_LATENCY_MS}ms")
-                      print(f"io.latency: {dev} system={SYSTEM_LATENCY_MS}ms kubepods={KUBEPODS_LATENCY_MS}ms")
-
-                  write_dropin(SYSTEM_DROPIN_DIR, sys_lines)
-                  write_dropin(KUBEPODS_DROPIN_DIR, kp_lines)
-
-                  subprocess.run(["systemctl", "daemon-reload"], check=True, timeout=30)
-                  print("io.latency drop-ins applied and daemon reloaded")
-
-
-              if __name__ == "__main__":
-                  main()
-
+      version: 3.5.0
     systemd:
       units:
-        # Oneshot service: adaptive watermark tuning at boot
-        - name: kubevirt-tune-watermarks.service
-          enabled: true
-          contents: |
+        - contents: |
             [Unit]
-            Description=KubeVirt adaptive watermark tuning for swap optimization
-            After=kubelet.service
+            Description=Enable swap
+            ConditionFirstBoot=no
+            ConditionPathExists=/dev/disk/by-partlabel/OCPSWAP
 
             [Service]
             Type=oneshot
-            ExecStart=/usr/local/bin/kubevirt-tune-watermarks.py
-            RemainAfterExit=true
-            StandardOutput=journal
-            StandardError=journal
+            ExecStart=/bin/sh -c "sudo swapon --priority 100 /dev/disk/by-partlabel/OCPSWAP"
 
             [Install]
-            WantedBy=multi-user.target
-
-        # IO latency device discovery: apply io.latency to swap and root devices
-        - name: kubevirt-io-latency-setup.service
+            RequiredBy=kubelet-dependencies.target
           enabled: true
-          contents: |
+          name: swap-disk-enable.service
+        - contents: |
             [Unit]
-            Description=KubeVirt IO latency protection for swap devices
-            After=local-fs.target swap.target
-            Wants=swap.target
+            Description=Enable OCP file swap
+            ConditionFirstBoot=no
+            ConditionPathExists=/var/tmp/ocpswap.file
 
             [Service]
             Type=oneshot
-            ExecStart=/usr/local/bin/kubevirt-io-latency-setup.py
-            RemainAfterExit=true
-            StandardOutput=journal
-            StandardError=journal
+            ExecStart=/bin/sh -c "sudo swapon --priority 10 /var/tmp/ocpswap.file"
 
             [Install]
-            WantedBy=multi-user.target
-
-        # Protect system.slice: no swap, CPU priority, IO weight
-        - name: system.slice
-          dropins:
-            - name: 10-kubevirt-protect.conf
-              contents: |
-                [Slice]
-                MemorySwapMax=0
-                IOWeight=800
-                CPUWeight=800
-
-        # Low IO weight on kubepods for proportional IO fairness
-        - name: kubepods.slice
-          dropins:
-            - name: 10-kubevirt-io-priority.conf
-              contents: |
-                [Slice]
-                IOWeight=100
+            RequiredBy=kubelet-dependencies.target
+          enabled: true
+          name: ocpswap-file-enable.service

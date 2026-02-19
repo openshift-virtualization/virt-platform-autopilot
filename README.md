@@ -77,7 +77,7 @@ While the autopilot provides opinionated defaults, you maintain full control thr
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
-  name: 99-kubevirt-swap-optimization
+  name: 90-worker-swap-online
   annotations:
     platform.kubevirt.io/patch: |
       [

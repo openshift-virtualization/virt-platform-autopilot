@@ -223,7 +223,7 @@ Apply RFC 6902 JSON Patch operations to customize any field:
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
-  name: 99-kubevirt-swap-optimization
+  name: 90-worker-swap-online
   annotations:
     platform.kubevirt.io/patch: |
       [
