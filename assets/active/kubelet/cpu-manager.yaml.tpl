@@ -10,6 +10,10 @@ spec:
       full-pcpus-only: "true"
     cpuManagerReconcilePeriod: 5s
     reservedSystemCPUs: "0-1"
+    # Reserve 1 CPU for Kubernetes system components (required for cluster stability
+    # when full-pcpus-only is enabled per virt-perf-optimization docs)
+    kubeReserved:
+      cpu: "1"
     # Topology Manager for NUMA awareness (required for VM pinning)
     topologyManagerPolicy: best-effort
     # Memory Manager for static memory allocation (required for VM pinning)
