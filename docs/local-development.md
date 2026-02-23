@@ -451,18 +451,18 @@ Deploy without modifying files:
 oc apply -k config/default
 
 # Update the image after deployment
-oc set image deployment/virt-platform-autopilot-virt-platform-autopilot \
+oc set image deployment/virt-platform-autopilot \
   manager=${IMG} -n openshift-cnv
 
 # Watch rollout
-oc rollout status deployment/virt-platform-autopilot-virt-platform-autopilot -n openshift-cnv
+oc rollout status deployment/virt-platform-autopilot -n openshift-cnv
 ```
 
 #### Option 3: Manual Edit
 
 ```bash
 # Edit the deployment directly
-oc edit deployment virt-platform-autopilot-virt-platform-autopilot -n openshift-cnv
+oc edit deployment virt-platform-autopilot -n openshift-cnv
 
 # Update the image field:
 # spec.template.spec.containers[0].image: quay.io/YOUR_USERNAME/virt-platform-autopilot:v1.0.0-dev
@@ -498,14 +498,14 @@ docker tag virt-platform-autopilot:latest ${IMG}
 docker push ${IMG}
 
 # Update deployment
-oc set image deployment/virt-platform-autopilot-virt-platform-autopilot \
+oc set image deployment/virt-platform-autopilot \
   manager=${IMG} -n openshift-cnv
 
 # Force restart if using same tag
-oc rollout restart deployment/virt-platform-autopilot-virt-platform-autopilot -n openshift-cnv
+oc rollout restart deployment/virt-platform-autopilot -n openshift-cnv
 
 # Watch the rollout
-oc rollout status deployment/virt-platform-autopilot-virt-platform-autopilot -n openshift-cnv
+oc rollout status deployment/virt-platform-autopilot -n openshift-cnv
 
 # Check logs
 oc logs -f -n openshift-cnv -l app=virt-platform-autopilot
@@ -518,7 +518,7 @@ Access debug endpoints via port-forward:
 ```bash
 # Port-forward to debug server
 oc port-forward -n openshift-cnv \
-  deployment/virt-platform-autopilot-virt-platform-autopilot 8081:8081
+  deployment/virt-platform-autopilot 8081:8081
 
 # In another terminal, access debug endpoints
 curl http://localhost:8081/debug/render
@@ -547,7 +547,7 @@ oc create secret docker-registry quay-secret \
   -n openshift-cnv
 
 # Patch service account to use the secret
-oc patch serviceaccount virt-platform-autopilot-virt-platform-autopilot \
+oc patch serviceaccount virt-platform-autopilot \
   -n openshift-cnv \
   -p '{"imagePullSecrets": [{"name": "quay-secret"}]}'
 ```
@@ -562,11 +562,11 @@ oc get clusterrole | grep virt-platform-autopilot
 oc get clusterrolebinding | grep virt-platform-autopilot
 
 # View RBAC permissions
-oc describe clusterrole virt-platform-autopilot-virt-platform-autopilot-role
+oc describe clusterrole virt-platform-autopilot-role
 
 # Test permissions as the service account
 oc auth can-i create machineconfigs \
-  --as=system:serviceaccount:openshift-cnv:virt-platform-autopilot-virt-platform-autopilot
+  --as=system:serviceaccount:openshift-cnv:virt-platform-autopilot
 ```
 
 #### Pod Not Starting
@@ -610,10 +610,10 @@ Remove the operator from the cluster:
 oc delete -k config/default
 
 # Or manually
-oc delete deployment virt-platform-autopilot-virt-platform-autopilot -n openshift-cnv
-oc delete clusterrolebinding virt-platform-autopilot-virt-platform-autopilot-rolebinding
-oc delete clusterrole virt-platform-autopilot-virt-platform-autopilot-role
-oc delete serviceaccount virt-platform-autopilot-virt-platform-autopilot -n openshift-cnv
+oc delete deployment virt-platform-autopilot -n openshift-cnv
+oc delete clusterrolebinding virt-platform-autopilot-rolebinding
+oc delete clusterrole virt-platform-autopilot-role
+oc delete serviceaccount virt-platform-autopilot -n openshift-cnv
 
 # Managed resources will remain - delete manually if needed
 oc get machineconfigs | grep kubevirt
@@ -629,7 +629,7 @@ oc get nodehealthchecks
 
 2. **Set ImagePullPolicy to Always** for development:
    ```bash
-   oc patch deployment virt-platform-autopilot-virt-platform-autopilot \
+   oc patch deployment virt-platform-autopilot \
      -n openshift-cnv \
      --type='json' \
      -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Always"}]'
