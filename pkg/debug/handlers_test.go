@@ -31,6 +31,7 @@ import (
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	pkgrender "github.com/kubevirt/virt-platform-autopilot/pkg/render"
 )
 
 func TestHandleHealth(t *testing.T) {
@@ -81,8 +82,9 @@ func TestHandleRender(t *testing.T) {
 			queryParams:    "",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body string) {
-				assert.Contains(t, body, "asset:")
-				assert.Contains(t, body, "status:")
+				assert.Contains(t, body, "# Asset:")
+				assert.Contains(t, body, "# Status:")
+				assert.Contains(t, body, "---")
 			},
 		},
 		{
@@ -90,7 +92,7 @@ func TestHandleRender(t *testing.T) {
 			queryParams:    "?format=json",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body string) {
-				var outputs []RenderOutput
+				var outputs []pkgrender.RenderOutput
 				err := json.Unmarshal([]byte(body), &outputs)
 				assert.NoError(t, err)
 				assert.NotEmpty(t, outputs)
@@ -101,18 +103,8 @@ func TestHandleRender(t *testing.T) {
 			queryParams:    "?show-excluded=true",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body string) {
-				var outputs []RenderOutput
-				err := yaml.Unmarshal([]byte(body), &outputs)
-				assert.NoError(t, err)
-				// Should have some excluded assets
-				hasExcluded := false
-				for _, out := range outputs {
-					if out.Status == "EXCLUDED" || out.Status == "FILTERED" {
-						hasExcluded = true
-						break
-					}
-				}
-				assert.True(t, hasExcluded, "Should have excluded assets when show-excluded=true")
+				// Multi-document YAML: check for the EXCLUDED status comment header
+				assert.Contains(t, body, "# Status: EXCLUDED", "Should have excluded assets when show-excluded=true")
 			},
 		},
 	}
@@ -160,11 +152,8 @@ func TestHandleRenderAsset(t *testing.T) {
 			assetName:      "swap-enable",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, body string) {
-				var outputs []RenderOutput
-				err := yaml.Unmarshal([]byte(body), &outputs)
-				assert.NoError(t, err)
-				assert.Len(t, outputs, 1)
-				assert.Equal(t, "swap-enable", outputs[0].Asset)
+				assert.Contains(t, body, "# Asset: swap-enable")
+				assert.Contains(t, body, "---")
 			},
 		},
 		{

@@ -17,6 +17,7 @@ limitations under the License.
 package debug
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -31,6 +32,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	pkgrender "github.com/kubevirt/virt-platform-autopilot/pkg/render"
 )
 
 // Server provides debug endpoints for the controller
@@ -60,17 +62,6 @@ func (s *Server) InstallHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/health", s.handleHealth)
 }
 
-// RenderOutput represents the output format for rendered assets
-type RenderOutput struct {
-	Asset      string                     `json:"asset" yaml:"asset"`
-	Path       string                     `json:"path" yaml:"path"`
-	Component  string                     `json:"component" yaml:"component"`
-	Status     string                     `json:"status" yaml:"status"`
-	Reason     string                     `json:"reason,omitempty" yaml:"reason,omitempty"`
-	Conditions []assets.AssetCondition    `json:"conditions,omitempty" yaml:"conditions,omitempty"`
-	Object     *unstructured.Unstructured `json:"object,omitempty" yaml:"object,omitempty"`
-}
-
 // handleRender renders all assets and returns them
 func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -81,85 +72,20 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
-	// Parse query parameters
 	format := r.URL.Query().Get("format")
 	if format == "" {
 		format = "yaml"
 	}
 	showExcluded := r.URL.Query().Get("show-excluded") == "true"
 
-	// Get HCO for render context
 	renderCtx, err := s.getRenderContext(ctx)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get render context: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Render all assets
-	outputs := []RenderOutput{}
-	assetList := s.registry.ListAssetsByReconcileOrder()
-
-	for _, assetMeta := range assetList {
-		output := RenderOutput{
-			Asset:      assetMeta.Name,
-			Path:       assetMeta.Path,
-			Component:  assetMeta.Component,
-			Conditions: assetMeta.Conditions,
-		}
-
-		// Check conditions
-		if !s.checkConditions(&assetMeta, renderCtx) {
-			output.Status = "EXCLUDED"
-			output.Reason = "Conditions not met"
-			if showExcluded {
-				outputs = append(outputs, output)
-			}
-			continue
-		}
-
-		// Render asset
-		rendered, err := s.renderer.RenderAsset(&assetMeta, renderCtx)
-		if err != nil {
-			output.Status = "ERROR"
-			output.Reason = err.Error()
-			outputs = append(outputs, output)
-			continue
-		}
-
-		if rendered == nil {
-			output.Status = "EXCLUDED"
-			output.Reason = "Conditional template rendered empty"
-			if showExcluded {
-				outputs = append(outputs, output)
-			}
-			continue
-		}
-
-		// Check root exclusion
-		disabledAnnotation := renderCtx.HCO.GetAnnotations()[engine.DisabledResourcesAnnotation]
-		if disabledAnnotation != "" {
-			rules, err := engine.ParseDisabledResources(disabledAnnotation)
-			if err != nil {
-				// Log error but continue (fail-open for debug endpoint)
-				continue
-			}
-			if engine.IsResourceExcluded(rendered.GetKind(), rendered.GetNamespace(), rendered.GetName(), rules) {
-				output.Status = "FILTERED"
-				output.Reason = "Root exclusion (disabled-resources annotation)"
-				if showExcluded {
-					outputs = append(outputs, output)
-				}
-				continue
-			}
-		}
-
-		output.Status = "INCLUDED"
-		output.Object = rendered
-		outputs = append(outputs, output)
-	}
-
-	// Write response
-	s.writeResponse(w, outputs, format)
+	outputs := pkgrender.BuildOutputs(s.registry.ListAssetsByReconcileOrder(), s.renderer, renderCtx, showExcluded)
+	s.writeRenderResponse(w, outputs, format)
 }
 
 // handleRenderAsset renders a specific asset by name
@@ -186,73 +112,62 @@ func (s *Server) handleRenderAsset(w http.ResponseWriter, r *http.Request) {
 		format = "yaml"
 	}
 
-	// Get asset metadata
 	assetMeta, err := s.registry.GetAsset(assetName)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Asset not found: %v", err), http.StatusNotFound)
 		return
 	}
 
-	// Get render context
 	renderCtx, err := s.getRenderContext(ctx)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get render context: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	output := RenderOutput{
+	output := pkgrender.RenderOutput{
 		Asset:      assetMeta.Name,
 		Path:       assetMeta.Path,
 		Component:  assetMeta.Component,
 		Conditions: assetMeta.Conditions,
 	}
 
-	// Check conditions
-	if !s.checkConditions(assetMeta, renderCtx) {
+	if !pkgrender.CheckConditions(assetMeta, renderCtx) {
 		output.Status = "EXCLUDED"
 		output.Reason = "Conditions not met"
-		s.writeResponse(w, []RenderOutput{output}, format)
+		s.writeRenderResponse(w, []pkgrender.RenderOutput{output}, format)
 		return
 	}
 
-	// Render asset
 	rendered, err := s.renderer.RenderAsset(assetMeta, renderCtx)
 	if err != nil {
 		output.Status = "ERROR"
 		output.Reason = err.Error()
-		s.writeResponse(w, []RenderOutput{output}, format)
+		s.writeRenderResponse(w, []pkgrender.RenderOutput{output}, format)
 		return
 	}
 
 	if rendered == nil {
 		output.Status = "EXCLUDED"
 		output.Reason = "Conditional template rendered empty"
-		s.writeResponse(w, []RenderOutput{output}, format)
+		s.writeRenderResponse(w, []pkgrender.RenderOutput{output}, format)
 		return
 	}
 
-	// Check root exclusion
+	// Check root exclusion; fail-open if the annotation cannot be parsed.
 	disabledAnnotation := renderCtx.HCO.GetAnnotations()[engine.DisabledResourcesAnnotation]
 	if disabledAnnotation != "" {
 		rules, err := engine.ParseDisabledResources(disabledAnnotation)
-		if err != nil {
-			// Log error but continue (fail-open for debug endpoint)
-			output.Status = "INCLUDED"
-			output.Object = rendered
-			s.writeResponse(w, []RenderOutput{output}, format)
-			return
-		}
-		if engine.IsResourceExcluded(rendered.GetKind(), rendered.GetNamespace(), rendered.GetName(), rules) {
+		if err == nil && engine.IsResourceExcluded(rendered.GetKind(), rendered.GetNamespace(), rendered.GetName(), rules) {
 			output.Status = "FILTERED"
 			output.Reason = "Root exclusion (disabled-resources annotation)"
-			s.writeResponse(w, []RenderOutput{output}, format)
+			s.writeRenderResponse(w, []pkgrender.RenderOutput{output}, format)
 			return
 		}
 	}
 
 	output.Status = "INCLUDED"
 	output.Object = rendered
-	s.writeResponse(w, []RenderOutput{output}, format)
+	s.writeRenderResponse(w, []pkgrender.RenderOutput{output}, format)
 }
 
 // ExclusionInfo represents information about excluded assets
@@ -280,60 +195,52 @@ func (s *Server) handleExclusions(w http.ResponseWriter, r *http.Request) {
 		format = "yaml"
 	}
 
-	// Get render context
 	renderCtx, err := s.getRenderContext(ctx)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to get render context: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Find all excluded assets
 	exclusions := []ExclusionInfo{}
 	assetList := s.registry.ListAssetsByReconcileOrder()
 
 	for _, assetMeta := range assetList {
-		// Check conditions
-		if !s.checkConditions(&assetMeta, renderCtx) {
-			exclusion := ExclusionInfo{
+		if !pkgrender.CheckConditions(&assetMeta, renderCtx) {
+			exclusions = append(exclusions, ExclusionInfo{
 				Asset:     assetMeta.Name,
 				Path:      assetMeta.Path,
 				Component: assetMeta.Component,
 				Reason:    "Conditions not met",
 				Details:   s.getConditionDetails(&assetMeta, renderCtx),
 				Metadata:  &assetMeta,
-			}
-			exclusions = append(exclusions, exclusion)
+			})
 			continue
 		}
 
-		// Try rendering
 		rendered, err := s.renderer.RenderAsset(&assetMeta, renderCtx)
 		if err != nil || rendered == nil {
 			reason := "Template rendered empty"
 			if err != nil {
 				reason = fmt.Sprintf("Render error: %v", err)
 			}
-			exclusion := ExclusionInfo{
+			exclusions = append(exclusions, ExclusionInfo{
 				Asset:     assetMeta.Name,
 				Path:      assetMeta.Path,
 				Component: assetMeta.Component,
 				Reason:    reason,
 				Metadata:  &assetMeta,
-			}
-			exclusions = append(exclusions, exclusion)
+			})
 			continue
 		}
 
-		// Check root exclusion
 		disabledAnnotation := renderCtx.HCO.GetAnnotations()[engine.DisabledResourcesAnnotation]
 		if disabledAnnotation != "" {
 			rules, err := engine.ParseDisabledResources(disabledAnnotation)
 			if err != nil {
-				// Log error but continue (fail-open for debug endpoint)
 				continue
 			}
 			if engine.IsResourceExcluded(rendered.GetKind(), rendered.GetNamespace(), rendered.GetName(), rules) {
-				exclusion := ExclusionInfo{
+				exclusions = append(exclusions, ExclusionInfo{
 					Asset:     assetMeta.Name,
 					Path:      assetMeta.Path,
 					Component: assetMeta.Component,
@@ -344,8 +251,7 @@ func (s *Server) handleExclusions(w http.ResponseWriter, r *http.Request) {
 						"resource":   fmt.Sprintf("%s/%s/%s", rendered.GetKind(), rendered.GetNamespace(), rendered.GetName()),
 					},
 					Metadata: &assetMeta,
-				}
-				exclusions = append(exclusions, exclusion)
+				})
 			}
 		}
 	}
@@ -373,14 +279,12 @@ func (s *Server) handleTombstones(w http.ResponseWriter, r *http.Request) {
 		format = "yaml"
 	}
 
-	// Load tombstones
 	tombstones, err := s.loader.LoadTombstones()
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to load tombstones: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Convert to info
 	infos := make([]TombstoneInfo, len(tombstones))
 	for i, ts := range tombstones {
 		infos[i] = TombstoneInfo{
@@ -402,7 +306,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 // getRenderContext builds a render context from the cluster HCO
 func (s *Server) getRenderContext(ctx context.Context) (*pkgcontext.RenderContext, error) {
-	// Get HCO from cluster
 	hcoList := &unstructured.UnstructuredList{}
 	hcoList.SetGroupVersionKind(pkgcontext.HCOGVK)
 	hcoList.SetAPIVersion("hco.kubevirt.io/v1beta1")
@@ -415,43 +318,7 @@ func (s *Server) getRenderContext(ctx context.Context) (*pkgcontext.RenderContex
 		return nil, fmt.Errorf("no HyperConverged resources found")
 	}
 
-	hco := &hcoList.Items[0]
-
-	// Build render context
-	renderCtx := pkgcontext.NewRenderContext(hco)
-
-	return renderCtx, nil
-}
-
-// checkConditions evaluates if an asset's conditions are met
-func (s *Server) checkConditions(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
-	// If no conditions, always include
-	if len(assetMeta.Conditions) == 0 {
-		return true
-	}
-
-	// All conditions must be met (AND logic)
-	for _, condition := range assetMeta.Conditions {
-		switch condition.Type {
-		case assets.ConditionTypeAnnotation:
-			annotations := renderCtx.HCO.GetAnnotations()
-			if annotations[condition.Key] != condition.Value {
-				return false
-			}
-		case assets.ConditionTypeFeatureGate:
-			// Simplified: check if feature gate is in annotations
-			featureGates := renderCtx.HCO.GetAnnotations()["platform.kubevirt.io/feature-gates"]
-			if !strings.Contains(featureGates, condition.Value) {
-				return false
-			}
-		case assets.ConditionTypeHardwareDetection:
-			// Hardware detection would require node inspection - skip for debug
-			// In real controller, this uses hardware detectors
-			return false
-		}
-	}
-
-	return true
+	return pkgcontext.NewRenderContext(&hcoList.Items[0]), nil
 }
 
 // getConditionDetails returns details about why conditions weren't met
@@ -461,8 +328,7 @@ func (s *Server) getConditionDetails(assetMeta *assets.AssetMetadata, renderCtx 
 	for _, condition := range assetMeta.Conditions {
 		switch condition.Type {
 		case assets.ConditionTypeAnnotation:
-			annotations := renderCtx.HCO.GetAnnotations()
-			actual := annotations[condition.Key]
+			actual := renderCtx.HCO.GetAnnotations()[condition.Key]
 			details[condition.Key] = fmt.Sprintf("expected=%s, actual=%s", condition.Value, actual)
 		case assets.ConditionTypeFeatureGate:
 			featureGates := renderCtx.HCO.GetAnnotations()["platform.kubevirt.io/feature-gates"]
@@ -477,7 +343,36 @@ func (s *Server) getConditionDetails(assetMeta *assets.AssetMetadata, renderCtx 
 	return details
 }
 
-// writeResponse writes the response in the requested format
+// writeRenderResponse writes RenderOutput items in the requested format.
+// YAML output is multi-document with comment headers (directly usable with
+// kubectl apply), matching the render CLI subcommand.
+func (s *Server) writeRenderResponse(w http.ResponseWriter, outputs []pkgrender.RenderOutput, format string) {
+	switch format {
+	case "json":
+		data, err := json.MarshalIndent(outputs, "", "  ")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to marshal response: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
+	case "yaml":
+		var buf bytes.Buffer
+		if err := pkgrender.WriteYAML(&buf, outputs); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to marshal response: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-yaml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(buf.Bytes())
+	default:
+		http.Error(w, fmt.Sprintf("Unsupported format: %s", format), http.StatusBadRequest)
+	}
+}
+
+// writeResponse writes the response in the requested format (used for
+// non-render endpoints such as /debug/exclusions and /debug/tombstones).
 func (s *Server) writeResponse(w http.ResponseWriter, data interface{}, format string) {
 	var contentType string
 	var output []byte
