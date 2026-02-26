@@ -28,6 +28,7 @@ import (
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	pkgrender "github.com/kubevirt/virt-platform-autopilot/pkg/render"
 )
 
 func TestLoadHCOFromFile(t *testing.T) {
@@ -143,14 +144,14 @@ func TestCheckConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := checkConditions(tt.asset, renderCtx)
+			result := pkgrender.CheckConditions(tt.asset, renderCtx)
 			assert.Equal(t, tt.shouldPass, result)
 		})
 	}
 }
 
 func TestWriteYAMLOutput(t *testing.T) {
-	outputs := []RenderOutput{
+	outputs := []pkgrender.RenderOutput{
 		{
 			Asset:     "test-asset",
 			Path:      "test/path.yaml",
@@ -172,7 +173,7 @@ func TestWriteYAMLOutput(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := writeYAMLOutput(outputs)
+	err := writeOutput(outputs, "yaml")
 	assert.NoError(t, err)
 
 	w.Close()
@@ -191,7 +192,7 @@ func TestWriteYAMLOutput(t *testing.T) {
 }
 
 func TestWriteJSONOutput(t *testing.T) {
-	outputs := []RenderOutput{
+	outputs := []pkgrender.RenderOutput{
 		{
 			Asset:     "test-asset",
 			Path:      "test/path.yaml",
@@ -205,7 +206,7 @@ func TestWriteJSONOutput(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := writeJSONOutput(outputs)
+	err := writeOutput(outputs, "json")
 	assert.NoError(t, err)
 
 	w.Close()
@@ -221,7 +222,7 @@ func TestWriteJSONOutput(t *testing.T) {
 }
 
 func TestWriteStatusOutput(t *testing.T) {
-	outputs := []RenderOutput{
+	outputs := []pkgrender.RenderOutput{
 		{
 			Asset:     "included-asset",
 			Component: "Component1",
@@ -379,7 +380,7 @@ metadata:
 }
 
 func TestWriteOutputUnsupportedFormat(t *testing.T) {
-	outputs := []RenderOutput{}
+	outputs := []pkgrender.RenderOutput{}
 	err := writeOutput(outputs, "unsupported")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported output format")
@@ -399,13 +400,13 @@ func TestRenderWithAssetFilter(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify conditions check
-	shouldInclude := checkConditions(asset, renderCtx)
+	shouldInclude := pkgrender.CheckConditions(asset, renderCtx)
 	assert.True(t, shouldInclude, "swap-enable should have no conditions")
 }
 
 func TestRenderOutputFormats(t *testing.T) {
 	// Test all output formats work
-	outputs := []RenderOutput{
+	outputs := []pkgrender.RenderOutput{
 		{
 			Asset:     "test",
 			Path:      "test.yaml",

@@ -18,7 +18,6 @@ package render
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -33,6 +32,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	pkgrender "github.com/kubevirt/virt-platform-autopilot/pkg/render"
 )
 
 var (
@@ -91,16 +91,13 @@ Examples:
 func runRender(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	// Validate flags
 	if kubeconfig == "" && hcoFile == "" {
 		return fmt.Errorf("either --kubeconfig or --hco-file must be specified")
 	}
-
 	if kubeconfig != "" && hcoFile != "" {
 		return fmt.Errorf("--kubeconfig and --hco-file are mutually exclusive")
 	}
 
-	// Load assets
 	loader := assets.NewLoader()
 	registry, err := assets.NewRegistry(loader)
 	if err != nil {
@@ -109,7 +106,6 @@ func runRender(cmd *cobra.Command, args []string) error {
 
 	renderer := engine.NewRenderer(loader)
 
-	// Get HCO
 	var hco *unstructured.Unstructured
 	if hcoFile != "" {
 		hco, err = loadHCOFromFile(hcoFile)
@@ -123,10 +119,8 @@ func runRender(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Build render context
 	renderCtx := pkgcontext.NewRenderContext(hco)
 
-	// Get assets to render
 	var assetsToRender []assets.AssetMetadata
 	if assetFilter != "" {
 		asset, err := registry.GetAsset(assetFilter)
@@ -138,80 +132,9 @@ func runRender(cmd *cobra.Command, args []string) error {
 		assetsToRender = registry.ListAssetsByReconcileOrder()
 	}
 
-	// Render assets
-	outputs := []RenderOutput{}
-	for _, assetMeta := range assetsToRender {
-		output := RenderOutput{
-			Asset:      assetMeta.Name,
-			Path:       assetMeta.Path,
-			Component:  assetMeta.Component,
-			Conditions: assetMeta.Conditions,
-		}
+	outputs := pkgrender.BuildOutputs(assetsToRender, renderer, renderCtx, showExcluded)
 
-		// Check conditions
-		if !checkConditions(&assetMeta, renderCtx) {
-			output.Status = "EXCLUDED"
-			output.Reason = "Conditions not met"
-			if showExcluded {
-				outputs = append(outputs, output)
-			}
-			continue
-		}
-
-		// Render asset
-		rendered, err := renderer.RenderAsset(&assetMeta, renderCtx)
-		if err != nil {
-			output.Status = "ERROR"
-			output.Reason = err.Error()
-			outputs = append(outputs, output)
-			continue
-		}
-
-		if rendered == nil {
-			output.Status = "EXCLUDED"
-			output.Reason = "Conditional template rendered empty"
-			if showExcluded {
-				outputs = append(outputs, output)
-			}
-			continue
-		}
-
-		// Check root exclusion
-		disabledAnnotation := renderCtx.HCO.GetAnnotations()[engine.DisabledResourcesAnnotation]
-		if disabledAnnotation != "" {
-			rules, err := engine.ParseDisabledResources(disabledAnnotation)
-			if err != nil {
-				// Log error but continue (fail-open for CLI)
-				continue
-			}
-			if engine.IsResourceExcluded(rendered.GetKind(), rendered.GetNamespace(), rendered.GetName(), rules) {
-				output.Status = "FILTERED"
-				output.Reason = "Root exclusion (disabled-resources annotation)"
-				if showExcluded {
-					outputs = append(outputs, output)
-				}
-				continue
-			}
-		}
-
-		output.Status = "INCLUDED"
-		output.Object = rendered
-		outputs = append(outputs, output)
-	}
-
-	// Write output
 	return writeOutput(outputs, outputFormat)
-}
-
-// RenderOutput represents the output for a rendered asset
-type RenderOutput struct {
-	Asset      string                     `json:"asset" yaml:"asset"`
-	Path       string                     `json:"path" yaml:"path"`
-	Component  string                     `json:"component" yaml:"component"`
-	Status     string                     `json:"status" yaml:"status"`
-	Reason     string                     `json:"reason,omitempty" yaml:"reason,omitempty"`
-	Conditions []assets.AssetCondition    `json:"conditions,omitempty" yaml:"conditions,omitempty"`
-	Object     *unstructured.Unstructured `json:"object,omitempty" yaml:"object,omitempty"`
 }
 
 // loadHCOFromFile loads HCO from a YAML file
@@ -226,7 +149,6 @@ func loadHCOFromFile(path string) (*unstructured.Unstructured, error) {
 		return nil, err
 	}
 
-	// Validate it's an HCO
 	if hco.GetKind() != "HyperConverged" {
 		return nil, fmt.Errorf("expected kind HyperConverged, got %s", hco.GetKind())
 	}
@@ -236,28 +158,23 @@ func loadHCOFromFile(path string) (*unstructured.Unstructured, error) {
 
 // loadHCOFromCluster loads HCO from the cluster
 func loadHCOFromCluster(ctx context.Context, kubeconfigPath string) (*unstructured.Unstructured, error) {
-	// Build config
 	var config *rest.Config
 	var err error
 
 	if kubeconfigPath != "" {
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	} else {
-		// In-cluster config
 		config, err = rest.InClusterConfig()
 	}
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config: %w", err)
 	}
 
-	// Create client
 	k8sClient, err := client.New(config, client.Options{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
-	// List HCO resources
 	hcoList := &unstructured.UnstructuredList{}
 	hcoList.SetGroupVersionKind(pkgcontext.HCOGVK)
 	hcoList.SetAPIVersion("hco.kubevirt.io/v1beta1")
@@ -273,43 +190,13 @@ func loadHCOFromCluster(ctx context.Context, kubeconfigPath string) (*unstructur
 	return &hcoList.Items[0], nil
 }
 
-// checkConditions evaluates if an asset's conditions are met
-func checkConditions(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
-	// If no conditions, always include
-	if len(assetMeta.Conditions) == 0 {
-		return true
-	}
-
-	// All conditions must be met (AND logic)
-	for _, condition := range assetMeta.Conditions {
-		switch condition.Type {
-		case assets.ConditionTypeAnnotation:
-			annotations := renderCtx.HCO.GetAnnotations()
-			if annotations[condition.Key] != condition.Value {
-				return false
-			}
-		case assets.ConditionTypeFeatureGate:
-			// Simplified: check if feature gate is in annotations
-			featureGates := renderCtx.HCO.GetAnnotations()["platform.kubevirt.io/feature-gates"]
-			if !strings.Contains(featureGates, condition.Value) {
-				return false
-			}
-		case assets.ConditionTypeHardwareDetection:
-			// Hardware detection requires node access - cannot check in offline mode
-			return false
-		}
-	}
-
-	return true
-}
-
 // writeOutput writes the rendered assets in the requested format
-func writeOutput(outputs []RenderOutput, format string) error {
+func writeOutput(outputs []pkgrender.RenderOutput, format string) error {
 	switch format {
 	case "yaml":
-		return writeYAMLOutput(outputs)
+		return pkgrender.WriteYAML(os.Stdout, outputs)
 	case "json":
-		return writeJSONOutput(outputs)
+		return pkgrender.WriteJSON(os.Stdout, outputs)
 	case "status":
 		return writeStatusOutput(outputs)
 	default:
@@ -317,44 +204,8 @@ func writeOutput(outputs []RenderOutput, format string) error {
 	}
 }
 
-// writeYAMLOutput writes multi-document YAML
-func writeYAMLOutput(outputs []RenderOutput) error {
-	for _, output := range outputs {
-		// Write comment header
-		fmt.Printf("# Asset: %s\n", output.Asset)
-		fmt.Printf("# Path: %s\n", output.Path)
-		fmt.Printf("# Component: %s\n", output.Component)
-		fmt.Printf("# Status: %s\n", output.Status)
-		if output.Reason != "" {
-			fmt.Printf("# Reason: %s\n", output.Reason)
-		}
-
-		// Write object if included
-		if output.Object != nil {
-			yamlData, err := yaml.Marshal(output.Object.Object)
-			if err != nil {
-				return fmt.Errorf("failed to marshal %s: %w", output.Asset, err)
-			}
-			fmt.Print(string(yamlData))
-		}
-
-		fmt.Println("---")
-	}
-	return nil
-}
-
-// writeJSONOutput writes JSON array
-func writeJSONOutput(outputs []RenderOutput) error {
-	data, err := json.MarshalIndent(outputs, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %w", err)
-	}
-	fmt.Println(string(data))
-	return nil
-}
-
-// writeStatusOutput writes a status table
-func writeStatusOutput(outputs []RenderOutput) error {
+// writeStatusOutput writes a status table (CLI-only format)
+func writeStatusOutput(outputs []pkgrender.RenderOutput) error {
 	fmt.Printf("%-30s %-15s %-20s %s\n", "ASSET", "STATUS", "COMPONENT", "REASON")
 	fmt.Println(strings.Repeat("-", 100))
 
@@ -370,12 +221,7 @@ func writeStatusOutput(outputs []RenderOutput) error {
 			truncate(reason, 35))
 	}
 
-	// Print summary
-	included := 0
-	excluded := 0
-	filtered := 0
-	errors := 0
-
+	included, excluded, filtered, errors := 0, 0, 0, 0
 	for _, output := range outputs {
 		switch output.Status {
 		case "INCLUDED":
