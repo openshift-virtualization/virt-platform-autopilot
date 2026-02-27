@@ -27,7 +27,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: manager
-          image: quay.io/tiraboschi/virt-platform-autopilot:test-descheduler-20260217-171253
+          image: quay.io/openshift-virtualization/virt-platform-autopilot:latest
           imagePullPolicy: IfNotPresent
           command:
             - /manager
