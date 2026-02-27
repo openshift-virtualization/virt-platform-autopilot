@@ -22,6 +22,11 @@ const (
 	hcoName               = "kubevirt-hyperconverged"
 	timeout               = 2 * time.Minute
 	interval              = 2 * time.Second
+
+	// autopilotAnnotation is the opt-in annotation that must be present on the HCO CR
+	// for the autopilot to activate. All e2e test HCO instances must carry it.
+	autopilotAnnotation = "platform.kubevirt.io/autopilot"
+	autopilotEnabled    = "true"
 )
 
 var _ = Describe("Controller E2E Tests", func() {
@@ -100,6 +105,9 @@ var _ = Describe("Controller E2E Tests", func() {
 						"name":      hcoName,
 						"namespace": operatorNamespace,
 						// Deliberately NO managed-by label to test adoption
+						"annotations": map[string]interface{}{
+							autopilotAnnotation: autopilotEnabled,
+						},
 					},
 					"spec": map[string]interface{}{},
 				},

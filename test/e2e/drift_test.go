@@ -52,6 +52,9 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 					"labels": map[string]interface{}{
 						driftManagedByLabel: driftManagedByValue,
 					},
+					"annotations": map[string]interface{}{
+						autopilotAnnotation: autopilotEnabled,
+					},
 				},
 				"spec": map[string]interface{}{},
 			},

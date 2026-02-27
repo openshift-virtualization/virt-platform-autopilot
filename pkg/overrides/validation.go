@@ -23,6 +23,11 @@ import (
 )
 
 const (
+	// AnnotationAutopilotEnabled is the opt-in annotation on the HCO CR to activate the autopilot.
+	// In the current early phase, the autopilot is inactive unless this annotation is set to "true".
+	// This behavior will be inverted in a future release once the project matures.
+	AnnotationAutopilotEnabled = "platform.kubevirt.io/autopilot"
+
 	// AnnotationMode is the annotation key for management mode (managed/unmanaged)
 	AnnotationMode = "platform.kubevirt.io/mode"
 
@@ -109,6 +114,22 @@ func IsPaused(obj *unstructured.Unstructured) bool {
 
 	val, exists := annotations[AnnotationReconcilePaused]
 	return exists && val == "true"
+}
+
+// IsAutopilotEnabled checks if the autopilot is opted in via the HCO CR annotation.
+// In the current early phase, the autopilot is inactive unless this annotation is
+// explicitly set to "true". This behavior will be inverted in a future release.
+func IsAutopilotEnabled(hco *unstructured.Unstructured) bool {
+	if hco == nil {
+		return false
+	}
+
+	annotations := hco.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	return annotations[AnnotationAutopilotEnabled] == "true"
 }
 
 // ValidateAnnotations validates all override annotations on an object

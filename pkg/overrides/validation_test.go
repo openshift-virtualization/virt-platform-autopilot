@@ -171,6 +171,75 @@ func TestIsUnmanaged(t *testing.T) {
 	}
 }
 
+func TestIsAutopilotEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+		obj  *unstructured.Unstructured
+		want bool
+	}{
+		{
+			name: "opt-in annotation set to true",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"annotations": map[string]interface{}{
+							AnnotationAutopilotEnabled: "true",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "opt-in annotation set to other value",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"annotations": map[string]interface{}{
+							AnnotationAutopilotEnabled: "yes",
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "opt-in annotation absent",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"annotations": map[string]interface{}{},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "no annotations",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "nil object",
+			obj:  nil,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsAutopilotEnabled(tt.obj)
+			if got != tt.want {
+				t.Errorf("IsAutopilotEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateAnnotations(t *testing.T) {
 	tests := []struct {
 		name    string

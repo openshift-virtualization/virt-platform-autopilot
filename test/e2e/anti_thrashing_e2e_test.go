@@ -41,7 +41,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 	)
 
 	BeforeAll(func() {
-		By("ensuring HCO instance exists")
+		By("ensuring HCO instance exists with opt-in annotation")
 		hco = &unstructured.Unstructured{
 			Object: map[string]interface{}{
 				"apiVersion": "hco.kubevirt.io/v1beta1",
@@ -49,6 +49,9 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 				"metadata": map[string]interface{}{
 					"name":      hcoName,
 					"namespace": operatorNamespace,
+					"annotations": map[string]interface{}{
+						autopilotAnnotation: autopilotEnabled,
+					},
 				},
 				"spec": map[string]interface{}{},
 			},
@@ -61,6 +64,15 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 		}, hco)
 		if err != nil {
 			Expect(k8sClient.Create(ctx, hco)).To(Succeed())
+		} else {
+			// Ensure the opt-in annotation is present on the existing instance
+			annotations := hco.GetAnnotations()
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			annotations[autopilotAnnotation] = autopilotEnabled
+			hco.SetAnnotations(annotations)
+			Expect(k8sClient.Update(ctx, hco)).To(Succeed())
 		}
 
 		// Wait for HCO to be ready
