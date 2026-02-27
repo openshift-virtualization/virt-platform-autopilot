@@ -33,6 +33,42 @@ The **virt-platform-autopilot** embraces a **"Zero API Surface"** philosophy:
    - Flexible when customization is needed
    - No configuration required for common use cases
 
+## Activation Gate (Opt-In)
+
+> **Early-phase behaviour** — this gate will be removed (behaviour inverted to opt-out) once the project reaches production maturity.
+
+In the current early phase the autopilot is **inactive by default**. It will not reconcile any resources — not even the HCO golden config — unless the opt-in annotation is explicitly present on the HCO CR:
+
+```yaml
+apiVersion: hco.kubevirt.io/v1beta1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+  namespace: openshift-cnv
+  annotations:
+    platform.kubevirt.io/autopilot: "true"
+```
+
+Or via `kubectl`:
+
+```bash
+kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
+  platform.kubevirt.io/autopilot=true
+```
+
+**When the annotation is absent** the reconciler logs a message and returns immediately, re-queuing after the standard 5-minute interval:
+
+```
+Autopilot not enabled, keeping idle. Set annotation to opt in.
+  annotation=platform.kubevirt.io/autopilot value=true
+```
+
+**Rationale:** The opt-in gate lets cluster administrators install the operator and evaluate it safely before committing to automated management. It also prevents accidental activation on clusters where the project has been deployed but not yet explicitly blessed.
+
+**Future plan:** As the project matures the gate will be inverted — the autopilot will be active by default, and a separate opt-out annotation will allow administrators to disable it on specific clusters.
+
+**Implementation:** The check lives at the very start of `PlatformReconciler.Reconcile()` in `pkg/controller/platform_controller.go`, using `overrides.IsAutopilotEnabled()` from `pkg/overrides/validation.go`.
+
 ## Three-Tier Management Model
 
 The autopilot manages resources across three tiers based on criticality and activation conditions:
@@ -213,7 +249,14 @@ This is useful for:
 
 ## User Control Mechanisms
 
-Users have three levels of control over managed resources:
+Users control the autopilot at four levels, from broadest to narrowest:
+
+| Level | Scope | Mechanism |
+|-------|-------|-----------|
+| **Cluster activation** | Entire autopilot | `platform.kubevirt.io/autopilot: "true"` on HCO (opt-in, see [Activation Gate](#activation-gate-opt-in)) |
+| **Resource exclusion** | One or more resources | `platform.kubevirt.io/disabled-resources` on HCO |
+| **Field masking** | Specific fields | `platform.kubevirt.io/ignore-fields` on the resource |
+| **Full opt-out** | Single resource | `platform.kubevirt.io/mode: unmanaged` on the resource |
 
 ### 1. JSON Patch Override
 

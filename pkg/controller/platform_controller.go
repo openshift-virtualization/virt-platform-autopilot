@@ -39,6 +39,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -144,6 +145,17 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Opt-in gate: the autopilot is inactive in this early phase unless explicitly enabled.
+	// To activate, set annotation platform.kubevirt.io/autopilot: "true" on the HCO CR.
+	// This guard will be removed (behavior inverted to opt-out) once the project matures.
+	if !overrides.IsAutopilotEnabled(hco) {
+		logger.Info("Autopilot not enabled, keeping idle. Set annotation to opt in.",
+			"annotation", overrides.AnnotationAutopilotEnabled,
+			"value", "true",
+		)
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 
 	// Step 0: Process tombstones FIRST (before HCO reconciliation)

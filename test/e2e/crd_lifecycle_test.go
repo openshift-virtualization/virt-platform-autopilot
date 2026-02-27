@@ -49,6 +49,9 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 					"labels": map[string]interface{}{
 						lifecycleManagedByLabel: lifecycleManagedByValue,
 					},
+					"annotations": map[string]interface{}{
+						autopilotAnnotation: autopilotEnabled,
+					},
 				},
 				"spec": map[string]interface{}{},
 			},

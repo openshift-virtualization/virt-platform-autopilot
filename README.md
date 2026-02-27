@@ -46,7 +46,16 @@ make docker-build docker-push
 make deploy
 ```
 
-3. Verify installation:
+3. **Enable the autopilot** (opt-in required in this early phase):
+
+   ```bash
+   kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
+     platform.kubevirt.io/autopilot=true
+   ```
+
+   > **Note:** The autopilot is currently **disabled by default**. It will not manage any resources until the opt-in annotation `platform.kubevirt.io/autopilot: "true"` is present on the HCO CR. This allows safe evaluation before committing to automated management. Once the project matures, the default will be inverted to opt-out.
+
+4. Verify installation:
 ```bash
 kubectl get deployment -n openshift-cnv
 kubectl logs -n openshift-cnv deployment/virt-platform-autopilot
