@@ -60,8 +60,18 @@ endif
 ##@ Build
 
 .PHONY: build
-build: fmt vet ## Build manager binary
+build: fmt vet ## Build manager binary and csv-generator
 	go build -o bin/manager cmd/main.go
+	go build -o bin/csv-generator cmd/csv-generator/main.go
+
+.PHONY: build-csv-gen
+build-csv-gen: fmt vet ## Build csv-generator binary only
+	go build -o bin/csv-generator cmd/csv-generator/main.go
+
+.PHONY: generate-csv
+generate-csv: build-csv-gen ## Generate sample CSV to stdout (for inspection)
+	@echo "Generating ClusterServiceVersion..."
+	@bin/csv-generator --csv-version=0.0.1 --operator-image=quay.io/openshift-virtualization/virt-platform-autopilot:latest
 
 .PHONY: run
 run: fmt vet ## Run from your host
