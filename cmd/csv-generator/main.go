@@ -266,6 +266,9 @@ func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy 
 				"description":    "Automatically configures OpenShift platform settings for optimal KubeVirt/OpenShift Virtualization performance.",
 				"repository":     "https://github.com/openshift-virtualization/virt-platform-autopilot",
 				"containerImage": operatorImage,
+				// alm-examples is required by HCO's CSV ingestion pipeline.
+				// virt-platform-autopilot owns no CRDs, so the list is empty.
+				"alm-examples": "[]",
 			},
 		},
 		Spec: CSVSpec{
