@@ -140,7 +140,7 @@ install_crds() {
     for crd_file in assets/crds/**/*.yaml; do
         if [ -f "$crd_file" ] && [ "$(basename "$crd_file")" != "README.md" ]; then
             echo "Installing CRD: $crd_file"
-            kubectl apply -f "$crd_file" --context "kind-$CLUSTER_NAME" || true
+            kubectl apply --server-side -f "$crd_file" --context "kind-$CLUSTER_NAME" || true
         fi
     done
 
