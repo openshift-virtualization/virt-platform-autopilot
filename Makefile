@@ -77,13 +77,21 @@ generate-csv: build-csv-gen ## Generate sample CSV to stdout (for inspection)
 run: fmt vet ## Run from your host
 	go run cmd/main.go
 
+IMAGE_REGISTRY ?= quay.io/openshift-virtualization
+IMAGE_TAG ?= latest
+OPERATOR_IMAGE ?= $(IMAGE_REGISTRY)/virt-platform-autopilot:$(IMAGE_TAG)
+
 .PHONY: docker-build
-docker-build: ## Build container image
-	$(CONTAINER_TOOL) build -t virt-platform-autopilot:latest .
+docker-build: ## Build container image (local arch only)
+	$(CONTAINER_TOOL) build -t $(IMAGE_NAME) .
 
 .PHONY: docker-push
 docker-push: ## Push container image
-	$(CONTAINER_TOOL) push virt-platform-autopilot:latest
+	$(CONTAINER_TOOL) push $(IMAGE_NAME)
+
+.PHONY: build-push-multi-arch
+build-push-multi-arch: ## Build and push multi-arch operator image (amd64, arm64, s390x)
+	IMAGE_NAME=$(OPERATOR_IMAGE) DOCKER_FILE=Dockerfile ./hack/build-push-multi-arch-images.sh
 
 ##@ Deployment
 
