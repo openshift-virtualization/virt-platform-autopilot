@@ -30,7 +30,7 @@ tests:
       # Time 0: value=1 (synced)
       # Time 1: value=0 (failed) - start counting
       # Time 16: value=0 - been failing for 15 minutes -> ALERT FIRES
-      - series: 'virt_platform_compliance_status{kind="MachineConfig",name="50-virt-platform-hugepages",namespace=""}'
+      - series: 'kubevirt_autopilot_compliance_status{kind="MachineConfig",name="50-virt-platform-hugepages",namespace=""}'
         values: '1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'
 
     alert_rule_test:
@@ -64,7 +64,7 @@ tests:
     input_series:
       # Scenario: High thrashing - counter increases by >5 in 10min window
       # Time 0-10: counter goes 0->9, increase(10m) = 9 (> 5 threshold)
-      - series: 'virt_platform_thrashing_total{kind="NodeHealthCheck",name="virt-workers",namespace="openshift-operators"}'
+      - series: 'kubevirt_autopilot_thrashing_total{kind="NodeHealthCheck",name="virt-workers",namespace="openshift-operators"}'
         values: '0 0 1 2 3 4 5 6 7 8 9 10 11 12 13'
 
     alert_rule_test:
@@ -95,7 +95,7 @@ tests:
       # Time 0: value=0 (present)
       # Time 1: value=1 (missing) - start counting
       # Time 6: value=1 - been missing for 5 minutes -> ALERT FIRES
-      - series: 'virt_platform_missing_dependency{group="remediation.medik8s.io",version="v1alpha1",kind="NodeHealthCheck"}'
+      - series: 'kubevirt_autopilot_missing_dependency{group="remediation.medik8s.io",version="v1alpha1",kind="NodeHealthCheck"}'
         values: '0 1 1 1 1 1 1 1 1 1 1 1'
 
     alert_rule_test:
@@ -129,7 +129,7 @@ tests:
     input_series:
       # Scenario: Resource fails then recovers within 15min threshold
       # Should NOT fire alert (transient failure)
-      - series: 'virt_platform_compliance_status{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"}'
+      - series: 'kubevirt_autopilot_compliance_status{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"}'
         values: '1 1 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 1'
 
     alert_rule_test:
@@ -151,7 +151,7 @@ tests:
   - interval: 1m
     input_series:
       # Scenario: Only 3 thrashing events in 10min window (< 5 threshold)
-      - series: 'virt_platform_thrashing_total{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"}'
+      - series: 'kubevirt_autopilot_thrashing_total{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"}'
         values: '0 0 0 1 1 1 1 2 2 2 3 3 3 3 3'
 
     alert_rule_test:
@@ -168,11 +168,11 @@ tests:
   - interval: 1m
     input_series:
       # Minimal test data - just ensuring expressions don't error
-      - series: 'virt_platform_compliance_status{kind="Test",name="test",namespace="test"}'
+      - series: 'kubevirt_autopilot_compliance_status{kind="Test",name="test",namespace="test"}'
         values: '1 1 1'
-      - series: 'virt_platform_thrashing_total{kind="Test",name="test",namespace="test"}'
+      - series: 'kubevirt_autopilot_thrashing_total{kind="Test",name="test",namespace="test"}'
         values: '0 0 0'
-      - series: 'virt_platform_missing_dependency{group="test",version="v1",kind="Test"}'
+      - series: 'kubevirt_autopilot_missing_dependency{group="test",version="v1",kind="Test"}'
         values: '0 0 0'
 
     alert_rule_test:

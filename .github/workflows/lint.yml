@@ -73,3 +73,6 @@ jobs:
 
       - name: Test Prometheus alert rules
         run: make test-alerts
+
+      - name: Lint Prometheus metric names
+        run: make lint-metrics

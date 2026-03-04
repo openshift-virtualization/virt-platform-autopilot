@@ -81,7 +81,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 
 		syncFailedAlert := criticalRules[0].(map[string]interface{})
 		Expect(syncFailedAlert["alert"]).To(Equal("VirtPlatformSyncFailed"))
-		Expect(syncFailedAlert["expr"]).To(ContainSubstring("virt_platform_compliance_status == 0"))
+		Expect(syncFailedAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_compliance_status == 0"))
 		Expect(syncFailedAlert["for"]).To(Equal("15m"))
 
 		labels := syncFailedAlert["labels"].(map[string]interface{})
@@ -97,18 +97,18 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		// Verify thrashing alert
 		thrashingAlert := warningRules[0].(map[string]interface{})
 		Expect(thrashingAlert["alert"]).To(Equal("VirtPlatformThrashingDetected"))
-		Expect(thrashingAlert["expr"]).To(ContainSubstring("virt_platform_paused_resources > 0"))
+		Expect(thrashingAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_paused_resources > 0"))
 
 		// Verify dependency alert
 		dependencyAlert := warningRules[1].(map[string]interface{})
 		Expect(dependencyAlert["alert"]).To(Equal("VirtPlatformDependencyMissing"))
-		Expect(dependencyAlert["expr"]).To(ContainSubstring("virt_platform_missing_dependency == 1"))
+		Expect(dependencyAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_missing_dependency == 1"))
 		Expect(dependencyAlert["for"]).To(Equal("5m"))
 
 		// Verify tombstone alert
 		tombstoneAlert := warningRules[2].(map[string]interface{})
 		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformTombstoneStuck"))
-		Expect(tombstoneAlert["expr"]).To(ContainSubstring("virt_platform_tombstone_status < 0"))
+		Expect(tombstoneAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_tombstone_status < 0"))
 		Expect(tombstoneAlert["for"]).To(Equal("30m"))
 	})
 

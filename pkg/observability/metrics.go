@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	// Metric subsystem name
-	subsystem = "virt_platform"
+	namespace = "kubevirt"
+	subsystem = "autopilot"
 )
 
 var (
@@ -35,6 +35,7 @@ var (
 	// This is the core health indicator used by the VirtPlatformSyncFailed alert.
 	ComplianceStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "compliance_status",
 			Help:      "Compliance status of managed resources (1=synced, 0=drifted/failed)",
@@ -47,6 +48,7 @@ var (
 	// Indicates an active "Edit War" between the autopilot and external changes.
 	ThrashingTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "thrashing_total",
 			Help:      "Total number of reconciliation throttling events (anti-thrashing gate hits)",
@@ -59,6 +61,7 @@ var (
 	// This gauge provides a stable signal for alerting on ongoing edit wars.
 	PausedResources = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "paused_resources",
 			Help:      "Resources currently paused due to edit war detection (1=paused, 0=active)",
@@ -71,6 +74,7 @@ var (
 	// Useful for Support to see "Is this cluster stock or customized?" without digging into YAML.
 	CustomizationInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "customization_info",
 			Help:      "Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged",
@@ -83,6 +87,7 @@ var (
 	// Distinguishes "Broken" (asset failed) from "Not Installed" (CRD missing).
 	MissingDependency = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "missing_dependency",
 			Help:      "Indicates missing optional CRDs (1=missing, 0=present)",
@@ -95,6 +100,7 @@ var (
 	// High latency implies API server stress or complex asset rendering.
 	ReconcileDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "reconcile_duration_seconds",
 			Help:      "Duration of asset reconciliation operations (rendering + SSA apply)",
@@ -108,6 +114,7 @@ var (
 	// Used by VirtPlatformTombstoneStuck alert to detect stuck tombstone deletions.
 	TombstoneStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
+			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "tombstone_status",
 			Help:      "Tombstone deletion status (1=exists, 0=deleted, -1=error, -2=skipped)",

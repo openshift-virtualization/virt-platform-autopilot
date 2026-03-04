@@ -9,11 +9,11 @@ virt-platform-autopilot has failed to apply the Golden State to a managed resour
 
 ## Symptom
 
-The `virt_platform_compliance_status` metric has been set to `0` (drifted/failed) for more than 15 minutes for a specific resource.
+The `kubevirt_autopilot_compliance_status` metric has been set to `0` (drifted/failed) for more than 15 minutes for a specific resource.
 
 **Alert Expression:**
 ```promql
-virt_platform_compliance_status == 0
+kubevirt_autopilot_compliance_status == 0
 ```
 
 **Alert Duration:** `for: 15m`
@@ -62,7 +62,7 @@ oc adm node-logs <node> --path=kube-apiserver/audit.log | \
 
 # Check for thrashing metric (indicates edit war)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_thrashing_total
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_thrashing_total
 ```
 
 **Resolution:**
@@ -86,7 +86,7 @@ kubectl get --raw /readyz
 
 # Check reconcile duration metrics (high values = API stress)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_reconcile_duration_seconds
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_reconcile_duration_seconds
 
 # Check API server logs
 oc adm node-logs <master-node> --path=kube-apiserver/kube-apiserver.log
@@ -113,7 +113,7 @@ kubectl get apiservices
 
 # Check dependency metric
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_missing_dependency
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_missing_dependency
 ```
 
 **Resolution:**
@@ -176,23 +176,23 @@ kubectl get events -n <namespace> --field-selector involvedObject.name=<name>
 # Method 1: Port-forward (for interactive session)
 kubectl port-forward -n openshift-cnv svc/virt-platform-autopilot-metrics 8080:8080
 # Then in another terminal:
-curl -s localhost:8080/metrics | grep "virt_platform_compliance_status"
+curl -s localhost:8080/metrics | grep "kubevirt_autopilot_compliance_status"
 
 # Method 2: Direct exec (one-off query)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep "virt_platform_compliance_status"
+  curl -s localhost:8080/metrics | grep "kubevirt_autopilot_compliance_status"
 
 # Check for resources failing to sync (only show failures)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep "virt_platform_compliance_status" | grep '} 0$'
+  curl -s localhost:8080/metrics | grep "kubevirt_autopilot_compliance_status" | grep '} 0$'
 
 # Check for thrashing (edit wars)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep "virt_platform_thrashing_total"
+  curl -s localhost:8080/metrics | grep "kubevirt_autopilot_thrashing_total"
 
 # Check reconcile duration (API performance)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep "virt_platform_reconcile_duration_seconds"
+  curl -s localhost:8080/metrics | grep "kubevirt_autopilot_reconcile_duration_seconds"
 ```
 
 ### Step 4: Manual Reconciliation
@@ -205,7 +205,7 @@ kubectl annotate <kind> <name> -n <namespace> \
   platform.kubevirt.io/force-reconcile="$(date +%s)"
 
 # Watch for compliance status to change
-watch -n 2 "oc exec -n openshift-cnv deploy/virt-platform-autopilot -- curl -s localhost:8080/metrics | grep virt_platform_compliance_status"
+watch -n 2 "oc exec -n openshift-cnv deploy/virt-platform-autopilot -- curl -s localhost:8080/metrics | grep kubevirt_autopilot_compliance_status"
 ```
 
 ## Resolution Procedures
@@ -246,7 +246,7 @@ kubectl get pods -n openshift-cnv -w
 
 The alert will automatically resolve when:
 
-1. `virt_platform_compliance_status` returns to `1` (synced) for the affected resource
+1. `kubevirt_autopilot_compliance_status` returns to `1` (synced) for the affected resource
 2. This state is maintained for the evaluation interval (30s)
 
 **To verify resolution:**
@@ -254,18 +254,18 @@ The alert will automatically resolve when:
 # Check metric value (should return 1 for synced)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep "virt_platform_compliance_status.*<kind>.*<name>" | \
+  grep "kubevirt_autopilot_compliance_status.*<kind>.*<name>" | \
   grep '} 1$'
 
 # Or verify no resources are failing (should return empty)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep "virt_platform_compliance_status" | grep '} 0$'
+  grep "kubevirt_autopilot_compliance_status" | grep '} 0$'
 ```
 
 ## Prevention
 
-- Monitor `virt_platform_thrashing_total` metric to detect edit wars early
+- Monitor `kubevirt_autopilot_thrashing_total` metric to detect edit wars early
 - Use `platform.kubevirt.io/mode: unmanaged` for intentional customizations
 - Configure admission policies to allow platform automation
 - Ensure API server has adequate resources for cluster size

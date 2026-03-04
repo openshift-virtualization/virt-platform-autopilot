@@ -181,6 +181,10 @@ shellcheck: ## Run shellcheck on all shell scripts
 test-alerts: ## Test Prometheus alert rules with promtool
 	@hack/test-alert-rules.sh
 
+.PHONY: lint-metrics
+lint-metrics: ## Lint Prometheus metric naming conventions with prom-metrics-linter
+	./hack/prom_metric_linter.sh --operator-name="kubevirt" --sub-operator-name="autopilot"
+
 ##@ Local Development (Kind)
 
 CLUSTER_NAME ?= virt-platform-autopilot

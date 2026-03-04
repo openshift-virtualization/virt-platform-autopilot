@@ -380,11 +380,11 @@ For detailed documentation, see: [Resource Lifecycle Management](lifecycle-manag
 
 The autopilot exposes Prometheus metrics on port 8080 (`/metrics`):
 
-- `virt_platform_asset_reconcile_total` - Total reconciliations per asset
-- `virt_platform_asset_reconcile_errors_total` - Reconciliation errors per asset
-- `virt_platform_asset_apply_total` - Successful applies per asset
-- `virt_platform_drift_detected_total` - Drift detections per asset
-- `virt_platform_throttle_delayed_total` - Reconciliations delayed by throttling
+- `kubevirt_autopilot_asset_reconcile_total` - Total reconciliations per asset
+- `kubevirt_autopilot_asset_reconcile_errors_total` - Reconciliation errors per asset
+- `kubevirt_autopilot_asset_apply_total` - Successful applies per asset
+- `kubevirt_autopilot_drift_detected_total` - Drift detections per asset
+- `kubevirt_autopilot_throttle_delayed_total` - Reconciliations delayed by throttling
 
 ### Alerts
 

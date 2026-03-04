@@ -48,7 +48,7 @@ When an edit war is detected, **stop fighting and pause reconciliation** by sett
 - Tracks consecutive throttle events
 - Threshold: 3 consecutive throttles = edit war detected
 - Action: Set `platform.kubevirt.io/reconcile-paused=true` annotation
-- Metric: Increment `virt_platform_thrashing_total` **once**
+- Metric: Increment `kubevirt_autopilot_thrashing_total` **once**
 - Recovery: User removes annotation to resume
 
 **Use case**: Persistent conflicts (external controller, automated scripts, user repeatedly modifying)
@@ -135,13 +135,13 @@ if applied {
 
 ```prometheus
 # Before edit war
-virt_platform_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"} 0
+kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"} 0
 
 # Edit war detected (3rd throttle hit)
-virt_platform_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"} 1
+kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"} 1
 
 # Subsequent reconciliation attempts (while paused) - NO INCREMENT
-virt_platform_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"} 1
+kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"} 1
 
 # ... stays at 1 until conflict is resolved or annotation is removed
 ```
@@ -150,7 +150,7 @@ virt_platform_thrashing_total{kind="ConfigMap",name="my-cm",namespace="default"}
 
 ```yaml
 - alert: VirtPlatformThrashingDetected
-  expr: virt_platform_thrashing_total > 0
+  expr: kubevirt_autopilot_thrashing_total > 0
   for: 5m
   labels:
     severity: warning
@@ -255,7 +255,7 @@ kubectl get events -n <namespace> --sort-by='.lastTimestamp' | grep <resource-na
 kubectl get <kind> <name> -n <namespace> -o jsonpath='{.metadata.annotations}'
 
 # Check that metric doesn't increment again (stable)
-curl -s http://localhost:8080/metrics | grep virt_platform_thrashing_total
+curl -s http://localhost:8080/metrics | grep kubevirt_autopilot_thrashing_total
 ```
 
 ## GitOps Benefits

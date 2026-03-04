@@ -282,7 +282,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 			Skip("This test requires Prometheus integration and is for manual E2E testing")
 
 			// In a real E2E scenario with Prometheus, we would:
-			// 1. Query virt_platform_thrashing_total before test
+			// 1. Query kubevirt_autopilot_thrashing_total before test
 			// 2. Trigger an edit war
 			// 3. Wait for thrashing detection
 			// 4. Query metric again

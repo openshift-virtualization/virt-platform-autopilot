@@ -90,9 +90,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric is 1 (synced)")
 			expected := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="test-cm",namespace="` + testNs + `"} 1
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="` + testNs + `"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expected))).To(Succeed())
 		})
@@ -120,9 +120,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric is 0 (failed)")
 			expected := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="invalid-cm",namespace="` + testNs + `"} 0
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="invalid-cm",namespace="` + testNs + `"} 0
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expected))).To(Succeed())
 		})
@@ -158,10 +158,10 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying both metrics are tracked independently")
 			expected := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="cm-failed",namespace="` + testNs + `"} 0
-				virt_platform_compliance_status{kind="ConfigMap",name="cm-synced",namespace="` + testNs + `"} 1
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-failed",namespace="` + testNs + `"} 0
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-synced",namespace="` + testNs + `"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expected))).To(Succeed())
 		})
@@ -184,9 +184,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying initial state is 1")
 			expected1 := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="cm-changing",namespace="` + testNs + `"} 1
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-changing",namespace="` + testNs + `"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expected1))).To(Succeed())
 
@@ -195,9 +195,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying updated state is 0")
 			expected0 := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="cm-changing",namespace="` + testNs + `"} 0
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-changing",namespace="` + testNs + `"} 0
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expected0))).To(Succeed())
 
@@ -229,9 +229,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying counter value is 3")
 			expected := `
-				# HELP virt_platform_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
-				# TYPE virt_platform_thrashing_total counter
-				virt_platform_thrashing_total{kind="ConfigMap",name="thrashing-cm",namespace="` + testNs + `"} 3
+				# HELP kubevirt_autopilot_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
+				# TYPE kubevirt_autopilot_thrashing_total counter
+				kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="thrashing-cm",namespace="` + testNs + `"} 3
 			`
 			Expect(testutil.CollectAndCompare(observability.ThrashingTotal, strings.NewReader(expected))).To(Succeed())
 		})
@@ -256,10 +256,10 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying independent counters")
 			expected := `
-				# HELP virt_platform_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
-				# TYPE virt_platform_thrashing_total counter
-				virt_platform_thrashing_total{kind="ConfigMap",name="cm1",namespace="` + testNs + `"} 2
-				virt_platform_thrashing_total{kind="ConfigMap",name="cm2",namespace="` + testNs + `"} 1
+				# HELP kubevirt_autopilot_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
+				# TYPE kubevirt_autopilot_thrashing_total counter
+				kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="cm1",namespace="` + testNs + `"} 2
+				kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="cm2",namespace="` + testNs + `"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.ThrashingTotal, strings.NewReader(expected))).To(Succeed())
 		})
@@ -276,9 +276,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying counter is 2")
 			expected2 := `
-				# HELP virt_platform_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
-				# TYPE virt_platform_thrashing_total counter
-				virt_platform_thrashing_total{kind="ConfigMap",name="monotonic-cm",namespace="` + testNs + `"} 2
+				# HELP kubevirt_autopilot_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
+				# TYPE kubevirt_autopilot_thrashing_total counter
+				kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="monotonic-cm",namespace="` + testNs + `"} 2
 			`
 			Expect(testutil.CollectAndCompare(observability.ThrashingTotal, strings.NewReader(expected2))).To(Succeed())
 
@@ -287,9 +287,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying counter increases to 3 (monotonic - never decreases)")
 			expected3 := `
-				# HELP virt_platform_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
-				# TYPE virt_platform_thrashing_total counter
-				virt_platform_thrashing_total{kind="ConfigMap",name="monotonic-cm",namespace="` + testNs + `"} 3
+				# HELP kubevirt_autopilot_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
+				# TYPE kubevirt_autopilot_thrashing_total counter
+				kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="monotonic-cm",namespace="` + testNs + `"} 3
 			`
 			Expect(testutil.CollectAndCompare(observability.ThrashingTotal, strings.NewReader(expected3))).To(Succeed())
 		})
@@ -317,9 +317,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying patch customization metric")
 			expected := `
-				# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-				# TYPE virt_platform_customization_info gauge
-				virt_platform_customization_info{kind="ConfigMap",name="patched-cm",namespace="` + testNs + `",type="patch"} 1
+				# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+				# TYPE kubevirt_autopilot_customization_info gauge
+				kubevirt_autopilot_customization_info{kind="ConfigMap",name="patched-cm",namespace="` + testNs + `",type="patch"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.CustomizationInfo, strings.NewReader(expected))).To(Succeed())
 		})
@@ -338,9 +338,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying ignore customization metric")
 			expected := `
-				# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-				# TYPE virt_platform_customization_info gauge
-				virt_platform_customization_info{kind="ConfigMap",name="ignored-cm",namespace="` + testNs + `",type="ignore"} 1
+				# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+				# TYPE kubevirt_autopilot_customization_info gauge
+				kubevirt_autopilot_customization_info{kind="ConfigMap",name="ignored-cm",namespace="` + testNs + `",type="ignore"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.CustomizationInfo, strings.NewReader(expected))).To(Succeed())
 		})
@@ -359,9 +359,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying unmanaged customization metric")
 			expected := `
-				# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-				# TYPE virt_platform_customization_info gauge
-				virt_platform_customization_info{kind="ConfigMap",name="unmanaged-cm",namespace="` + testNs + `",type="unmanaged"} 1
+				# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+				# TYPE kubevirt_autopilot_customization_info gauge
+				kubevirt_autopilot_customization_info{kind="ConfigMap",name="unmanaged-cm",namespace="` + testNs + `",type="unmanaged"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.CustomizationInfo, strings.NewReader(expected))).To(Succeed())
 		})
@@ -378,10 +378,10 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying both customization metrics exist")
 			expected := `
-				# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-				# TYPE virt_platform_customization_info gauge
-				virt_platform_customization_info{kind="ConfigMap",name="multi-custom-cm",namespace="` + testNs + `",type="ignore"} 1
-				virt_platform_customization_info{kind="ConfigMap",name="multi-custom-cm",namespace="` + testNs + `",type="patch"} 1
+				# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+				# TYPE kubevirt_autopilot_customization_info gauge
+				kubevirt_autopilot_customization_info{kind="ConfigMap",name="multi-custom-cm",namespace="` + testNs + `",type="ignore"} 1
+				kubevirt_autopilot_customization_info{kind="ConfigMap",name="multi-custom-cm",namespace="` + testNs + `",type="patch"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.CustomizationInfo, strings.NewReader(expected))).To(Succeed())
 		})
@@ -511,17 +511,17 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric is 1 (synced)")
 			expectedCompliance := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="e2e-cm",namespace="` + testNs + `"} 1
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="e2e-cm",namespace="` + testNs + `"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expectedCompliance))).To(Succeed())
 
 			By("verifying customization metric")
 			expectedCustom := `
-				# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-				# TYPE virt_platform_customization_info gauge
-				virt_platform_customization_info{kind="ConfigMap",name="e2e-cm",namespace="` + testNs + `",type="patch"} 1
+				# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+				# TYPE kubevirt_autopilot_customization_info gauge
+				kubevirt_autopilot_customization_info{kind="ConfigMap",name="e2e-cm",namespace="` + testNs + `",type="patch"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.CustomizationInfo, strings.NewReader(expectedCustom))).To(Succeed())
 
@@ -555,9 +555,9 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric shows failure (0)")
 			expectedFailed := `
-				# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-				# TYPE virt_platform_compliance_status gauge
-				virt_platform_compliance_status{kind="ConfigMap",name="failed-cm",namespace="` + testNs + `"} 0
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# TYPE kubevirt_autopilot_compliance_status gauge
+				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="failed-cm",namespace="` + testNs + `"} 0
 			`
 			Expect(testutil.CollectAndCompare(observability.ComplianceStatus, strings.NewReader(expectedFailed))).To(Succeed())
 

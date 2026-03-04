@@ -58,23 +58,23 @@ oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
 
 # Check compliance status (core health indicator)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_compliance_status
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_compliance_status
 
 # Check for resources failing to sync (compliance_status=0)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_compliance_status | grep '} 0$'
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_compliance_status | grep '} 0$'
 
 # Check for thrashing (edit wars)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_thrashing_total
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_thrashing_total
 
 # Check for missing dependencies
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_missing_dependency
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_missing_dependency
 
 # Check for missing dependencies (only show missing ones)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_missing_dependency | grep '} 1$'
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_missing_dependency | grep '} 1$'
 ```
 
 ### Check Active Alerts
@@ -92,11 +92,11 @@ curl -s http://alertmanager-main.openshift-monitoring:9093/api/v2/alerts | \
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `virt_platform_compliance_status` | Gauge | kind, name, namespace | 1=synced, 0=drifted/failed |
-| `virt_platform_thrashing_total` | Counter | kind, name, namespace | Reconciliation throttling events |
-| `virt_platform_customization_info` | Gauge | kind, name, namespace, type | Intentional customizations |
-| `virt_platform_missing_dependency` | Gauge | group, version, kind | 1=missing, 0=present |
-| `virt_platform_reconcile_duration_seconds` | Histogram | kind, name, namespace | Reconciliation latency |
+| `kubevirt_autopilot_compliance_status` | Gauge | kind, name, namespace | 1=synced, 0=drifted/failed |
+| `kubevirt_autopilot_thrashing_total` | Counter | kind, name, namespace | Reconciliation throttling events |
+| `kubevirt_autopilot_customization_info` | Gauge | kind, name, namespace, type | Intentional customizations |
+| `kubevirt_autopilot_missing_dependency` | Gauge | group, version, kind | 1=missing, 0=present |
+| `kubevirt_autopilot_reconcile_duration_seconds` | Histogram | kind, name, namespace | Reconciliation latency |
 
 ## Common Resolution Patterns
 
