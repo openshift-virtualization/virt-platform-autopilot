@@ -178,12 +178,12 @@ testEnv = &envtest.Environment{
 ### Kind
 
 ```bash
-kubectl apply -f assets/crds/kubevirt/
-kubectl apply -f assets/crds/openshift/
-kubectl apply -f assets/crds/remediation/
-kubectl apply -f assets/crds/operators/
-kubectl apply -f assets/crds/observability/
-kubectl apply -f assets/crds/oadp/
+kubectl apply --server-side -f assets/crds/kubevirt/
+kubectl apply --server-side -f assets/crds/openshift/
+kubectl apply --server-side -f assets/crds/remediation/
+kubectl apply --server-side -f assets/crds/operators/
+kubectl apply --server-side -f assets/crds/observability/
+kubectl apply --server-side -f assets/crds/oadp/
 ```
 
 ## Maintenance
