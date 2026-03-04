@@ -23,6 +23,9 @@ spec:
           labels:
             severity: critical
             operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: critical
           annotations:
             summary: "virt-platform-autopilot failed to sync {{`{{ $labels.kind }}/{{ $labels.name }}`}}"
             description: |-
@@ -50,6 +53,9 @@ spec:
           labels:
             severity: warning
             operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: warning
           annotations:
             summary: "Edit war detected on {{`{{ $labels.kind }}/{{ $labels.name }}`}}"
             description: |-
@@ -78,6 +84,9 @@ spec:
           labels:
             severity: warning
             operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: warning
           annotations:
             summary: "Missing optional CRD: {{`{{ $labels.kind }}.{{ $labels.version }}.{{ $labels.group }}`}}"
             description: |-
@@ -103,6 +112,9 @@ spec:
           labels:
             severity: warning
             operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: warning
           annotations:
             summary: "Tombstone deletion stuck for {{`{{ $labels.kind }}/{{ $labels.name }}`}}"
             description: |-
