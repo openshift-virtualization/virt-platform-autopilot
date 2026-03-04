@@ -14,11 +14,11 @@ spec:
       rules:
         - alert: VirtPlatformSyncFailed
           # Core health indicator: Asset failed to apply for >15min
-          # Expr: virt_platform_compliance_status == 0 (for > 15m)
+          # Expr: kubevirt_autopilot_compliance_status == 0 (for > 15m)
           # 15m allows for transient API errors or slow rollouts (like MachineConfig)
           # If it persists longer, the automation is broken and requires attention
           expr: |
-            virt_platform_compliance_status == 0
+            kubevirt_autopilot_compliance_status == 0
           for: 15m
           labels:
             severity: critical
@@ -41,12 +41,12 @@ spec:
       rules:
         - alert: VirtPlatformThrashingDetected
           # Edit war indicator: Another controller or user is fighting our configuration
-          # Expr: virt_platform_paused_resources > 0
+          # Expr: kubevirt_autopilot_paused_resources > 0
           # Any resource currently paused indicates an active conflict
           # The operator has paused automation to protect the API server
           # This metric is set to 1 when pause annotation is added, 0 when removed
           expr: |
-            virt_platform_paused_resources > 0
+            kubevirt_autopilot_paused_resources > 0
           labels:
             severity: warning
             operator: virt-platform-autopilot
@@ -69,11 +69,11 @@ spec:
 
         - alert: VirtPlatformDependencyMissing
           # Soft dependency indicator: Optional CRD is missing
-          # Expr: virt_platform_missing_dependency == 1
+          # Expr: kubevirt_autopilot_missing_dependency == 1
           # Related platform features will not be configured until CRD is installed
           # This is a warning, not critical - cluster is functional but feature-incomplete
           expr: |
-            virt_platform_missing_dependency == 1
+            kubevirt_autopilot_missing_dependency == 1
           for: 5m
           labels:
             severity: warning
@@ -94,11 +94,11 @@ spec:
 
         - alert: VirtPlatformTombstoneStuck
           # Tombstone cleanup indicator: Tombstone deletion failed or skipped
-          # Expr: virt_platform_tombstone_status < 0
+          # Expr: kubevirt_autopilot_tombstone_status < 0
           # -1 = deletion error, -2 = label mismatch (not managed by autopilot)
           # Manual intervention may be required to remove the resource
           expr: |
-            virt_platform_tombstone_status < 0
+            kubevirt_autopilot_tombstone_status < 0
           for: 30m
           labels:
             severity: warning

@@ -8,7 +8,7 @@
 
 **Summary:** A tombstoned resource cannot be deleted by virt-platform-autopilot
 
-**Triggers when:** `virt_platform_tombstone_status < 0` for 30 minutes
+**Triggers when:** `kubevirt_autopilot_tombstone_status < 0` for 30 minutes
 
 **Metric values:**
 - `-1` = Deletion error (API error, permissions, finalizers, webhooks)
@@ -36,7 +36,7 @@
 
 # Check metric value
 kubectl exec -n openshift-cnv deployment/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep 'virt_platform_tombstone_status{kind="<KIND>",name="<NAME>"'
+  curl -s localhost:8080/metrics | grep 'kubevirt_autopilot_tombstone_status{kind="<KIND>",name="<NAME>"'
 ```
 
 **Interpret the value:**
@@ -246,7 +246,7 @@ If automated resolution fails after 1 hour:
 
 1. **Monitor tombstone metrics**:
    ```promql
-   virt_platform_tombstone_status
+   kubevirt_autopilot_tombstone_status
    ```
 2. **Set up alerts** (already configured)
 3. **Review stuck tombstones** within 1 hour of alert

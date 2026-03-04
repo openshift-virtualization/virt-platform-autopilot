@@ -111,7 +111,7 @@ Generated ClusterRole example:
 **Metrics:**
 
 ```prometheus
-virt_platform_tombstone_status{kind, name, namespace}
+kubevirt_autopilot_tombstone_status{kind, name, namespace}
 # Values:
 #  1 = Resource still exists (not yet deleted)
 #  0 = Resource deleted successfully
@@ -129,7 +129,7 @@ virt_platform_tombstone_status{kind, name, namespace}
 
 ```yaml
 - alert: VirtPlatformTombstoneStuck
-  expr: virt_platform_tombstone_status < 0
+  expr: kubevirt_autopilot_tombstone_status < 0
   for: 30m
 ```
 

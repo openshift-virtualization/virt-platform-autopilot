@@ -327,7 +327,7 @@ func TestAllMetricsHaveSubsystem(t *testing.T) {
 		ReconcileDuration,
 	}
 
-	expectedSubsystem := "virt_platform"
+	expectedSubsystem := "kubevirt_autopilot"
 
 	for i, metric := range metrics {
 		metricFamilies, err := collectMetrics(metric)

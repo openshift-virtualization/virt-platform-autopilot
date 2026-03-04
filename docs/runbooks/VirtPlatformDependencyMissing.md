@@ -9,11 +9,11 @@ virt-platform-autopilot has detected that an **optional CRD (soft dependency)** 
 
 ## Symptom
 
-The `virt_platform_missing_dependency` metric has been set to `1` (missing) for more than **5 minutes** for a specific CRD.
+The `kubevirt_autopilot_missing_dependency` metric has been set to `1` (missing) for more than **5 minutes** for a specific CRD.
 
 **Alert Expression:**
 ```promql
-virt_platform_missing_dependency == 1
+kubevirt_autopilot_missing_dependency == 1
 ```
 
 **Alert Duration:** `for: 5m`
@@ -192,14 +192,14 @@ oc get csv -n openshift-mtv | grep forklift-operator
 
 # Query metric to see all missing dependencies
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_missing_dependency
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_missing_dependency
 
 # Show only missing dependencies (value=1)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
-  curl -s localhost:8080/metrics | grep virt_platform_missing_dependency | grep '} 1$'
+  curl -s localhost:8080/metrics | grep kubevirt_autopilot_missing_dependency | grep '} 1$'
 
 # Example output:
-# virt_platform_missing_dependency{group="operator.openshift.io",kind="KubeDescheduler",version="v1"} 1
+# kubevirt_autopilot_missing_dependency{group="operator.openshift.io",kind="KubeDescheduler",version="v1"} 1
 ```
 
 ### Step 2: Determine if CRD Should Be Installed
@@ -292,7 +292,7 @@ spec:
       rules:
         - alert: VirtPlatformDependencyMissingSuppressed
           expr: |
-            virt_platform_missing_dependency{kind="KubeDescheduler"} == 1
+            kubevirt_autopilot_missing_dependency{kind="KubeDescheduler"} == 1
           labels:
             severity: none
 EOF
@@ -322,7 +322,7 @@ The alert will automatically resolve when:
 
 1. The missing CRD is installed in the cluster
 2. The operator detects the CRD via discovery
-3. `virt_platform_missing_dependency` metric changes to `0` (present)
+3. `kubevirt_autopilot_missing_dependency` metric changes to `0` (present)
 4. This state is maintained for the evaluation interval (30s)
 
 **To verify resolution:**
@@ -333,16 +333,16 @@ kubectl get crd <crd-name>
 # Check metric value (should be 0 for present)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep "virt_platform_missing_dependency.*<kind>" | \
+  grep "kubevirt_autopilot_missing_dependency.*<kind>" | \
   grep '} 0$'
 
 # Or verify no missing dependencies (should return empty)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep virt_platform_missing_dependency | grep '} 1$'
+  grep kubevirt_autopilot_missing_dependency | grep '} 1$'
 
 # Example:
-# virt_platform_missing_dependency{group="operator.openshift.io",kind="KubeDescheduler",version="v1"} 0
+# kubevirt_autopilot_missing_dependency{group="operator.openshift.io",kind="KubeDescheduler",version="v1"} 0
 ```
 
 ## Prevention

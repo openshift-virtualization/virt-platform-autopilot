@@ -9,11 +9,11 @@ virt-platform-autopilot has detected an "**Edit War**" on a managed resource. An
 
 ## Symptom
 
-The `virt_platform_thrashing_total` counter has increased by more than **5 events** in a **10-minute window** for a specific resource.
+The `kubevirt_autopilot_thrashing_total` counter has increased by more than **5 events** in a **10-minute window** for a specific resource.
 
 **Alert Expression:**
 ```promql
-increase(virt_platform_thrashing_total[10m]) > 5
+increase(kubevirt_autopilot_thrashing_total[10m]) > 5
 ```
 
 **Alert Duration:** Immediate (no `for` clause - fires on first evaluation when threshold exceeded)
@@ -200,16 +200,16 @@ diff -u current.yaml assets/<category>/<resource>.yaml
 # Query thrashing events for the resource
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep "virt_platform_thrashing_total.*<kind>.*<name>"
+  grep "kubevirt_autopilot_thrashing_total.*<kind>.*<name>"
 
 # Example output:
-# virt_platform_thrashing_total{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"} 12
+# kubevirt_autopilot_thrashing_total{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"} 12
 # ^ 12 thrashing events have occurred
 
 # Show only resources with thrashing (counter > 0)
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep "virt_platform_thrashing_total" | grep -v '} 0$'
+  grep "kubevirt_autopilot_thrashing_total" | grep -v '} 0$'
 ```
 
 ### Step 4: Review Token Bucket State
@@ -240,7 +240,7 @@ If the external change is **unintentional** (bug, misconfiguration):
 kubectl delete hpa <hpa-name> -n <namespace>
 
 # Monitor for thrashing to stop (watch the counter for specific resource)
-watch -n 5 "oc exec -n openshift-cnv deploy/virt-platform-autopilot -- curl -s localhost:8080/metrics | grep 'virt_platform_thrashing_total.*<kind>.*<name>'"
+watch -n 5 "oc exec -n openshift-cnv deploy/virt-platform-autopilot -- curl -s localhost:8080/metrics | grep 'kubevirt_autopilot_thrashing_total.*<kind>.*<name>'"
 ```
 
 ### Resolution Option B: Mark as Unmanaged
@@ -293,7 +293,7 @@ kubectl delete validatingwebhookconfiguration <webhook-name>
 
 The alert will automatically resolve when:
 
-1. `increase(virt_platform_thrashing_total[10m])` drops to ≤ 5 events
+1. `increase(kubevirt_autopilot_thrashing_total[10m])` drops to ≤ 5 events
 2. Meaning: Fewer than 6 thrashing events in the last 10 minutes
 
 **To verify resolution:**
@@ -301,7 +301,7 @@ The alert will automatically resolve when:
 # Check recent thrashing rate
 oc exec -n openshift-cnv deploy/virt-platform-autopilot -- \
   curl -s localhost:8080/metrics | \
-  grep "virt_platform_thrashing_total.*<kind>.*<name>"
+  grep "kubevirt_autopilot_thrashing_total.*<kind>.*<name>"
 
 # Wait 10 minutes, query again
 # If counter stops incrementing, alert will resolve
