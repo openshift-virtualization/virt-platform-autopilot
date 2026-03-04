@@ -38,9 +38,9 @@ func TestSetCompliance(t *testing.T) {
 	SetCompliance(obj, 1)
 
 	expected := `
-		# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-		# TYPE virt_platform_compliance_status gauge
-		virt_platform_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 1
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# TYPE kubevirt_autopilot_compliance_status gauge
+		kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 1
 	`
 
 	if err := testutil.CollectAndCompare(ComplianceStatus, strings.NewReader(expected)); err != nil {
@@ -51,9 +51,9 @@ func TestSetCompliance(t *testing.T) {
 	SetCompliance(obj, 0)
 
 	expected = `
-		# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-		# TYPE virt_platform_compliance_status gauge
-		virt_platform_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 0
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# TYPE kubevirt_autopilot_compliance_status gauge
+		kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 0
 	`
 
 	if err := testutil.CollectAndCompare(ComplianceStatus, strings.NewReader(expected)); err != nil {
@@ -76,9 +76,9 @@ func TestIncThrashing(t *testing.T) {
 	IncThrashing(obj)
 
 	expected := `
-		# HELP virt_platform_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
-		# TYPE virt_platform_thrashing_total counter
-		virt_platform_thrashing_total{kind="Deployment",name="test-deploy",namespace="test-ns"} 3
+		# HELP kubevirt_autopilot_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
+		# TYPE kubevirt_autopilot_thrashing_total counter
+		kubevirt_autopilot_thrashing_total{kind="Deployment",name="test-deploy",namespace="test-ns"} 3
 	`
 
 	if err := testutil.CollectAndCompare(ThrashingTotal, strings.NewReader(expected)); err != nil {
@@ -99,9 +99,9 @@ func TestSetPaused(t *testing.T) {
 	SetPaused(obj, true)
 
 	expected := `
-		# HELP virt_platform_paused_resources Resources currently paused due to edit war detection (1=paused, 0=active)
-		# TYPE virt_platform_paused_resources gauge
-		virt_platform_paused_resources{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"} 1
+		# HELP kubevirt_autopilot_paused_resources Resources currently paused due to edit war detection (1=paused, 0=active)
+		# TYPE kubevirt_autopilot_paused_resources gauge
+		kubevirt_autopilot_paused_resources{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"} 1
 	`
 
 	if err := testutil.CollectAndCompare(PausedResources, strings.NewReader(expected)); err != nil {
@@ -112,9 +112,9 @@ func TestSetPaused(t *testing.T) {
 	SetPaused(obj, false)
 
 	expected = `
-		# HELP virt_platform_paused_resources Resources currently paused due to edit war detection (1=paused, 0=active)
-		# TYPE virt_platform_paused_resources gauge
-		virt_platform_paused_resources{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"} 0
+		# HELP kubevirt_autopilot_paused_resources Resources currently paused due to edit war detection (1=paused, 0=active)
+		# TYPE kubevirt_autopilot_paused_resources gauge
+		kubevirt_autopilot_paused_resources{kind="KubeDescheduler",name="cluster",namespace="openshift-kube-descheduler-operator"} 0
 	`
 
 	if err := testutil.CollectAndCompare(PausedResources, strings.NewReader(expected)); err != nil {
@@ -135,9 +135,9 @@ func TestSetCustomization(t *testing.T) {
 	SetCustomization(obj, "patch")
 
 	expected := `
-		# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-		# TYPE virt_platform_customization_info gauge
-		virt_platform_customization_info{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="kubevirt-hyperconverged",type="patch"} 1
+		# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+		# TYPE kubevirt_autopilot_customization_info gauge
+		kubevirt_autopilot_customization_info{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="kubevirt-hyperconverged",type="patch"} 1
 	`
 
 	if err := testutil.CollectAndCompare(CustomizationInfo, strings.NewReader(expected)); err != nil {
@@ -179,10 +179,10 @@ func TestMultipleCustomizationTypes(t *testing.T) {
 	SetCustomization(obj, "ignore")
 
 	expected := `
-		# HELP virt_platform_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
-		# TYPE virt_platform_customization_info gauge
-		virt_platform_customization_info{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="kubevirt-hyperconverged",type="ignore"} 1
-		virt_platform_customization_info{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="kubevirt-hyperconverged",type="patch"} 1
+		# HELP kubevirt_autopilot_customization_info Tracks intentional customizations (always 1 when present). Type: patch/ignore/unmanaged
+		# TYPE kubevirt_autopilot_customization_info gauge
+		kubevirt_autopilot_customization_info{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="kubevirt-hyperconverged",type="ignore"} 1
+		kubevirt_autopilot_customization_info{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="kubevirt-hyperconverged",type="patch"} 1
 	`
 
 	if err := testutil.CollectAndCompare(CustomizationInfo, strings.NewReader(expected)); err != nil {
@@ -198,9 +198,9 @@ func TestSetMissingDependency(t *testing.T) {
 	SetMissingDependency("metallb.io", "v1beta1", "MetalLB", true)
 
 	expected := `
-		# HELP virt_platform_missing_dependency Indicates missing optional CRDs (1=missing, 0=present)
-		# TYPE virt_platform_missing_dependency gauge
-		virt_platform_missing_dependency{group="metallb.io",kind="MetalLB",version="v1beta1"} 1
+		# HELP kubevirt_autopilot_missing_dependency Indicates missing optional CRDs (1=missing, 0=present)
+		# TYPE kubevirt_autopilot_missing_dependency gauge
+		kubevirt_autopilot_missing_dependency{group="metallb.io",kind="MetalLB",version="v1beta1"} 1
 	`
 
 	if err := testutil.CollectAndCompare(MissingDependency, strings.NewReader(expected)); err != nil {
@@ -211,9 +211,9 @@ func TestSetMissingDependency(t *testing.T) {
 	SetMissingDependency("metallb.io", "v1beta1", "MetalLB", false)
 
 	expected = `
-		# HELP virt_platform_missing_dependency Indicates missing optional CRDs (1=missing, 0=present)
-		# TYPE virt_platform_missing_dependency gauge
-		virt_platform_missing_dependency{group="metallb.io",kind="MetalLB",version="v1beta1"} 0
+		# HELP kubevirt_autopilot_missing_dependency Indicates missing optional CRDs (1=missing, 0=present)
+		# TYPE kubevirt_autopilot_missing_dependency gauge
+		kubevirt_autopilot_missing_dependency{group="metallb.io",kind="MetalLB",version="v1beta1"} 0
 	`
 
 	if err := testutil.CollectAndCompare(MissingDependency, strings.NewReader(expected)); err != nil {
@@ -282,10 +282,10 @@ func TestMultipleResources(t *testing.T) {
 	SetCompliance(deploy, 0)
 
 	expected := `
-		# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-		# TYPE virt_platform_compliance_status gauge
-		virt_platform_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 1
-		virt_platform_compliance_status{kind="Deployment",name="test-deploy",namespace="test-ns"} 0
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# TYPE kubevirt_autopilot_compliance_status gauge
+		kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 1
+		kubevirt_autopilot_compliance_status{kind="Deployment",name="test-deploy",namespace="test-ns"} 0
 	`
 
 	if err := testutil.CollectAndCompare(ComplianceStatus, strings.NewReader(expected)); err != nil {
@@ -306,9 +306,9 @@ func TestClusterScopedResources(t *testing.T) {
 	SetCompliance(obj, 1)
 
 	expected := `
-		# HELP virt_platform_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
-		# TYPE virt_platform_compliance_status gauge
-		virt_platform_compliance_status{kind="ClusterRole",name="test-role",namespace=""} 1
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# TYPE kubevirt_autopilot_compliance_status gauge
+		kubevirt_autopilot_compliance_status{kind="ClusterRole",name="test-role",namespace=""} 1
 	`
 
 	if err := testutil.CollectAndCompare(ComplianceStatus, strings.NewReader(expected)); err != nil {

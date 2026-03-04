@@ -182,9 +182,9 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 
 			By("verifying metric value")
 			expected := `
-				# HELP virt_platform_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
-				# TYPE virt_platform_thrashing_total counter
-				virt_platform_thrashing_total{kind="ConfigMap",name="test-cm",namespace="` + testNs + `"} 1
+				# HELP kubevirt_autopilot_thrashing_total Total number of reconciliation throttling events (anti-thrashing gate hits)
+				# TYPE kubevirt_autopilot_thrashing_total counter
+				kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="test-cm",namespace="` + testNs + `"} 1
 			`
 			Expect(testutil.CollectAndCompare(observability.ThrashingTotal, strings.NewReader(expected))).To(Succeed())
 

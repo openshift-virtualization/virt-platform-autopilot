@@ -61,6 +61,7 @@ testbin/
 # Build artifacts
 _output/
 _tmp/
+_out/
 
 # Helm charts (if added later)
 *.tgz

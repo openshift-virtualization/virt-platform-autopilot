@@ -168,12 +168,12 @@ This document tracks implementation progress against the original plan in `claud
 
 **Metrics Infrastructure** (Commits: 55de367, 2e6ea6f):
 - [x] `pkg/observability/metrics.go` - Custom metrics package (6 metrics)
-  - virt_platform_compliance_status (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
-  - virt_platform_thrashing_total (Counter) - Anti-thrashing gate hits
-  - virt_platform_customization_info (Gauge) - Intentional deviations tracking
-  - virt_platform_missing_dependency (Gauge) - Missing CRD detection
-  - virt_platform_reconcile_duration_seconds (Histogram) - Performance monitoring
-  - virt_platform_tombstone_deletion_total (Counter) - Tombstone deletion tracking
+  - kubevirt_autopilot_compliance_status (Gauge) - Core health indicator (1=synced, 0=drifted/failed)
+  - kubevirt_autopilot_thrashing_total (Counter) - Anti-thrashing gate hits
+  - kubevirt_autopilot_customization_info (Gauge) - Intentional deviations tracking
+  - kubevirt_autopilot_missing_dependency (Gauge) - Missing CRD detection
+  - kubevirt_autopilot_reconcile_duration_seconds (Histogram) - Performance monitoring
+  - kubevirt_autopilot_tombstone_deletion_total (Counter) - Tombstone deletion tracking
 - [x] `pkg/observability/metrics_test.go` - 14 unit tests with prometheus/testutil
 - [x] `pkg/observability/label_consistency_test.go` - 4 label consistency tests
 - [x] `test/metrics_integration_test.go` - 17 integration scenarios
