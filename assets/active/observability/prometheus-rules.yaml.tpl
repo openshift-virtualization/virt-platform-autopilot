@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: virt-platform-autopilot-alerts
-  namespace: openshift-cnv
+  namespace: {{ .HCO.GetNamespace | default "openshift-cnv" }}
   labels:
     app: virt-platform-autopilot
     prometheus: k8s
