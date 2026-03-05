@@ -96,14 +96,20 @@ install_hco_crd() {
     log_info "Installing HCO CRD"
     kubectl apply --server-side --context "kind-$CLUSTER_NAME" -f assets/crds/kubevirt/hyperconverged-crd.yaml
 
-    # Wait for CRD to be established
+    # Wait for CRD to be established.
+    # kubectl wait can fail immediately after apply if .status.conditions is still
+    # nil (before the CRD controller populates it), so retry until it succeeds.
     log_info "Waiting for HCO CRD to be established..."
-    kubectl wait --for condition=established --timeout=60s \
+    local deadline=$((SECONDS + 60))
+    until kubectl wait --for condition=established --timeout=5s \
         crd/hyperconvergeds.hco.kubevirt.io \
-        --context "kind-$CLUSTER_NAME" || {
-        log_error "HCO CRD failed to become established"
-        return 1
-    }
+        --context "kind-$CLUSTER_NAME" 2>/dev/null; do
+        if [ $SECONDS -ge $deadline ]; then
+            log_error "HCO CRD failed to become established"
+            return 1
+        fi
+        sleep 2
+    done
     log_info "HCO CRD installed successfully"
 }
 
