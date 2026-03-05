@@ -30,9 +30,13 @@ import yaml
 import sys
 
 try:
+    import re
     # Read the PrometheusRule CRD
     with open('assets/active/observability/prometheus-rules.yaml.tpl') as f:
-        crd = yaml.safe_load(f)
+        content = f.read()
+    # Replace Go template expressions with placeholder values so YAML parses cleanly
+    content = re.sub(r'\{\{[^}]*\}\}', 'placeholder', content)
+    crd = yaml.safe_load(content)
 
     # Extract just the groups (what promtool expects)
     rule_groups = crd['spec']['groups']
