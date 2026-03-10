@@ -59,9 +59,7 @@ rules:
       - get
       - list
       - watch
-  # ========================================
-  # Managed Resources (Dynamic - from assets/)
-  # ========================================
+  # OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)
   - apiGroups:
       - config.openshift.io
     resources:
@@ -70,6 +68,9 @@ rules:
       - get
       - list
       - watch
+  # ========================================
+  # Managed Resources (Dynamic - from assets/)
+  # ========================================
   # Migration Toolkit for Virtualization (MTV)
   - apiGroups:
       - forklift.konveyor.io

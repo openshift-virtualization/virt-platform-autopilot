@@ -259,43 +259,39 @@ var _ = Describe("Platform Controller Integration", func() {
 			Expect(installed).To(BeTrue(), "HCO CRD should be installed")
 
 			By("controller would skip assets for missing CRDs")
-			// The controller's reconcileAssets function checks IsComponentSupported
+			// The controller's reconcileAssets function checks IsCRDInstalled via asset.RequiredCRD
 			// and skips assets when their CRDs are not installed
 		})
 
 		It("should start managing resources when CRDs appear dynamically", func() {
-			By("starting without NodeHealthCheck CRD")
+			const nhcCRD = "nodehealthchecks.remediation.medik8s.io"
 			checker := util.NewCRDChecker(k8sClient)
 
-			supported, _, err := checker.IsComponentSupported(ctx, "NodeHealthCheck")
+			By("starting without NodeHealthCheck CRD")
+			installed, err := checker.IsCRDInstalled(ctx, nhcCRD)
 			Expect(err).NotTo(HaveOccurred())
 
-			if supported {
-				By("CRD already installed, skipping to installation verification")
-			} else {
+			if !installed {
 				By("dynamically installing NodeHealthCheck CRD")
 				err = InstallCRDs(ctx, k8sClient, CRDSetRemediation)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Cleanup CRDs after test
 				DeferCleanup(func() {
 					_ = UninstallCRDs(ctx, k8sClient, CRDSetRemediation)
 				})
 
-				// Wait for CRD to be established
 				Eventually(func() bool {
-					return IsCRDInstalled(ctx, k8sClient, "nodehealthchecks.remediation.medik8s.io")
+					return IsCRDInstalled(ctx, k8sClient, nhcCRD)
 				}, 10*time.Second, 250*time.Millisecond).Should(BeTrue())
 			}
 
 			By("invalidating cache to detect new CRD")
 			checker.InvalidateCache("")
 
-			By("verifying component is now supported")
-			supported, crdName, err := checker.IsComponentSupported(ctx, "NodeHealthCheck")
+			By("verifying CRD is detected as installed")
+			installed, err = checker.IsCRDInstalled(ctx, nhcCRD)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(supported).To(BeTrue(), "NodeHealthCheck should be supported after CRD installation")
-			Expect(crdName).To(Equal("nodehealthchecks.remediation.medik8s.io"))
+			Expect(installed).To(BeTrue(), "NodeHealthCheck CRD should be detected after installation")
 		})
 	})
 

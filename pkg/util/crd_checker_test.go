@@ -23,7 +23,6 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -81,137 +80,6 @@ func TestCRDChecker_IsCRDInstalled(t *testing.T) {
 
 			if exists != tt.wantExists {
 				t.Errorf("IsCRDInstalled() exists = %v, want %v", exists, tt.wantExists)
-			}
-		})
-	}
-}
-
-func TestCRDChecker_IsComponentSupported(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = apiextensionsv1.AddToScheme(scheme)
-
-	// Create fake CRDs for some components
-	metallbCRD := &apiextensionsv1.CustomResourceDefinition{}
-	metallbCRD.SetName("metallbs.metallb.io")
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(metallbCRD).
-		Build()
-
-	checker := NewCRDChecker(fakeClient)
-	ctx := context.Background()
-
-	tests := []struct {
-		name          string
-		component     string
-		wantSupported bool
-		wantCRDName   string
-		wantErr       bool
-	}{
-		{
-			name:          "supported component with CRD installed",
-			component:     "MetalLB",
-			wantSupported: true,
-			wantCRDName:   "metallbs.metallb.io",
-			wantErr:       false,
-		},
-		{
-			name:          "supported component with CRD missing",
-			component:     "NodeHealthCheck",
-			wantSupported: false,
-			wantCRDName:   "nodehealthchecks.remediation.medik8s.io",
-			wantErr:       false,
-		},
-		{
-			name:          "unknown component (assumes core resource)",
-			component:     "UnknownComponent",
-			wantSupported: true,
-			wantCRDName:   "",
-			wantErr:       false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			supported, crdName, err := checker.IsComponentSupported(ctx, tt.component)
-
-			if (err != nil) != tt.wantErr {
-				t.Errorf("IsComponentSupported() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if supported != tt.wantSupported {
-				t.Errorf("IsComponentSupported() supported = %v, want %v", supported, tt.wantSupported)
-			}
-
-			if crdName != tt.wantCRDName {
-				t.Errorf("IsComponentSupported() crdName = %v, want %v", crdName, tt.wantCRDName)
-			}
-		})
-	}
-}
-
-func TestCRDChecker_IsGVKSupported(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = apiextensionsv1.AddToScheme(scheme)
-
-	// Create a fake CRD for testing
-	fooCRD := &apiextensionsv1.CustomResourceDefinition{}
-	fooCRD.SetName("Foos.example.com")
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(fooCRD).
-		Build()
-
-	checker := NewCRDChecker(fakeClient)
-	ctx := context.Background()
-
-	tests := []struct {
-		name       string
-		gvk        schema.GroupVersionKind
-		wantExists bool
-	}{
-		{
-			name: "core Kubernetes type (empty group)",
-			gvk: schema.GroupVersionKind{
-				Group:   "",
-				Version: "v1",
-				Kind:    "Pod",
-			},
-			wantExists: true, // Core types always return true
-		},
-		{
-			name: "custom resource with CRD installed",
-			gvk: schema.GroupVersionKind{
-				Group:   "example.com",
-				Version: "v1",
-				Kind:    "Foo",
-			},
-			wantExists: true,
-		},
-		{
-			name: "custom resource without CRD",
-			gvk: schema.GroupVersionKind{
-				Group:   "missing.com",
-				Version: "v1",
-				Kind:    "Bar",
-			},
-			wantExists: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			exists, err := checker.IsGVKSupported(ctx, tt.gvk)
-			if err != nil {
-				t.Errorf("IsGVKSupported() unexpected error: %v", err)
-				return
-			}
-
-			if exists != tt.wantExists {
-				t.Errorf("IsGVKSupported() = %v, want %v", exists, tt.wantExists)
 			}
 		})
 	}
@@ -329,50 +197,6 @@ func TestCRDChecker_InvalidateCache(t *testing.T) {
 	}
 }
 
-func TestCRDChecker_GetMissingCRDs(t *testing.T) {
-	scheme := runtime.NewScheme()
-	_ = apiextensionsv1.AddToScheme(scheme)
-
-	// Install only MetalLB CRD
-	metallbCRD := &apiextensionsv1.CustomResourceDefinition{}
-	metallbCRD.SetName("metallbs.metallb.io")
-
-	fakeClient := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithObjects(metallbCRD).
-		Build()
-
-	checker := NewCRDChecker(fakeClient)
-	ctx := context.Background()
-
-	components := []string{
-		"MetalLB",            // Installed
-		"NodeHealthCheck",    // Missing
-		"ForkliftController", // Missing
-		"UnknownComponent",   // Not in mapping (ignored)
-	}
-
-	missing, err := checker.GetMissingCRDs(ctx, components)
-	if err != nil {
-		t.Fatalf("GetMissingCRDs() failed: %v", err)
-	}
-
-	expectedMissing := []string{
-		"nodehealthchecks.remediation.medik8s.io",
-		"forkliftcontrollers.forklift.konveyor.io",
-	}
-
-	if len(missing) != len(expectedMissing) {
-		t.Fatalf("Expected %d missing CRDs, got %d", len(expectedMissing), len(missing))
-	}
-
-	for i, crdName := range expectedMissing {
-		if missing[i] != crdName {
-			t.Errorf("Expected missing CRD %s, got %s", crdName, missing[i])
-		}
-	}
-}
-
 func TestCRDChecker_ConcurrentAccess(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = apiextensionsv1.AddToScheme(scheme)
@@ -431,26 +255,4 @@ func TestCRDCache_ThreadSafety(t *testing.T) {
 	}
 
 	// If no race detector panic, test passed
-}
-
-func TestComponentKindMapping(t *testing.T) {
-	// Verify critical components are mapped
-	critical := []string{
-		"HyperConverged",
-		"MachineConfig",
-		"NodeHealthCheck",
-		"MetalLB",
-	}
-
-	for _, component := range critical {
-		if _, ok := ComponentKindMapping[component]; !ok {
-			t.Errorf("Critical component %s not found in ComponentKindMapping", component)
-		}
-	}
-
-	// Verify HyperConverged is mapped (always required)
-	hcoCRD, ok := ComponentKindMapping["HyperConverged"]
-	if !ok || hcoCRD != "hyperconvergeds.hco.kubevirt.io" {
-		t.Error("HyperConverged mapping incorrect")
-	}
 }
