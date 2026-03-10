@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	// ThrashingThreshold is the number of consecutive throttles before pausing
-	// 3 throttles = resource has been modified 15 times in 1 minute (5 updates/min capacity)
+	// ThrashingThreshold is the number of consecutive throttles before pausing.
+	// With defaults (capacity=10, window=1min, rate-based refill), pausing kicks in
+	// after 10 burst corrections followed by 3 consecutive throttled attempts.
 	ThrashingThreshold = 3
 )
 
