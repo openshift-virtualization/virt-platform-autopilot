@@ -46,7 +46,8 @@ func TestTokenBucket_Allow(t *testing.T) {
 		}
 	})
 
-	t.Run("refills after window expires", func(t *testing.T) {
+	t.Run("refills tokens over time (rate-based)", func(t *testing.T) {
+		// capacity=2, window=100ms → 1 token per 50ms
 		tb := NewTokenBucketWithSettings(2, 100*time.Millisecond)
 		key := "test-resource"
 
@@ -59,12 +60,12 @@ func TestTokenBucket_Allow(t *testing.T) {
 			t.Error("Should be throttled after consuming all tokens")
 		}
 
-		// Wait for window to expire
-		time.Sleep(150 * time.Millisecond)
+		// Wait for at least one token to accumulate (>50ms)
+		time.Sleep(70 * time.Millisecond)
 
-		// Should be allowed again after refill
+		// Should be allowed again after rate-based refill
 		if !tb.Allow(key) {
-			t.Error("Should be allowed after window expiration")
+			t.Error("Should be allowed after token accumulates")
 		}
 	})
 
@@ -213,26 +214,27 @@ func TestTokenBucket_GetTokens(t *testing.T) {
 		}
 	})
 
-	t.Run("returns full capacity after window expiration", func(t *testing.T) {
+	t.Run("returns full capacity after tokens fully accumulate", func(t *testing.T) {
+		// capacity=5, window=100ms → 1 token per 20ms
 		tb := NewTokenBucketWithSettings(5, 100*time.Millisecond)
 		key := "test-key"
 
-		// Consume some tokens
-		tb.Allow(key)
-		tb.Allow(key)
+		// Consume some tokens (first Allow creates bucket with capacity-1=4)
+		tb.Allow(key) // tokens: 4
+		tb.Allow(key) // tokens: 3
 
-		// Check before expiration
+		// Check immediately (no accumulation yet)
 		if tb.GetTokens(key) != 3 {
-			t.Error("Should have 3 tokens before expiration")
+			t.Error("Should have 3 tokens immediately after consumption")
 		}
 
-		// Wait for window to expire
-		time.Sleep(150 * time.Millisecond)
+		// Wait long enough for all 2 consumed tokens to accumulate back (2 * 20ms = 40ms → use 60ms)
+		time.Sleep(60 * time.Millisecond)
 
 		// Should return full capacity
 		tokens := tb.GetTokens(key)
 		if tokens != 5 {
-			t.Errorf("Expected full capacity (5) after expiration, got %d", tokens)
+			t.Errorf("Expected full capacity (5) after tokens accumulate, got %d", tokens)
 		}
 	})
 }

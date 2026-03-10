@@ -23,10 +23,11 @@ import (
 )
 
 const (
-	// DefaultCapacity is the default token bucket capacity (number of updates allowed)
-	DefaultCapacity = 5
+	// DefaultCapacity is the default token bucket capacity (burst of updates allowed)
+	DefaultCapacity = 10
 
 	// DefaultWindow is the default time window for token refill
+	// Tokens accumulate continuously at rate = capacity/window (1 token per 6s with defaults)
 	DefaultWindow = 1 * time.Minute
 
 	// DefaultTTL is the time after which unused bucket entries are cleaned up
@@ -84,10 +85,23 @@ func (tb *TokenBucket) Allow(key string) bool {
 	// Update last accessed time
 	b.lastAccessed = now
 
-	// Check if window has expired and refill bucket
-	if now.Sub(b.lastFill) >= tb.window {
-		b.tokens = tb.capacity
-		b.lastFill = now
+	// Rate-based refill: tokens accumulate continuously at rate = capacity/window.
+	// This avoids the harsh "all-or-nothing" reset of a fixed window: instead of
+	// blocking for up to a full minute after exhaustion, tokens trickle back
+	// every (window/capacity) seconds (e.g. every 6s with defaults).
+	tokenDuration := tb.window / time.Duration(tb.capacity)
+	if tokenDuration > 0 {
+		elapsed := now.Sub(b.lastFill)
+		tokensToAdd := int(elapsed / tokenDuration)
+		if tokensToAdd > 0 {
+			b.tokens += tokensToAdd
+			if b.tokens > tb.capacity {
+				b.tokens = tb.capacity
+			}
+			// Advance lastFill only by the time that produced whole tokens,
+			// so fractional time carries over to the next call.
+			b.lastFill = b.lastFill.Add(time.Duration(tokensToAdd) * tokenDuration)
+		}
 	}
 
 	// Check if tokens available
@@ -129,7 +143,8 @@ func (tb *TokenBucket) ResetAll() {
 	tb.buckets = make(map[string]*bucket)
 }
 
-// GetTokens returns the current token count for a key (for testing/debugging)
+// GetTokens returns the current token count for a key (for testing/debugging).
+// Reflects tokens that have accumulated since the last Allow call.
 func (tb *TokenBucket) GetTokens(key string) int {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
@@ -139,12 +154,17 @@ func (tb *TokenBucket) GetTokens(key string) int {
 		return tb.capacity
 	}
 
-	// Check if window expired
-	if time.Since(b.lastFill) >= tb.window {
-		return tb.capacity
+	// Include tokens accumulated since the last Allow call
+	tokenDuration := tb.window / time.Duration(tb.capacity)
+	tokens := b.tokens
+	if tokenDuration > 0 {
+		elapsed := time.Since(b.lastFill)
+		tokens += int(elapsed / tokenDuration)
+		if tokens > tb.capacity {
+			tokens = tb.capacity
+		}
 	}
-
-	return b.tokens
+	return tokens
 }
 
 // CleanupStale removes bucket entries that haven't been accessed for longer than ttl
