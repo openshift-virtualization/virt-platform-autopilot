@@ -161,14 +161,14 @@ Contributions are welcome! To add new platform components or extend the autopilo
 make build
 
 # Run tests
-make test              # Unit tests
-make test-integration  # Integration tests
+make test                  # Unit tests
+make test-integration      # Integration tests
 
 # Local development with Kind
-make kind-setup        # Setup local cluster
-make deploy-local      # Deploy autopilot
-make logs-local        # View logs
-make redeploy-local    # Redeploy after changes
+make kind-setup            # Setup local cluster
+make deploy-local          # Deploy autopilot
+make logs-local            # View logs
+make redeploy-local        # Redeploy after changes
 
 # Development cycle (format + test + redeploy)
 make dev-cycle
