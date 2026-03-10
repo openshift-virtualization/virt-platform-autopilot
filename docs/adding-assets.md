@@ -259,6 +259,8 @@ If the CRD is missing:
 - Reconciliation continues with other assets
 - Asset is automatically applied when CRD becomes available
 
+**CRD present but operator namespace absent** — a related scenario arises when the CRD exists as a leftover (e.g. after uninstalling an operator without cleaning up its CRDs) but the operator's namespace is gone. In this case the asset renders successfully but the apply fails because the target namespace does not exist. The autopilot detects this and soft-skips the asset without raising an error, identical in behaviour to the missing-CRD case. The asset will be retried on the next periodic reconciliation once the operator is reinstalled.
+
 ### Check Object Existence
 
 ```yaml

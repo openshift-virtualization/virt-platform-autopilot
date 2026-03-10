@@ -371,6 +371,16 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Step 7: Apply via Server-Side Apply
 	applied, err := p.applier.Apply(ctx, desired, true)
 	if err != nil {
+		// If the target namespace doesn't exist, the operator is not installed —
+		// the CRD is just a leftover. Treat this as a soft skip, same as a missing CRD.
+		if desired.GetNamespace() != "" && isNamespaceNotFound(err) {
+			logger.Info("Target namespace not found, skipping asset (operator likely not installed)",
+				"name", assetMeta.Name,
+				"namespace", desired.GetNamespace(),
+			)
+			return false, nil
+		}
+
 		// Set compliance status to failed (0)
 		observability.SetCompliance(desired, 0)
 
@@ -491,6 +501,14 @@ func (p *Patcher) setPauseAnnotation(ctx context.Context, obj *unstructured.Unst
 	}
 
 	return nil
+}
+
+// isNamespaceNotFound reports whether err is a 404 caused by a missing namespace.
+// When the API server rejects an apply because the target namespace doesn't exist it
+// returns a NotFound error whose message contains `namespaces "<name>" not found`,
+// which is distinguishable from a resource-level 404.
+func isNamespaceNotFound(err error) bool {
+	return errors.IsNotFound(err) && strings.Contains(err.Error(), "namespaces \"")
 }
 
 // countJSONPatchOperations counts the number of operations in a JSON patch string
