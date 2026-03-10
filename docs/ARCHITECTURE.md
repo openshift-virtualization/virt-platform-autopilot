@@ -481,22 +481,17 @@ assets:
 
 ### Soft Dependencies
 
-The autopilot gracefully handles missing CRDs and dependencies:
+The autopilot gracefully handles missing runtime dependencies without raising errors or blocking other assets.
 
-```go
-// Example: Template checks if CRD exists
-{{- if .ClusterCapabilities.HasCRD "kubedeschedulers.descheduler.kubevirt.io" }}
-apiVersion: descheduler.kubevirt.io/v1
-kind: KubeDescheduler
-# ... resource spec
-{{- end }}
-```
-
-If a CRD is not installed:
-- Asset is skipped during rendering
+**Missing CRD** — if the CRD required by an asset is not installed, the asset is skipped before rendering:
 - No error is raised
-- Alert fires if dependency is expected but missing
-- Automatic retry when dependency becomes available
+- Reconciliation continues with other assets
+- Asset is automatically applied when the CRD becomes available (CRD watch triggers re-reconciliation)
+
+**Missing operator namespace (CRD leftover)** — a subtler case occurs when a CRD exists as a leftover from a previously installed operator whose namespace and workloads have since been removed. In this situation the CRD check passes, the asset renders to a valid object, but the SSA apply fails because the target namespace does not exist. The autopilot detects this condition and treats it as a soft skip:
+- No error is raised and no failure event is emitted
+- Reconciliation continues with other assets
+- The asset will be applied on the next periodic reconciliation cycle (every 5 minutes) once the operator is reinstalled and its namespace recreated
 
 ### Adding New Assets
 

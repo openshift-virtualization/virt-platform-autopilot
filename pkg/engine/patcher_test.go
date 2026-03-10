@@ -17,8 +17,59 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
 	"testing"
+
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+func TestIsNamespaceNotFound(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "namespace 404 is recognized",
+			err:  k8serrors.NewNotFound(schema.GroupResource{Resource: "namespaces"}, "openshift-kube-descheduler-operator"),
+			want: true,
+		},
+		{
+			name: "resource-level 404 is not a namespace 404",
+			err:  k8serrors.NewNotFound(schema.GroupResource{Group: "operator.openshift.io", Resource: "kubedeschedulers"}, "cluster"),
+			want: false,
+		},
+		{
+			name: "configmap 404 is not a namespace 404",
+			err:  k8serrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, "my-config"),
+			want: false,
+		},
+		{
+			name: "conflict error is not namespace 404",
+			err:  k8serrors.NewConflict(schema.GroupResource{Resource: "kubedeschedulers"}, "cluster", fmt.Errorf("conflict")),
+			want: false,
+		},
+		{
+			name: "plain error with namespace-like message is not a namespace 404",
+			err:  fmt.Errorf(`namespaces "foo" not found`),
+			want: false, // IsNotFound returns false for plain errors
+		},
+		{
+			name: "forbidden is not namespace 404",
+			err:  k8serrors.NewForbidden(schema.GroupResource{Resource: "namespaces"}, "foo", fmt.Errorf("forbidden")),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isNamespaceNotFound(tt.err); got != tt.want {
+				t.Errorf("isNamespaceNotFound() = %v, want %v (err: %v)", got, tt.want, tt.err)
+			}
+		})
+	}
+}
 
 func TestCountJSONPatchOperations(t *testing.T) {
 	tests := []struct {

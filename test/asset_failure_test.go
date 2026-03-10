@@ -5,9 +5,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	pkgassets "github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 )
 
@@ -232,6 +235,73 @@ var _ = Describe("Asset Failure Handling", func() {
 			By("  1. Unit tests for error aggregation logic")
 			By("  2. Integration tests above proving assets process independently")
 			By("  3. The ReconcileAssets code review")
+		})
+	})
+
+	Context("when the target namespace is missing", func() {
+		It("should surface a namespace-not-found 404 from the API server", func() {
+			// This verifies the API server error shape that the patcher's soft-skip logic
+			// depends on. If this breaks, isNamespaceNotFound() would stop working.
+			By("applying a ConfigMap to a namespace that does not exist")
+			missingNs := "missing-ns-" + randString()
+			obj := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
+					"metadata": map[string]interface{}{
+						"name":      "test-cm",
+						"namespace": missingNs,
+					},
+					"data": map[string]interface{}{"key": "value"},
+				},
+			}
+
+			_, err := applier.Apply(ctx, obj, true)
+			Expect(err).To(HaveOccurred())
+
+			By("verifying it is a NotFound error mentioning the namespace (the class we soft-skip)")
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "expected a 404 NotFound from the API server")
+			Expect(err.Error()).To(ContainSubstring(`namespaces "`),
+				"expected the error to identify the missing namespace, got: %v", err)
+		})
+
+		It("should soft-skip ReconcileAsset when CRD is present but operator namespace is absent", func() {
+			// Scenario mirroring the real-world failure: the KubeDescheduler CRD exists
+			// (leftover from a previous operator install) but the operator namespace was
+			// removed together with the operator itself.
+			// Expected: ReconcileAsset returns (false, nil) — a silent skip, not an error.
+
+			By("installing the KubeDescheduler CRD to simulate a leftover-CRD situation")
+			Expect(InstallCRDs(ctx, k8sClient, CRDSetOpenShift)).To(Succeed())
+			DeferCleanup(func() { _ = UninstallCRDs(ctx, k8sClient, CRDSetOpenShift) })
+
+			By("confirming the operator namespace does not exist")
+			operatorNs := &unstructured.Unstructured{}
+			operatorNs.SetGroupVersionKind(nsGVK)
+			err := k8sClient.Get(ctx, client.ObjectKey{Name: "openshift-kube-descheduler-operator"}, operatorNs)
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue(), "operator namespace must not exist for this test")
+
+			By("creating a Patcher backed by the real embedded asset loader")
+			patcher := engine.NewPatcher(k8sClient, apiReader, pkgassets.NewLoader())
+
+			deschedulerAsset := pkgassets.AssetMetadata{
+				Name:    "descheduler-loadaware",
+				Path:    "active/descheduler/recommended.yaml.tpl",
+				Install: pkgassets.InstallModeAlways,
+			}
+			renderCtx := pkgcontext.NewRenderContext(
+				pkgcontext.NewMockHCO(pkgcontext.HCOName, pkgcontext.DefaultHCONamespace),
+			)
+
+			By("reconciling the descheduler asset against the cluster")
+			// Use Eventually to tolerate a brief REST-mapper warm-up after CRD installation.
+			Eventually(func(g Gomega) {
+				applied, reconcileErr := patcher.ReconcileAsset(ctx, &deschedulerAsset, renderCtx)
+				g.Expect(reconcileErr).NotTo(HaveOccurred(),
+					"namespace-not-found must be treated as a soft skip, not an error")
+				g.Expect(applied).To(BeFalse(),
+					"asset must not be reported as applied when the operator namespace is missing")
+			}).Should(Succeed())
 		})
 	})
 
