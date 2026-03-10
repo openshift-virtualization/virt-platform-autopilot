@@ -17,7 +17,6 @@ limitations under the License.
 package controller
 
 import (
-	"context"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
@@ -424,51 +422,26 @@ func TestIsManagedCRD(t *testing.T) {
 }
 
 func TestDetectHardware(t *testing.T) {
-	ctx := context.Background()
-
 	t.Run("GPU detection", func(t *testing.T) {
-		testGPUDetection(ctx, t)
+		testGPUDetection(t)
 	})
 
 	t.Run("other hardware detection", func(t *testing.T) {
-		testOtherHardwareDetection(ctx, t)
+		testOtherHardwareDetection(t)
 	})
 
 	t.Run("handles empty node list", func(t *testing.T) {
-		scheme := runtime.NewScheme()
-		_ = corev1.AddToScheme(scheme)
-		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+		hardware := detectHardware(nil)
 
-		builder := NewRenderContextBuilder(fakeClient)
-		hardware, err := builder.detectHardware(ctx)
-
-		if err != nil {
-			t.Fatalf("detectHardware() error = %v", err)
-		}
 		if hardware.GPUPresent || hardware.PCIDevicesPresent ||
 			hardware.NUMANodesPresent || hardware.VFIOCapable ||
 			hardware.USBDevicesPresent {
 			t.Error("detectHardware() detected hardware on empty node list")
 		}
 	})
-
-	t.Run("returns error when client fails", func(t *testing.T) {
-		scheme := runtime.NewScheme()
-		_ = corev1.AddToScheme(scheme)
-		fakeClient := &failingClient{
-			Client: fake.NewClientBuilder().WithScheme(scheme).Build(),
-		}
-
-		builder := NewRenderContextBuilder(fakeClient)
-		_, err := builder.detectHardware(ctx)
-
-		if err == nil {
-			t.Error("detectHardware() should return error when client fails")
-		}
-	})
 }
 
-func testGPUDetection(ctx context.Context, t *testing.T) {
+func testGPUDetection(t *testing.T) {
 	t.Helper()
 
 	gpuTests := []struct {
@@ -482,9 +455,6 @@ func testGPUDetection(ctx context.Context, t *testing.T) {
 
 	for _, tt := range gpuTests {
 		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			_ = corev1.AddToScheme(scheme)
-
 			node := &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: "gpu-node"},
 				Status: corev1.NodeStatus{
@@ -494,13 +464,8 @@ func testGPUDetection(ctx context.Context, t *testing.T) {
 				},
 			}
 
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(node).Build()
-			builder := NewRenderContextBuilder(fakeClient)
-			hardware, err := builder.detectHardware(ctx)
+			hardware := detectHardware([]corev1.Node{*node})
 
-			if err != nil {
-				t.Fatalf("detectHardware() error = %v", err)
-			}
 			if !hardware.GPUPresent {
 				t.Errorf("detectHardware() did not detect %s GPU", tt.name)
 			}
@@ -508,7 +473,7 @@ func testGPUDetection(ctx context.Context, t *testing.T) {
 	}
 }
 
-func testOtherHardwareDetection(ctx context.Context, t *testing.T) {
+func testOtherHardwareDetection(t *testing.T) {
 	t.Helper()
 
 	tests := []struct {
@@ -524,9 +489,6 @@ func testOtherHardwareDetection(ctx context.Context, t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scheme := runtime.NewScheme()
-			_ = corev1.AddToScheme(scheme)
-
 			node := &corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "test-node",
@@ -534,13 +496,8 @@ func testOtherHardwareDetection(ctx context.Context, t *testing.T) {
 				},
 			}
 
-			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(node).Build()
-			builder := NewRenderContextBuilder(fakeClient)
-			hardware, err := builder.detectHardware(ctx)
+			hardware := detectHardware([]corev1.Node{*node})
 
-			if err != nil {
-				t.Fatalf("detectHardware() error = %v", err)
-			}
 			if !tt.checkFunc(hardware) {
 				t.Errorf("detectHardware() did not detect %s", tt.name)
 			}
@@ -553,21 +510,4 @@ func newQuantity(value int64) *resource.Quantity {
 	q := resource.Quantity{}
 	q.Set(value)
 	return &q
-}
-
-// failingClient wraps a client to simulate failures
-type failingClient struct {
-	client.Client
-}
-
-func (f *failingClient) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
-	return &errorForTest{msg: "simulated client failure"}
-}
-
-type errorForTest struct {
-	msg string
-}
-
-func (e *errorForTest) Error() string {
-	return e.msg
 }

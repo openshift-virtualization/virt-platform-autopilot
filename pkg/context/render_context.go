@@ -51,6 +51,7 @@ var (
 type RenderContext struct {
 	HCO      *unstructured.Unstructured // Full HCO object, templates access directly
 	Hardware *HardwareContext           // Cluster-discovered hardware info
+	Topology *TopologyContext           // Cluster topology info (HCP, compact, node counts)
 }
 
 // HardwareContext contains cluster hardware detection results
@@ -60,6 +61,66 @@ type HardwareContext struct {
 	VFIOCapable       bool // For VFIO device assignment
 	USBDevicesPresent bool // For USB passthrough
 	GPUPresent        bool // For GPU operator
+}
+
+// TopologyContext contains cluster topology detection results.
+// Available in templates as .Topology.
+type TopologyContext struct {
+	// IsHCP is true when the cluster uses a Hosted Control Plane (HyperShift).
+	// Detected via Infrastructure CR status.controlPlaneTopology == "External".
+	IsHCP bool
+
+	// IsCompact is true when all visible master nodes also carry the worker role,
+	// meaning control-plane nodes run regular workloads (typical 3-node clusters).
+	IsCompact bool
+
+	// ControlPlaneTopology is the raw value from Infrastructure CR
+	// status.controlPlaneTopology: "HighlyAvailable", "SingleReplica", or "External".
+	// Empty string when the Infrastructure CR is unavailable (non-OpenShift).
+	ControlPlaneTopology string
+
+	// CloudProvider is the raw platform type from Infrastructure CR
+	// status.platformStatus.type.  Known values: "AWS", "Azure", "GCP",
+	// "BareMetal", "VSphere", "OpenStack", "IBMCloud", "Nutanix", "PowerVS",
+	// "External", "None".  Empty on non-OpenShift clusters.
+	CloudProvider string
+
+	// Convenience booleans derived from CloudProvider.
+	IsAWS       bool
+	IsAzure     bool
+	IsGCP       bool
+	IsBareMetal bool
+	IsVSphere   bool
+	IsOpenStack bool
+
+	// MasterCount is the number of nodes with the master or control-plane role label.
+	MasterCount int
+
+	// WorkerCount is the number of nodes carrying the worker role but NOT the master
+	// role (dedicated workers). Zero in compact clusters.
+	WorkerCount int
+
+	// TotalNodeCount is the total number of nodes visible to the operator.
+	TotalNodeCount int
+}
+
+// AsMap converts TopologyContext to a flat map for condition evaluation.
+func (t *TopologyContext) AsMap() map[string]interface{} {
+	return map[string]interface{}{
+		"isHCP":                t.IsHCP,
+		"isCompact":            t.IsCompact,
+		"controlPlaneTopology": t.ControlPlaneTopology,
+		"cloudProvider":        t.CloudProvider,
+		"isAWS":                t.IsAWS,
+		"isAzure":              t.IsAzure,
+		"isGCP":                t.IsGCP,
+		"isBareMetal":          t.IsBareMetal,
+		"isVSphere":            t.IsVSphere,
+		"isOpenStack":          t.IsOpenStack,
+		"masterCount":          t.MasterCount,
+		"workerCount":          t.WorkerCount,
+		"totalNodeCount":       t.TotalNodeCount,
+	}
 }
 
 // AsMap converts HardwareContext to map for condition evaluation
@@ -77,10 +138,8 @@ func (h *HardwareContext) AsMap() map[string]bool {
 func NewRenderContext(hco *unstructured.Unstructured) *RenderContext {
 	return &RenderContext{
 		HCO:      hco,
-		Hardware: &HardwareContext{
-			// Hardware detection would populate these
-			// For now, all false (requires node inspection)
-		},
+		Hardware: &HardwareContext{},
+		Topology: &TopologyContext{},
 	}
 }
 
