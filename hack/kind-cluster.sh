@@ -162,6 +162,8 @@ kind: HyperConverged
 metadata:
   name: kubevirt-hyperconverged
   namespace: openshift-cnv
+  annotations:
+    platform.kubevirt.io/autopilot: "true"
 spec:
   liveMigrationConfig:
     parallelMigrationsPerCluster: 5
