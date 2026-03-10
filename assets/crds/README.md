@@ -42,6 +42,12 @@ assets/crds/
 - Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_kubeletconfigs.crd.yaml`
 - Local: `openshift/kubeletconfig-crd.yaml`
 
+**Infrastructure**
+- Repository: https://github.com/openshift/api
+- Branch: `master`
+- Path: `config/v1/zz_generated.crd-manifests/0000_10_config-operator_01_infrastructures-Default.crd.yaml`
+- Local: `openshift/infrastructure-crd.yaml`
+
 **KubeDescheduler**
 - Repository: https://github.com/openshift/cluster-kube-descheduler-operator
 - Branch: `main`
