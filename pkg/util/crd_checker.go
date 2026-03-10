@@ -25,28 +25,11 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
 )
-
-// ComponentKindMapping maps asset components to their CRD names
-// This defines the soft dependencies - which components require which CRDs
-var ComponentKindMapping = map[string]string{
-	"MachineConfig":          "machineconfigs.machineconfiguration.openshift.io",
-	"KubeletConfig":          "kubeletconfigs.machineconfiguration.openshift.io",
-	"NodeHealthCheck":        "nodehealthchecks.remediation.medik8s.io",
-	"ForkliftController":     "forkliftcontrollers.forklift.konveyor.io",
-	"MetalLB":                "metallbs.metallb.io",
-	"UIPlugin":               "uiplugins.console.openshift.io",
-	"KubeDescheduler":        "kubedeschedulers.operator.openshift.io",
-	"PrometheusRule":         "prometheusrules.monitoring.coreos.com",
-	"SelfNodeRemediation":    "selfnoderemediations.self-node-remediation.medik8s.io",
-	"FenceAgentsRemediation": "fenceagentsremediations.fence-agents-remediation.medik8s.io",
-	"HyperConverged":         "hyperconvergeds.hco.kubevirt.io", // Always required
-}
 
 // CRDChecker provides CRD availability checking with caching
 type CRDChecker struct {
@@ -139,39 +122,6 @@ func (c *CRDChecker) updateDependencyMetric(crdName string, missing bool) {
 	observability.SetMissingDependency(group, version, kind, missing)
 }
 
-// IsComponentSupported checks if a component's CRD is installed
-// Returns (supported, crdName, error)
-func (c *CRDChecker) IsComponentSupported(ctx context.Context, component string) (bool, string, error) {
-	crdName, ok := ComponentKindMapping[component]
-	if !ok {
-		// Component not in mapping - assume it's a core Kubernetes resource
-		// or a resource that doesn't require CRD checking
-		return true, "", nil
-	}
-
-	installed, err := c.IsCRDInstalled(ctx, crdName)
-	if err != nil {
-		return false, crdName, err
-	}
-
-	return installed, crdName, nil
-}
-
-// IsGVKSupported checks if a GroupVersionKind is supported in the cluster
-func (c *CRDChecker) IsGVKSupported(ctx context.Context, gvk schema.GroupVersionKind) (bool, error) {
-	// For core Kubernetes types (empty group), always return true
-	if gvk.Group == "" {
-		return true, nil
-	}
-
-	// Construct CRD name: <plural>.<group>
-	// Note: This is a heuristic. The actual CRD name might differ.
-	// For production use, maintain a proper mapping or query discovery API
-	crdName := fmt.Sprintf("%ss.%s", gvk.Kind, gvk.Group)
-
-	return c.IsCRDInstalled(ctx, crdName)
-}
-
 // InvalidateCache clears the cache for a specific CRD or all CRDs
 func (c *CRDChecker) InvalidateCache(crdName string) {
 	if crdName == "" {
@@ -225,23 +175,4 @@ func (cc *crdCache) clear() {
 	defer cc.mu.Unlock()
 
 	cc.entries = make(map[string]*cacheEntry)
-}
-
-// GetMissingCRDs returns a list of CRD names that are not installed
-// for the given components
-func (c *CRDChecker) GetMissingCRDs(ctx context.Context, components []string) ([]string, error) {
-	var missing []string
-
-	for _, component := range components {
-		supported, crdName, err := c.IsComponentSupported(ctx, component)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check component %s: %w", component, err)
-		}
-
-		if !supported && crdName != "" {
-			missing = append(missing, crdName)
-		}
-	}
-
-	return missing, nil
 }

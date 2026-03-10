@@ -250,26 +250,24 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 			continue
 		}
 
-		// Check if component's CRD is installed (soft dependency handling)
-		if asset.Component != "" {
-			supported, crdName, err := r.crdChecker.IsComponentSupported(ctx, asset.Component)
+		// Check if the asset's required CRD is installed (soft dependency handling)
+		if asset.RequiredCRD != "" {
+			installed, err := r.crdChecker.IsCRDInstalled(ctx, asset.RequiredCRD)
 			if err != nil {
 				logger.Error(err, "Failed to check CRD availability, skipping asset",
 					"asset", asset.Name,
-					"component", asset.Component,
+					"crd", asset.RequiredCRD,
 				)
 				continue
 			}
 
-			if !supported {
+			if !installed {
 				logger.V(1).Info("CRD not installed, skipping asset (soft dependency)",
 					"asset", asset.Name,
-					"component", asset.Component,
-					"crd", crdName,
+					"crd", asset.RequiredCRD,
 				)
-				// Record event about missing CRD (only once per reconciliation to avoid spam)
 				if r.eventRecorder != nil {
-					r.eventRecorder.CRDMissing(renderCtx.HCO, asset.Component, crdName)
+					r.eventRecorder.CRDMissing(renderCtx.HCO, asset.Name, asset.RequiredCRD)
 				}
 				continue
 			}
@@ -341,15 +339,9 @@ func extractFeatureGates(hco *unstructured.Unstructured) map[string]bool {
 	return gates
 }
 
-// SetupWithManager sets up the controller with the Manager
-// isManagedCRD checks if a CRD is for a resource type we manage
+// isManagedCRD checks if a CRD is required by at least one declared asset.
 func (r *PlatformReconciler) isManagedCRD(crdName string) bool {
-	for _, mappedCRD := range util.ComponentKindMapping {
-		if crdName == mappedCRD {
-			return true
-		}
-	}
-	return false
+	return r.registry.IsManagedCRD(crdName)
 }
 
 // isWatchedCRD safely checks if a CRD is currently being watched
@@ -457,12 +449,18 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Named("platform")
 
-	// Dynamically add watches for resource types we manage (if their CRDs exist)
+	// Dynamically add watches for every CRD required by a declared asset.
+	// RequiredCRD is derived from the asset template at load time, so no separate
+	// mapping needs to be maintained when adding new asset files.
 	logger.Info("Discovering managed resource types to watch")
 
-	// Iterate through ALL components in ComponentKindMapping
-	// This ensures we watch all managed types, even if they don't have assets yet
-	for component, crdName := range util.ComponentKindMapping {
+	seenCRDs := make(map[string]bool)
+	for _, asset := range r.registry.ListAssets(nil) {
+		crdName := asset.RequiredCRD
+		if crdName == "" || seenCRDs[crdName] {
+			continue
+		}
+		seenCRDs[crdName] = true
 
 		// Check if CRD is installed
 		installed, err := r.crdChecker.IsCRDInstalled(ctx, crdName)
@@ -472,7 +470,7 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 
 		if !installed {
-			logger.Info("CRD not installed, skipping watch", "component", component, "crd", crdName)
+			logger.Info("CRD not installed, skipping watch", "crd", crdName)
 			continue
 		}
 
@@ -507,9 +505,7 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		obj.SetGroupVersionKind(gvk)
 
 		// Add watch - enqueue HCO for reconciliation when these resources change
-		logger.Info("Adding watch for managed resource type",
-			"component", component,
-			"gvk", gvk.String())
+		logger.Info("Adding watch for managed resource type", "gvk", gvk.String())
 
 		// Track that we're watching this CRD
 		r.markCRDAsWatched(crdName)

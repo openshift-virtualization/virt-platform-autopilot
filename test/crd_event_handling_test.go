@@ -51,11 +51,10 @@ var _ = Describe("CRD Event Handling", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(installed).To(BeTrue(), "CRD should be detected after installation")
 
-			By("verifying component is now supported")
-			supported, crdName, err := checker.IsComponentSupported(ctx, "NodeHealthCheck")
+			By("verifying CRD is now detected as installed")
+			installed, err = checker.IsCRDInstalled(ctx, "nodehealthchecks.remediation.medik8s.io")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(supported).To(BeTrue(), "NodeHealthCheck component should be supported")
-			Expect(crdName).To(Equal("nodehealthchecks.remediation.medik8s.io"))
+			Expect(installed).To(BeTrue(), "NodeHealthCheck CRD should be detected as installed")
 		})
 
 		It("should detect when a managed CRD is removed", func() {
@@ -93,10 +92,10 @@ var _ = Describe("CRD Event Handling", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(installed).To(BeFalse(), "CRD should not be detected after removal")
 
-			By("verifying component is no longer supported")
-			supported, _, err := checker.IsComponentSupported(ctx, "NodeHealthCheck")
+			By("verifying CRD is no longer detected as installed")
+			installed, err = checker.IsCRDInstalled(ctx, "nodehealthchecks.remediation.medik8s.io")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(supported).To(BeFalse(), "NodeHealthCheck should not be supported after CRD removal")
+			Expect(installed).To(BeFalse(), "NodeHealthCheck CRD should not be detected after removal")
 		})
 
 		It("should handle CRD updates correctly", func() {
@@ -144,32 +143,6 @@ var _ = Describe("CRD Event Handling", func() {
 	})
 
 	Context("when validating CRD discovery for all managed types", func() {
-		It("should identify all managed CRD types from ComponentKindMapping", func() {
-			By("checking ComponentKindMapping has entries")
-			Expect(util.ComponentKindMapping).NotTo(BeEmpty(), "ComponentKindMapping should define managed types")
-
-			By("verifying each component maps to a valid CRD name")
-			for component, crdName := range util.ComponentKindMapping {
-				Expect(crdName).NotTo(BeEmpty(), "CRD name should not be empty for component %s", component)
-				Expect(crdName).To(ContainSubstring("."), "CRD name should be fully qualified for component %s", component)
-			}
-
-			By("checking for expected components")
-			expectedComponents := []string{
-				"MachineConfig",
-				"NodeHealthCheck",
-				"SelfNodeRemediation",
-				"FenceAgentsRemediation",
-				"ForkliftController",
-				"MetalLB",
-			}
-
-			for _, expected := range expectedComponents {
-				_, exists := util.ComponentKindMapping[expected]
-				Expect(exists).To(BeTrue(), "Expected component %s to be in ComponentKindMapping", expected)
-			}
-		})
-
 		It("should correctly identify which CRDs are installed", func() {
 			checker := util.NewCRDChecker(k8sClient)
 
@@ -177,19 +150,6 @@ var _ = Describe("CRD Event Handling", func() {
 			installed, err := checker.IsCRDInstalled(ctx, "hyperconvergeds.hco.kubevirt.io")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(installed).To(BeTrue(), "HCO CRD is required for tests")
-
-			By("checking each managed component")
-			for component, crdName := range util.ComponentKindMapping {
-				supported, detectedCRD, err := checker.IsComponentSupported(ctx, component)
-				Expect(err).NotTo(HaveOccurred(), "Should not error checking component %s", component)
-
-				if supported {
-					Expect(detectedCRD).To(Equal(crdName), "CRD name should match for component %s", component)
-					GinkgoWriter.Printf("✓ Component %s is supported (CRD: %s)\n", component, crdName)
-				} else {
-					GinkgoWriter.Printf("○ Component %s is not supported (CRD %s not installed)\n", component, crdName)
-				}
-			}
 		})
 	})
 

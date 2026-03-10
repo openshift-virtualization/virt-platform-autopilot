@@ -79,12 +79,13 @@ rules:
 	}
 
 	fmt.Printf("✓ RBAC ClusterRole written to %s\n", outputFile)
-	fmt.Printf("  Total rules: %d (5 static + %d dynamic)\n", len(rules), dynamicCount)
+	fmt.Printf("  Total rules: %d (%d static + %d dynamic)\n", len(rules), staticCount, dynamicCount)
 }
 
 // formatRulesWithComments renders all rules as YAML with human-readable section comments.
-// The first 5 rules are expected to be the static infrastructure rules (StaticRules()).
+// The first len(StaticRules()) rules are the static infrastructure rules; the rest are dynamic.
 func formatRulesWithComments(rules []rbac.Rule) string {
+	staticCount := len(rbac.StaticRules())
 	var b strings.Builder
 
 	b.WriteString("  # ========================================\n")
@@ -100,12 +101,14 @@ func formatRulesWithComments(rules []rbac.Rule) string {
 	writeRule(&b, rules[3])
 	b.WriteString("  # CRD Discovery (for soft dependency detection and template introspection)\n")
 	writeRule(&b, rules[4])
+	b.WriteString("  # OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)\n")
+	writeRule(&b, rules[5])
 
 	b.WriteString("  # ========================================\n")
 	b.WriteString("  # Managed Resources (Dynamic - from assets/)\n")
 	b.WriteString("  # ========================================\n")
 
-	for i := 5; i < len(rules); i++ {
+	for i := staticCount; i < len(rules); i++ {
 		rule := rules[i]
 		comment := commentForAPIGroup(rule.APIGroups[0])
 
@@ -151,6 +154,8 @@ func writeRule(b *strings.Builder, rule rbac.Rule) {
 
 func commentForAPIGroup(group string) string {
 	switch group {
+	case "config.openshift.io":
+		return "OpenShift Infrastructure"
 	case "hco.kubevirt.io":
 		return "HyperConverged"
 	case "machineconfiguration.openshift.io":

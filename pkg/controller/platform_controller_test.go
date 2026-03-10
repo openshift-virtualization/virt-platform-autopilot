@@ -381,7 +381,7 @@ func TestIsManagedCRD(t *testing.T) {
 		},
 		{
 			name:     "UIPlugin is managed",
-			crdName:  "uiplugins.console.openshift.io",
+			crdName:  "uiplugins.observability.openshift.io",
 			expected: true,
 		},
 		{

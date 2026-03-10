@@ -50,8 +50,7 @@ type Rule struct {
 
 // StaticRules returns the fixed infrastructure RBAC rules that every release of
 // virt-platform-autopilot requires, regardless of which asset templates are active.
-// The order is stable and must not be changed without updating callers that rely on
-// index-based access (e.g. the comment formatter in cmd/rbac-gen).
+// The order is stable; the comment formatter in cmd/rbac-gen writes each rule by index.
 func StaticRules() []Rule {
 	return []Rule{
 		// Rule 0: Nodes (for hardware detection)
@@ -128,10 +127,6 @@ func pluralize(kind string) string {
 	switch kind {
 	case "nodehealthcheck":
 		return "nodehealthchecks"
-	case "selfnoderemediation":
-		return "selfnoderemediations"
-	case "fenceagentsremediation":
-		return "fenceagentsremediations"
 	case "kubeletconfig":
 		return "kubeletconfigs"
 	case "machineconfig":
