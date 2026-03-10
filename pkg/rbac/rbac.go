@@ -84,6 +84,14 @@ func StaticRules() []Rule {
 			Resources: []string{"customresourcedefinitions"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
+		// Rule 5: OpenShift Infrastructure CR (for cluster topology detection: HCP, compact)
+		// The Infrastructure CR is a singleton (name="cluster") and is non-sensitive read-only.
+		// Gracefully absent on non-OpenShift clusters — the operator handles NotFound.
+		{
+			APIGroups: []string{"config.openshift.io"},
+			Resources: []string{"infrastructures"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
 	}
 }
 

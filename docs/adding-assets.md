@@ -176,9 +176,55 @@ spec:
 {{- end }}
 ```
 
-### Example 4: Multiple Conditions
+### Example 4: Topology-Aware Configuration
 
-Combine multiple checks for complex logic:
+Use `.Topology` to adapt resources to the cluster shape:
+
+```yaml
+apiVersion: hco.kubevirt.io/v1beta1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+  namespace: {{ dig "metadata" "namespace" "openshift-cnv" .HCO.Object }}
+spec:
+  {{- if .Topology.IsHCP }}
+  # Hosted Control Plane: no local control-plane overhead, be more generous
+  resourceRequirements:
+    vmiCPUAllocationRatio: 4
+  {{- else if .Topology.IsCompact }}
+  # Compact 3-node cluster: control-plane competes with workloads
+  resourceRequirements:
+    vmiCPUAllocationRatio: 8
+  {{- else }}
+  resourceRequirements:
+    vmiCPUAllocationRatio: 10
+  {{- end }}
+```
+
+Cloud provider awareness:
+
+```yaml
+{{- if .Topology.IsAWS }}
+  # AWS-specific: use instance store for ephemeral scratch
+  storageClassName: gp3-csi
+{{- else if .Topology.IsAzure }}
+  storageClassName: managed-premium
+{{- else if .Topology.IsBareMetal }}
+  storageClassName: local-block
+{{- end }}
+```
+
+For less-common providers not covered by a dedicated boolean, use the raw string:
+
+```yaml
+{{- if eq .Topology.CloudProvider "IBMCloud" }}
+  storageClassName: ibmc-block-gold
+{{- end }}
+```
+
+### Example 5: Multiple Checks Combined
+
+Combine multiple topology and hardware checks for complex logic:
 
 ```yaml
 {{- $crdExists := crdExists "gpus.nvidia.com/v1" }}
@@ -466,7 +512,38 @@ The following helper functions are available in templates:
 - `.HCO.Object` - HyperConverged resource
 - `.HCO.Namespace` - HCO namespace
 - `.HCO.Name` - HCO name
-- `.ClusterCapabilities` - Cluster capabilities and version info
+
+#### `.Hardware` — cluster hardware detection
+
+| Field | Type | Description |
+|---|---|---|
+| `.Hardware.PCIDevicesPresent` | `bool` | PCI passthrough-capable devices detected |
+| `.Hardware.NUMANodesPresent` | `bool` | Multi-NUMA topology detected |
+| `.Hardware.VFIOCapable` | `bool` | IOMMU/VFIO capable nodes detected |
+| `.Hardware.USBDevicesPresent` | `bool` | USB devices detected |
+| `.Hardware.GPUPresent` | `bool` | GPU devices detected |
+
+#### `.Topology` — cluster topology detection
+
+Populated from node role labels and the OpenShift `Infrastructure` CR
+(`config.openshift.io/v1`). All fields default to safe zero-values on
+non-OpenShift or vanilla Kubernetes clusters.
+
+| Field | Type | Description |
+|---|---|---|
+| `.Topology.IsHCP` | `bool` | Hosted Control Plane (HyperShift) — `status.controlPlaneTopology == "External"` |
+| `.Topology.IsCompact` | `bool` | All visible master nodes also carry the worker role (3-node clusters) |
+| `.Topology.ControlPlaneTopology` | `string` | Raw Infrastructure CR value: `"HighlyAvailable"`, `"SingleReplica"`, `"External"` |
+| `.Topology.CloudProvider` | `string` | Raw platform type: `"AWS"`, `"Azure"`, `"GCP"`, `"BareMetal"`, `"VSphere"`, `"OpenStack"`, `"IBMCloud"`, `"Nutanix"`, `"PowerVS"`, `"None"`, … |
+| `.Topology.IsAWS` | `bool` | Running on AWS |
+| `.Topology.IsAzure` | `bool` | Running on Azure |
+| `.Topology.IsGCP` | `bool` | Running on GCP |
+| `.Topology.IsBareMetal` | `bool` | Running on bare metal |
+| `.Topology.IsVSphere` | `bool` | Running on vSphere |
+| `.Topology.IsOpenStack` | `bool` | Running on OpenStack |
+| `.Topology.MasterCount` | `int` | Nodes with the master / control-plane role label |
+| `.Topology.WorkerCount` | `int` | Dedicated worker nodes (0 on compact clusters) |
+| `.Topology.TotalNodeCount` | `int` | Total visible node count |
 
 ### Annotations
 
@@ -605,7 +682,37 @@ apiVersion: myresource.example.com/{{ $apiVersion }}
 kind: MyResource
 ```
 
-### Pattern 2: Environment-Specific Settings
+### Pattern 2: Topology-Gated Assets
+
+Skip rendering entirely on unsupported topologies:
+
+```yaml
+{{- if .Topology.IsHCP }}
+{{- /* HCP clusters have no local control-plane — skip MachineConfig */ -}}
+{{- else }}
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-my-tuning
+spec:
+  config:
+    ...
+{{- end }}
+```
+
+Or guard a compact-only tuning:
+
+```yaml
+{{- if and .Topology.IsCompact .Topology.IsBareMetal }}
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-compact-baremetal-tuning
+...
+{{- end }}
+```
+
+### Pattern 4: Environment-Specific Settings
 
 Different settings for different environments:
 
@@ -618,7 +725,7 @@ spec:
   replicas: {{ $replicas }}
 ```
 
-### Pattern 3: Conditional Subsections
+### Pattern 5: Conditional Subsections
 
 Include entire sections conditionally:
 
