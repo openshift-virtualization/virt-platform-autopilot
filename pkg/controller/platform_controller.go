@@ -148,12 +148,15 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Opt-in gate: the autopilot is inactive in this early phase unless explicitly enabled.
-	// To activate, set annotation platform.kubevirt.io/autopilot: "true" on the HCO CR.
+	// To activate, set annotation platform.kubevirt.io/autopilot on the HCO CR to either:
+	//   "true"              – enable all assets
+	//   "asset-a,asset-b"  – enable only the named assets
 	// This guard will be removed (behavior inverted to opt-out) once the project matures.
-	if !overrides.IsAutopilotEnabled(hco) {
+	allowlist, enabled := overrides.ParseAutopilotScope(hco)
+	if !enabled {
 		logger.Info("Autopilot not enabled, keeping idle. Set annotation to opt in.",
 			"annotation", overrides.AnnotationAutopilotEnabled,
-			"value", "true",
+			"value", "true or comma-separated asset names",
 		)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
@@ -168,14 +171,18 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("Tombstone processing completed", "deleted", deletedCount)
 	}
 
-	// Step 1: Apply HCO golden config FIRST (reconcile_order: 0)
-	logger.Info("Applying HCO golden configuration")
-	if err := r.reconcileHCO(ctx, hco); err != nil {
-		logger.Error(err, "Failed to reconcile HCO golden config")
-		return ctrl.Result{}, err
+	// Step 1: Apply HCO golden config FIRST (reconcile_order: 0), unless explicitly excluded.
+	if allowlist == nil || allowlist["hco-golden-config"] {
+		logger.Info("Applying HCO golden configuration")
+		if err := r.reconcileHCO(ctx, hco); err != nil {
+			logger.Error(err, "Failed to reconcile HCO golden config")
+			return ctrl.Result{}, err
+		}
+	} else {
+		logger.V(1).Info("Skipping HCO golden configuration (not in asset allowlist)")
 	}
 
-	// Re-fetch HCO to get effective state after applying golden config
+	// Re-fetch HCO to get effective state (after potential golden config application)
 	if err := r.Get(ctx, req.NamespacedName, hco); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -193,7 +200,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Step 3: Reconcile all other assets in reconcile_order
 	logger.Info("Reconciling platform assets")
-	if err := r.reconcileAssets(ctx, renderCtx); err != nil {
+	if err := r.reconcileAssets(ctx, renderCtx, allowlist); err != nil {
 		logger.Error(err, "Failed to reconcile assets")
 		return ctrl.Result{}, err
 	}
@@ -233,8 +240,10 @@ func (r *PlatformReconciler) reconcileHCO(ctx context.Context, currentHCO *unstr
 	return nil
 }
 
-// reconcileAssets reconciles all non-HCO assets
-func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkgcontext.RenderContext) error {
+// reconcileAssets reconciles all non-HCO assets.
+// allowlist is nil when all assets are enabled, or a set of asset names to restrict reconciliation.
+// The allowlist is an additional filter on top of the existing opt-in/conditions logic.
+func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkgcontext.RenderContext, allowlist map[string]bool) error {
 	logger := log.FromContext(ctx)
 
 	// Get all assets sorted by reconcile_order (HCO should be 0, others 1+)
@@ -247,6 +256,12 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 
 		// Skip HCO (already reconciled in step 1)
 		if asset.ReconcileOrder == 0 {
+			continue
+		}
+
+		// Apply allowlist filter: when an explicit set of asset names is specified,
+		// only reconcile assets that appear in it. All other opt-in logic still applies.
+		if allowlist != nil && !allowlist[asset.Name] {
 			continue
 		}
 

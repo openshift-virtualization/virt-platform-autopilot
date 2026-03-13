@@ -178,7 +178,7 @@ func TestIsAutopilotEnabled(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "opt-in annotation set to true",
+			name: "annotation set to true",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"metadata": map[string]interface{}{
@@ -191,24 +191,37 @@ func TestIsAutopilotEnabled(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "opt-in annotation set to other value",
+			name: "annotation set to comma-separated asset names",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"metadata": map[string]interface{}{
 						"annotations": map[string]interface{}{
-							AnnotationAutopilotEnabled: "yes",
+							AnnotationAutopilotEnabled: "swap-enable,psi-enable",
 						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "annotation absent",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"annotations": map[string]interface{}{},
 					},
 				},
 			},
 			want: false,
 		},
 		{
-			name: "opt-in annotation absent",
+			name: "annotation set to empty string",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{},
+						"annotations": map[string]interface{}{
+							AnnotationAutopilotEnabled: "",
+						},
 					},
 				},
 			},
@@ -235,6 +248,64 @@ func TestIsAutopilotEnabled(t *testing.T) {
 			got := IsAutopilotEnabled(tt.obj)
 			if got != tt.want {
 				t.Errorf("IsAutopilotEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseAutopilotScope(t *testing.T) {
+	hcoWith := func(val string) *unstructured.Unstructured {
+		return &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"annotations": map[string]interface{}{
+						AnnotationAutopilotEnabled: val,
+					},
+				},
+			},
+		}
+	}
+	noAnnotations := &unstructured.Unstructured{Object: map[string]interface{}{}}
+
+	tests := []struct {
+		name        string
+		hco         *unstructured.Unstructured
+		wantEnabled bool
+		wantNilList bool // true = nil allowlist means "all assets"
+		wantList    []string
+	}{
+		{name: "nil object", hco: nil, wantEnabled: false},
+		{name: "annotation absent", hco: noAnnotations, wantEnabled: false},
+		{name: "annotation empty", hco: hcoWith(""), wantEnabled: false},
+		{name: "annotation true", hco: hcoWith("true"), wantEnabled: true, wantNilList: true},
+		{name: "single asset name", hco: hcoWith("swap-enable"), wantEnabled: true, wantList: []string{"swap-enable"}},
+		{name: "multiple asset names", hco: hcoWith("swap-enable,psi-enable,node-health-check"), wantEnabled: true, wantList: []string{"swap-enable", "psi-enable", "node-health-check"}},
+		{name: "whitespace trimmed", hco: hcoWith("  swap-enable , psi-enable  "), wantEnabled: true, wantList: []string{"swap-enable", "psi-enable"}},
+		{name: "hco-golden-config explicit", hco: hcoWith("hco-golden-config,swap-enable"), wantEnabled: true, wantList: []string{"hco-golden-config", "swap-enable"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allowlist, enabled := ParseAutopilotScope(tt.hco)
+			if enabled != tt.wantEnabled {
+				t.Fatalf("enabled = %v, want %v", enabled, tt.wantEnabled)
+			}
+			if !tt.wantEnabled {
+				return
+			}
+			if tt.wantNilList {
+				if allowlist != nil {
+					t.Errorf("expected nil allowlist (all assets), got %v", allowlist)
+				}
+				return
+			}
+			if len(allowlist) != len(tt.wantList) {
+				t.Fatalf("allowlist len = %d, want %d: %v", len(allowlist), len(tt.wantList), allowlist)
+			}
+			for _, name := range tt.wantList {
+				if !allowlist[name] {
+					t.Errorf("%q missing from allowlist %v", name, allowlist)
+				}
 			}
 		})
 	}
