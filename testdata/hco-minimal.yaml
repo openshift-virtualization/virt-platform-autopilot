@@ -4,6 +4,12 @@ metadata:
   name: kubevirt-hyperconverged
   namespace: openshift-cnv
   annotations:
+    # Enable all eligible assets (full activation).
+    # Alternatively, set a comma-separated list of asset names to enable only
+    # a specific subset (selective activation), e.g.:
+    #   platform.kubevirt.io/autopilot: "swap-enable,psi-enable,node-health-check"
+    # All existing opt-in logic (conditions, hardware detection, feature gates,
+    # CRD presence) still applies on top of the allowlist in both modes.
     platform.kubevirt.io/autopilot: "true"
 spec:
   featureGates:
