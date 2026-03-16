@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -510,4 +511,116 @@ func newQuantity(value int64) *resource.Quantity {
 	q := resource.Quantity{}
 	q.Set(value)
 	return &q
+}
+
+// applyAllowlistFilter mirrors the two-step filter used at the top of reconcileAssets:
+//  1. assets with reconcile_order == 0 (hco-golden-config) are always excluded
+//  2. when allowlist is non-nil, only assets whose name appears in the set pass
+//
+// CRD availability and condition evaluation are NOT applied here; they are covered
+// by the CRD-checker unit tests and the integration test suite.
+func applyAllowlistFilter(r *PlatformReconciler, allowlist map[string]bool) map[string]bool {
+	passed := make(map[string]bool)
+	for _, asset := range r.registry.ListAssetsByReconcileOrder() {
+		if asset.ReconcileOrder == 0 {
+			continue
+		}
+		if allowlist != nil && !allowlist[asset.Name] {
+			continue
+		}
+		passed[asset.Name] = true
+	}
+	return passed
+}
+
+// checkAllowlistResults asserts that every name in wantIn is present in passed and
+// every name in wantOut is absent, reporting failures via t.
+func checkAllowlistResults(t *testing.T, annotation string, passed map[string]bool, wantIn, wantOut []string) {
+	t.Helper()
+	for _, name := range wantIn {
+		if !passed[name] {
+			t.Errorf("asset %q should pass the allowlist for annotation %q, but did not", name, annotation)
+		}
+	}
+	for _, name := range wantOut {
+		if passed[name] {
+			t.Errorf("asset %q should NOT pass the allowlist for annotation %q, but did", name, annotation)
+		}
+	}
+}
+
+// TestAssetSelectionWithAutopilotAnnotation verifies that the allowlist derived
+// from the platform.kubevirt.io/autopilot annotation correctly drives which assets
+// the controller considers for reconciliation.
+func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	reconciler, err := NewPlatformReconciler(fakeClient, fakeClient, "test-namespace")
+	if err != nil {
+		t.Fatalf("NewPlatformReconciler() error = %v", err)
+	}
+
+	tests := []struct {
+		name               string
+		annotationValue    string
+		wantInAllowlist    []string
+		wantNotInAllowlist []string
+	}{
+		{
+			name:               "annotation=true passes all non-HCO assets through allowlist",
+			annotationValue:    "true",
+			wantInAllowlist:    []string{"swap-enable", "psi-enable", "prometheus-alerts"},
+			wantNotInAllowlist: []string{"hco-golden-config"}, // always excluded (reconcile_order=0)
+		},
+		{
+			name:            "annotation=swap-enable selects only swap-enable",
+			annotationValue: "swap-enable",
+			wantInAllowlist: []string{"swap-enable"},
+			wantNotInAllowlist: []string{
+				"hco-golden-config", "prometheus-alerts", "psi-enable",
+				"kubelet-perf-settings", "node-health-check", "descheduler-loadaware",
+				"pci-passthrough", "numa-topology", "kubelet-cpu-manager",
+				"mtv-operator", "metallb-operator", "observability-operator",
+			},
+		},
+		{
+			name:            "annotation with multiple assets selects exactly those assets",
+			annotationValue: "swap-enable,psi-enable",
+			wantInAllowlist: []string{"swap-enable", "psi-enable"},
+			wantNotInAllowlist: []string{
+				"hco-golden-config", "prometheus-alerts",
+				"kubelet-perf-settings", "node-health-check", "descheduler-loadaware",
+			},
+		},
+		{
+			name:               "annotation with unknown asset name selects nothing",
+			annotationValue:    "non-existent-asset",
+			wantInAllowlist:    []string{},
+			wantNotInAllowlist: []string{"hco-golden-config", "swap-enable", "prometheus-alerts"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hco := &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"annotations": map[string]interface{}{
+							overrides.AnnotationAutopilotEnabled: tt.annotationValue,
+						},
+					},
+				},
+			}
+
+			allowlist, enabled := overrides.ParseAutopilotScope(hco)
+			if !enabled {
+				t.Fatalf("autopilot should be enabled for annotation value %q", tt.annotationValue)
+			}
+
+			passed := applyAllowlistFilter(reconciler, allowlist)
+			checkAllowlistResults(t, tt.annotationValue, passed, tt.wantInAllowlist, tt.wantNotInAllowlist)
+		})
+	}
 }
