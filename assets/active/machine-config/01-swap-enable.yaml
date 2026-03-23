@@ -90,6 +90,32 @@ spec:
           WantedBy=multi-user.target
         enabled: true
         name: kubevirt-io-latency-setup.service
+      - contents: |
+          [Unit]
+          Description=Remove legacy OCI hook configuration
+          ConditionPathExists=/run/containers/oci/hooks.d/swap-for-burstable.json
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c "rm -f /run/containers/oci/hooks.d/swap-for-burstable.json"
+
+          [Install]
+          RequiredBy=kubelet-dependencies.target
+        enabled: true
+        name: remove-swap-for-burstable-hook.service
+      - contents: |
+          [Unit]
+          Description=Remove legacy OCI hook swap script
+          ConditionPathExists=/opt/oci-hook-swap.sh
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c "rm -f /opt/oci-hook-swap.sh"
+
+          [Install]
+          RequiredBy=kubelet-dependencies.target
+        enabled: true
+        name: remove-oci-hook-swap.service
       - dropins:
           - contents: |
               [Slice]
