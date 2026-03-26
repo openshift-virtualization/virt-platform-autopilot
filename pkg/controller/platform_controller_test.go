@@ -515,7 +515,7 @@ func newQuantity(value int64) *resource.Quantity {
 
 // applyAllowlistFilter mirrors the two-step filter used at the top of reconcileAssets:
 //  1. assets with reconcile_order == 0 (hco-golden-config) are always excluded
-//  2. when allowlist is non-nil, only assets whose name appears in the set pass
+//  2. when allowlist is non-nil, only assets whose name or group appears in the set pass
 //
 // CRD availability and condition evaluation are NOT applied here; they are covered
 // by the CRD-checker unit tests and the integration test suite.
@@ -525,7 +525,7 @@ func applyAllowlistFilter(r *PlatformReconciler, allowlist map[string]bool) map[
 		if asset.ReconcileOrder == 0 {
 			continue
 		}
-		if allowlist != nil && !allowlist[asset.Name] {
+		if !isInAllowlist(&asset, allowlist) {
 			continue
 		}
 		passed[asset.Name] = true
@@ -571,7 +571,7 @@ func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
 		{
 			name:               "annotation=true passes all non-HCO assets through allowlist",
 			annotationValue:    "true",
-			wantInAllowlist:    []string{"swap-enable", "psi-enable", "prometheus-alerts"},
+			wantInAllowlist:    []string{"swap-enable", "descheduler-loadaware", "psi-enable", "prometheus-alerts"},
 			wantNotInAllowlist: []string{"hco-golden-config"}, // always excluded (reconcile_order=0)
 		},
 		{
@@ -581,17 +581,17 @@ func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
 			wantNotInAllowlist: []string{
 				"hco-golden-config", "prometheus-alerts", "psi-enable",
 				"kubelet-perf-settings", "node-health-check", "descheduler-loadaware",
-				"pci-passthrough", "numa-topology", "kubelet-cpu-manager",
+				"pci-passthrough", "kubelet-cpu-manager",
 				"mtv-operator", "metallb-operator", "observability-operator",
 			},
 		},
 		{
-			name:            "annotation with multiple assets selects exactly those assets",
-			annotationValue: "swap-enable,psi-enable",
-			wantInAllowlist: []string{"swap-enable", "psi-enable"},
+			name:            "annotation=descheduler-loadaware selects descheduler and psi-enable via group",
+			annotationValue: "descheduler-loadaware",
+			wantInAllowlist: []string{"descheduler-loadaware", "psi-enable"},
 			wantNotInAllowlist: []string{
 				"hco-golden-config", "prometheus-alerts",
-				"kubelet-perf-settings", "node-health-check", "descheduler-loadaware",
+				"kubelet-perf-settings", "node-health-check", "swap-enable",
 			},
 		},
 		{

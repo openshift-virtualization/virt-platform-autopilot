@@ -5,7 +5,9 @@ metadata:
 spec:
   kubeletConfig:
     # CPU Manager for pinned workloads
+    # according to https://access.redhat.com/articles/6994974
     cpuManagerPolicy: static
+    # according to https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html/virtualization/postinstallation-configuration#virt-CPU-manager-policy_virt-perf-optimization
     cpuManagerPolicyOptions:
       full-pcpus-only: "true"
     cpuManagerReconcilePeriod: 5s
@@ -19,6 +21,7 @@ spec:
     # Memory Manager for static memory allocation (required for VM pinning)
     memoryManagerPolicy: Static
     # Reserved memory for NUMA node 0 (adjust based on host size)
+    # according to https://access.redhat.com/articles/6994974
     reservedMemory:
       - numaNode: 0
         limits:

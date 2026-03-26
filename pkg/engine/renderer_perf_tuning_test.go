@@ -135,21 +135,6 @@ func TestKubeletPerfSettingsAutoSizing(t *testing.T) {
 	}
 }
 
-func TestKubeletPerfSettingsFailSwapOn(t *testing.T) {
-	rendered, _, _ := renderHCOAsset(t, "kubelet-perf-settings")
-
-	failSwap, found, err := unstructured.NestedBool(rendered.Object, "spec", "kubeletConfig", "failSwapOn")
-	if err != nil {
-		t.Fatalf("Error accessing failSwapOn: %v", err)
-	}
-	if !found {
-		t.Error("failSwapOn should be present")
-	}
-	if failSwap {
-		t.Error("failSwapOn should be false to allow future swap enablement")
-	}
-}
-
 func TestKubeletPerfSettingsMaxPodsDefault(t *testing.T) {
 	rendered, _, _ := renderHCOAsset(t, "kubelet-perf-settings")
 

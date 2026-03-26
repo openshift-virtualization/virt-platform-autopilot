@@ -66,31 +66,39 @@ Only the named assets are considered for reconciliation. All other assets — in
 
 ```yaml
 annotations:
-  platform.kubevirt.io/autopilot: "swap-enable,psi-enable,node-health-check"
+  platform.kubevirt.io/autopilot: "swap-enable,descheduler-loadaware,node-health-check"
 ```
 
 ```bash
 kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
-  "platform.kubevirt.io/autopilot=swap-enable,psi-enable,node-health-check"
+  "platform.kubevirt.io/autopilot=swap-enable,descheduler-loadaware,node-health-check"
 ```
 
 Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The current set includes:
 
-| Asset name | Component | Notes |
-|---|---|---|
-| `hco-golden-config` | HyperConverged | Applied first; omitting it skips golden config |
-| `prometheus-alerts` | PrometheusRule | Soft dependency on Prometheus Operator CRD |
-| `swap-enable` | MachineConfig | Always-on baseline |
-| `psi-enable` | MachineConfig | Always-on baseline |
-| `pci-passthrough` | MachineConfig | Opt-in: hardware + annotation condition |
-| `numa-topology` | MachineConfig | Opt-in: hardware + annotation condition |
-| `kubelet-perf-settings` | KubeletConfig | Always-on baseline |
-| `kubelet-cpu-manager` | KubeletConfig | Opt-in: CPUManager feature gate |
-| `node-health-check` | NodeHealthCheck | Always-on baseline |
-| `descheduler-loadaware` | KubeDescheduler | Soft dependency on Descheduler CRD |
-| `mtv-operator` | ForkliftController | Opt-in: annotation condition |
-| `metallb-operator` | MetalLB | Opt-in: annotation condition |
-| `observability-operator` | UIPlugin | Opt-in: annotation condition |
+| Asset name | Group | Component | Notes |
+|---|---|---|---|
+| `hco-golden-config` | | HyperConverged | Applied first; omitting it skips golden config |
+| `prometheus-alerts` | | PrometheusRule | Soft dependency on Prometheus Operator CRD |
+| `swap-enable` | | MachineConfig | Always-on baseline |
+| `psi-enable` | `descheduler-loadaware` | MachineConfig | Gate CRD: KubeDescheduler; grouped with `descheduler-loadaware` for allowlist matching |
+| `pci-passthrough` | | MachineConfig | Opt-in: hardware + annotation condition |
+| `kubelet-perf-settings` | | KubeletConfig | Always-on baseline |
+| `kubelet-cpu-manager` | | KubeletConfig | Opt-in: CPUManager feature gate |
+| `node-health-check` | | NodeHealthCheck | Always-on baseline |
+| `descheduler-loadaware` | | KubeDescheduler | Soft dependency on KubeDescheduler CRD |
+| `mtv-operator` | | ForkliftController | Opt-in: annotation condition |
+| `metallb-operator` | | MetalLB | Opt-in: annotation condition |
+| `observability-operator` | | UIPlugin | Opt-in: annotation condition |
+
+The `group` field enables **allowlist grouping**: listing `descheduler-loadaware` in the annotation activates both the `KubeDescheduler` asset (by name) and the `psi-enable` MachineConfig (by group). For example:
+
+```bash
+kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
+  "platform.kubevirt.io/autopilot=hco-golden-config,descheduler-loadaware"
+```
+
+This deploys the HCO golden config, the KubeDescheduler, **and** the PSI MachineConfig (via its group membership), but nothing else.
 
 **When the annotation is absent or empty** the reconciler logs a message and returns immediately, re-queuing after the standard 5-minute interval:
 
@@ -128,9 +136,12 @@ Critical baseline configurations applied to all clusters:
 
 Features activated based on conditions (annotations, hardware detection, feature gates):
 
-- **KubeDescheduler**: LoadAware profile for intelligent workload balancing
-  - Activated via `platform.kubevirt.io/enable-descheduler: "true"` annotation
+- **KubeDescheduler** (`descheduler-loadaware`): LoadAware profile for intelligent workload balancing
+  - Soft dependency on the KubeDescheduler CRD; skipped if the operator is not installed
   - Balances VM workloads across cluster nodes
+- **PSI MachineConfig** (`psi-enable`): Enables kernel Pressure Stall Information for load-aware descheduling
+  - Gate CRD: KubeDescheduler — only deployed when the descheduler operator is present
+  - Grouped under `descheduler-loadaware` for allowlist matching
 - **CPU Manager**: CPU pinning for guaranteed workloads
   - Activated via feature gate when QoS requirements detected
 
@@ -481,46 +492,59 @@ The metadata catalog defines all managed assets and their properties:
 ```yaml
 assets:
   - name: hco-golden-config
-    file: hco/hyperconverged.yaml
-    phase: 1
+    path: active/hco/golden-config.yaml.tpl
+    phase: 0
     install: always
-    component: core
+    component: HyperConverged
     reconcile_order: 0  # HCO must be first
 
-  - name: kubevirt-swap-optimization
-    file: machine-config/99-kubevirt-swap.yaml
+  - name: swap-enable
+    path: active/machine-config/01-swap-enable.yaml
     phase: 1
     install: always
-    component: machine-config
-    reconcile_order: 10
+    component: MachineConfig
+    reconcile_order: 1
+
+  - name: psi-enable
+    group: descheduler-loadaware        # included in allowlist when "descheduler-loadaware" is listed
+    gate_crd: kubedeschedulers.operator.openshift.io  # skipped if KubeDescheduler CRD is absent
+    path: active/machine-config/04-psi-enable.yaml
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
 
   - name: descheduler-loadaware
-    file: descheduler/kubedescheduler.yaml
+    path: active/descheduler/recommended.yaml.tpl
     phase: 1
-    install: opt-in
-    component: scheduling
-    reconcile_order: 20
-    conditions:
-      annotations:
-        - key: platform.kubevirt.io/enable-descheduler
-          value: "true"
+    install: always
+    component: KubeDescheduler
+    reconcile_order: 1
+    conditions: []
 ```
 
 **Metadata fields:**
 
-- `name`: Unique asset identifier
-- `file`: Template file path relative to `assets/active/`
-- `phase`: Rollout phase (1=GA, 2=Tech Preview, 3=Experimental)
-- `install`: `always` or `opt-in` (requires condition)
-- `component`: Logical grouping for organization
-- `reconcile_order`: Processing order (lower = earlier)
-- `conditions`: Activation conditions (annotations, hardware, feature gates)
+- `name`: Unique asset identifier (used by the debug endpoint and the opt-in allowlist)
+- `group`: Optional group name for allowlist matching — an asset is included if its `name` **or** its `group` appears in the allowlist
+- `path`: Template file path relative to `assets/`
+- `gate_crd`: Optional additional CRD that must be present at runtime (on top of the auto-detected `RequiredCRD`); also registered with the CRD watch handler so installs/removals trigger re-reconciliation
+- `phase`: Rollout phase (0=HCO bootstrap, 1=standard)
+- `install`: `always` or `opt-in` (opt-in without conditions is never applied)
+- `component`: Kubernetes Kind of the primary managed resource
+- `reconcile_order`: Processing order within a phase (lower = earlier)
+- `conditions`: Activation conditions (annotations, hardware detection, feature gates) — all must be satisfied (AND logic)
 
 ### Soft Dependencies
 
 The autopilot gracefully handles missing runtime dependencies without raising errors or blocking other assets.
 
-**Missing CRD** — if the CRD required by an asset is not installed, the asset is skipped before rendering:
+**Missing CRD** — if the CRD required by an asset is not installed, the asset is skipped before rendering. Two mechanisms declare CRD dependencies:
+
+- **`RequiredCRD`** (auto-detected): derived from the `apiVersion`/`kind` of the resource in the template. Guards against the operator not being installed.
+- **`gate_crd`** (explicit): set in `metadata.yaml`; declares an additional CRD that must be present. Used when an asset's own CRD is always available (e.g. `MachineConfig`) but deployment should be gated on another operator (e.g. the PSI MachineConfig requires the KubeDescheduler CRD).
+
+In both cases:
 - No error is raised
 - Reconciliation continues with other assets
 - Asset is automatically applied when the CRD becomes available (CRD watch triggers re-reconciliation)

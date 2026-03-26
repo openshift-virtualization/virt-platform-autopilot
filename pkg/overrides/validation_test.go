@@ -196,7 +196,7 @@ func TestIsAutopilotEnabled(t *testing.T) {
 				Object: map[string]interface{}{
 					"metadata": map[string]interface{}{
 						"annotations": map[string]interface{}{
-							AnnotationAutopilotEnabled: "swap-enable,psi-enable",
+							AnnotationAutopilotEnabled: "swap-enable,descheduler-loadaware",
 						},
 					},
 				},
@@ -279,8 +279,8 @@ func TestParseAutopilotScope(t *testing.T) {
 		{name: "annotation empty", hco: hcoWith(""), wantEnabled: false},
 		{name: "annotation true", hco: hcoWith("true"), wantEnabled: true, wantNilList: true},
 		{name: "single asset name", hco: hcoWith("swap-enable"), wantEnabled: true, wantList: []string{"swap-enable"}},
-		{name: "multiple asset names", hco: hcoWith("swap-enable,psi-enable,node-health-check"), wantEnabled: true, wantList: []string{"swap-enable", "psi-enable", "node-health-check"}},
-		{name: "whitespace trimmed", hco: hcoWith("  swap-enable , psi-enable  "), wantEnabled: true, wantList: []string{"swap-enable", "psi-enable"}},
+		{name: "multiple asset names", hco: hcoWith("swap-enable,descheduler-loadaware,node-health-check"), wantEnabled: true, wantList: []string{"swap-enable", "descheduler-loadaware", "node-health-check"}},
+		{name: "whitespace trimmed", hco: hcoWith("  swap-enable , descheduler-loadaware  "), wantEnabled: true, wantList: []string{"swap-enable", "descheduler-loadaware"}},
 		{name: "hco-golden-config explicit", hco: hcoWith("hco-golden-config,swap-enable"), wantEnabled: true, wantList: []string{"hco-golden-config", "swap-enable"}},
 	}
 

@@ -468,6 +468,26 @@ func testAnnotationConditions(ctx context.Context, t *testing.T) {
 	}
 }
 
+// TestNoDuplicateAssetNames validates that all assets in metadata.yaml have unique names.
+// Duplicate names cause GetAsset to silently return only the first match, breaking
+// the debug endpoint and making catalog entries unreachable by name.
+func TestNoDuplicateAssetNames(t *testing.T) {
+	loader := NewLoader()
+	registry, err := NewRegistry(loader)
+	if err != nil {
+		t.Fatalf("Failed to create registry: %v", err)
+	}
+
+	seen := make(map[string]int) // name -> first index
+	for i, asset := range registry.catalog.Assets {
+		if prev, dup := seen[asset.Name]; dup {
+			t.Errorf("Duplicate asset name %q at index %d (first seen at index %d)", asset.Name, i, prev)
+		} else {
+			seen[asset.Name] = i
+		}
+	}
+}
+
 // TestOptInAssetsHaveConditions validates that all opt-in assets in metadata.yaml
 // have at least one condition. Opt-in assets without conditions will never be applied
 // (see pkg/assets/registry.go:140-142), which is likely a configuration error.
