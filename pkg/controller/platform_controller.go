@@ -240,6 +240,52 @@ func (r *PlatformReconciler) reconcileHCO(ctx context.Context, currentHCO *unstr
 	return nil
 }
 
+// isInAllowlist reports whether the asset passes the allowlist filter.
+// An asset is included if allowlist is nil (all assets), or if its name or group appears in the allowlist.
+func isInAllowlist(asset *assets.AssetMetadata, allowlist map[string]bool) bool {
+	if allowlist == nil {
+		return true
+	}
+	if allowlist[asset.Name] {
+		return true
+	}
+	return asset.Group != "" && allowlist[asset.Group]
+}
+
+// assetCRDsAvailable checks both the auto-detected RequiredCRD and the explicit GateCRD.
+// Returns false (skip) if either CRD is absent or cannot be checked.
+func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
+	logger := log.FromContext(ctx)
+
+	for _, entry := range []struct {
+		crd  string
+		desc string
+	}{
+		{asset.RequiredCRD, "CRD not installed, skipping asset (soft dependency)"},
+		{asset.GateCRD, "Gate CRD not installed, skipping asset"},
+	} {
+		if entry.crd == "" {
+			continue
+		}
+		installed, err := r.crdChecker.IsCRDInstalled(ctx, entry.crd)
+		if err != nil {
+			logger.Error(err, "Failed to check CRD availability, skipping asset",
+				"asset", asset.Name,
+				"crd", entry.crd,
+			)
+			return false
+		}
+		if !installed {
+			logger.V(1).Info(entry.desc, "asset", asset.Name, "crd", entry.crd)
+			if r.eventRecorder != nil {
+				r.eventRecorder.CRDMissing(renderCtx.HCO, asset.Name, entry.crd)
+			}
+			return false
+		}
+	}
+	return true
+}
+
 // reconcileAssets reconciles all non-HCO assets.
 // allowlist is nil when all assets are enabled, or a set of asset names to restrict reconciliation.
 // The allowlist is an additional filter on top of the existing opt-in/conditions logic.
@@ -259,33 +305,12 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 			continue
 		}
 
-		// Apply allowlist filter: when an explicit set of asset names is specified,
-		// only reconcile assets that appear in it. All other opt-in logic still applies.
-		if allowlist != nil && !allowlist[asset.Name] {
+		if !isInAllowlist(asset, allowlist) {
 			continue
 		}
 
-		// Check if the asset's required CRD is installed (soft dependency handling)
-		if asset.RequiredCRD != "" {
-			installed, err := r.crdChecker.IsCRDInstalled(ctx, asset.RequiredCRD)
-			if err != nil {
-				logger.Error(err, "Failed to check CRD availability, skipping asset",
-					"asset", asset.Name,
-					"crd", asset.RequiredCRD,
-				)
-				continue
-			}
-
-			if !installed {
-				logger.V(1).Info("CRD not installed, skipping asset (soft dependency)",
-					"asset", asset.Name,
-					"crd", asset.RequiredCRD,
-				)
-				if r.eventRecorder != nil {
-					r.eventRecorder.CRDMissing(renderCtx.HCO, asset.Name, asset.RequiredCRD)
-				}
-				continue
-			}
+		if !r.assetCRDsAvailable(ctx, asset, renderCtx) {
+			continue
 		}
 
 		// Check if asset should be applied based on conditions

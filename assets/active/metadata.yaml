@@ -42,20 +42,9 @@ assets:
       - type: hardware-detection
         detector: pciDevicesPresent
 
-  - name: numa-topology
-    path: active/machine-config/03-numa.yaml.tpl
-    phase: 1
-    install: opt-in
-    component: MachineConfig
-    reconcile_order: 1
-    conditions:
-      - type: annotation
-        key: platform.kubevirt.io/openshift
-        value: "true"
-      - type: hardware-detection
-        detector: numaNodesPresent
-
   - name: psi-enable
+    group: descheduler-loadaware
+    gate_crd: kubedeschedulers.operator.openshift.io
     path: active/machine-config/04-psi-enable.yaml
     phase: 1
     install: always

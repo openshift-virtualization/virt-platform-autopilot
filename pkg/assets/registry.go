@@ -55,6 +55,8 @@ type AssetCondition struct {
 // AssetMetadata defines the metadata for a managed asset
 type AssetMetadata struct {
 	Name            string                     `json:"name"`
+	Group           string                     `json:"group,omitempty"`    // Optional group for allowlist matching (e.g. "descheduler-loadaware")
+	GateCRD         string                     `json:"gate_crd,omitempty"` // Optional additional CRD that must be present (on top of RequiredCRD)
 	Path            string                     `json:"path"`
 	Phase           int                        `json:"phase"`
 	Install         InstallMode                `json:"install"`
@@ -177,6 +179,9 @@ func (r *Registry) ShouldApply(ctx context.Context, asset *AssetMetadata, evalCo
 func (r *Registry) IsManagedCRD(crdName string) bool {
 	for i := range r.catalog.Assets {
 		if r.catalog.Assets[i].RequiredCRD == crdName {
+			return true
+		}
+		if r.catalog.Assets[i].GateCRD != "" && r.catalog.Assets[i].GateCRD == crdName {
 			return true
 		}
 	}

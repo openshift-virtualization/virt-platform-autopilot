@@ -10,6 +10,7 @@ spec:
   # Opinionated defaults for production virtualization workloads
 
   # Control plane tuning - HighBurst for better control plane performance (CNV-69442)
+  # according to https://access.redhat.com/articles/6994974
   tuningPolicy: highBurst
 
   # Note: VM-level performance defaults (networkInterfaceMultiqueue, ioThreadsPolicy, etc.)
