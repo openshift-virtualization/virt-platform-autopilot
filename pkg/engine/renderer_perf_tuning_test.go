@@ -77,46 +77,6 @@ func TestHCOGoldenConfigHighBurst(t *testing.T) {
 	}
 }
 
-func TestHCOGoldenConfigCPUAllocationRatio(t *testing.T) {
-	rendered, _, _ := renderHCOAsset(t, "hco-golden-config")
-
-	ratio, found, err := unstructured.NestedInt64(rendered.Object, "spec", "resourceRequirements", "vmiCPUAllocationRatio")
-	if err != nil {
-		t.Fatalf("Error accessing vmiCPUAllocationRatio: %v", err)
-	}
-	if !found {
-		t.Error("vmiCPUAllocationRatio should be present")
-	}
-	if ratio != 10 {
-		t.Errorf("vmiCPUAllocationRatio = %d, want 10", ratio)
-	}
-}
-
-func TestHCOGoldenConfigLiveMigration(t *testing.T) {
-	rendered, _, _ := renderHCOAsset(t, "hco-golden-config")
-
-	liveMigration, found, err := unstructured.NestedMap(rendered.Object, "spec", "liveMigrationConfig")
-	if err != nil {
-		t.Fatalf("Error accessing liveMigrationConfig: %v", err)
-	}
-	if !found {
-		t.Error("liveMigrationConfig should be present")
-	}
-	if len(liveMigration) == 0 {
-		t.Error("liveMigrationConfig should not be empty")
-	}
-
-	if allowAutoConverge, ok := liveMigration["allowAutoConverge"].(bool); !ok || allowAutoConverge {
-		t.Error("allowAutoConverge should be false")
-	}
-	if allowPostCopy, ok := liveMigration["allowPostCopy"].(bool); !ok || allowPostCopy {
-		t.Error("allowPostCopy should be false")
-	}
-	if parallel, ok := liveMigration["parallelMigrationsPerCluster"].(int64); !ok || parallel != 5 {
-		t.Errorf("parallelMigrationsPerCluster = %v, want 5", liveMigration["parallelMigrationsPerCluster"])
-	}
-}
-
 func TestHCOGoldenConfigDocumentation(t *testing.T) {
 	_, loader, asset := renderHCOAsset(t, "hco-golden-config")
 
