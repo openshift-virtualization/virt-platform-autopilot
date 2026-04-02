@@ -34,6 +34,7 @@ Renders all assets based on the current HCO configuration.
 **Query Parameters:**
 - `format` - Output format: `yaml` (default) or `json`
 - `show-excluded` - Include excluded/filtered assets: `true` or `false` (default)
+- `only-installed` - Skip assets whose CRD is not installed in the cluster: `true` or `false` (default)
 
 **Examples:**
 ```bash
@@ -45,6 +46,9 @@ curl http://localhost:8081/debug/render?format=json&show-excluded=true
 
 # Pretty-print JSON
 curl http://localhost:8081/debug/render?format=json | jq '.'
+
+# Diff rendered assets against live cluster (skips assets with missing CRDs)
+curl 'http://localhost:8081/debug/render?only-installed=true' | oc diff -f -
 ```
 
 **Response (YAML format):**

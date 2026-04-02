@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -77,6 +78,7 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 		format = "yaml"
 	}
 	showExcluded := r.URL.Query().Get("show-excluded") == "true"
+	onlyInstalled := r.URL.Query().Get("only-installed") == "true"
 
 	renderCtx, err := s.getRenderContext(ctx)
 	if err != nil {
@@ -85,6 +87,16 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) {
 	}
 
 	outputs := pkgrender.BuildOutputs(s.registry.ListAssetsByReconcileOrder(), s.renderer, renderCtx, showExcluded)
+
+	if onlyInstalled {
+		installedGVKs, err := s.getInstalledCRDGroups(ctx)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to list CRDs: %v", err), http.StatusInternalServerError)
+			return
+		}
+		outputs = filterByInstalledCRDs(outputs, installedGVKs)
+	}
+
 	s.writeRenderResponse(w, outputs, format)
 }
 
@@ -341,6 +353,44 @@ func (s *Server) getConditionDetails(assetMeta *assets.AssetMetadata, renderCtx 
 	}
 
 	return details
+}
+
+// getInstalledCRDGroups returns a set of "group/kind" keys for all CRDs currently
+// installed in the cluster. The CRD list is served from the controller cache.
+func (s *Server) getInstalledCRDGroups(ctx context.Context) (map[string]bool, error) {
+	crdList := &apiextensionsv1.CustomResourceDefinitionList{}
+	if err := s.client.List(ctx, crdList); err != nil {
+		return nil, fmt.Errorf("failed to list CRDs: %w", err)
+	}
+	installed := make(map[string]bool, len(crdList.Items))
+	for _, crd := range crdList.Items {
+		installed[crd.Spec.Group+"/"+crd.Spec.Names.Kind] = true
+	}
+	return installed, nil
+}
+
+// filterByInstalledCRDs removes INCLUDED outputs whose API group requires a CRD
+// that is not present in the installed set. Core resources (group == "") are
+// always kept. Non-INCLUDED outputs (EXCLUDED, FILTERED, ERROR) are always kept.
+func filterByInstalledCRDs(outputs []pkgrender.RenderOutput, installed map[string]bool) []pkgrender.RenderOutput {
+	filtered := make([]pkgrender.RenderOutput, 0, len(outputs))
+	for _, output := range outputs {
+		if output.Status != "INCLUDED" || output.Object == nil {
+			filtered = append(filtered, output)
+			continue
+		}
+		group := output.Object.GroupVersionKind().Group
+		if group == "" {
+			// Core API group (e.g. ConfigMap, Pod) — always installed.
+			filtered = append(filtered, output)
+			continue
+		}
+		kind := output.Object.GroupVersionKind().Kind
+		if installed[group+"/"+kind] {
+			filtered = append(filtered, output)
+		}
+	}
+	return filtered
 }
 
 // writeRenderResponse writes RenderOutput items in the requested format.
