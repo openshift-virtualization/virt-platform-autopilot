@@ -15,6 +15,7 @@ jobs:
   build-push-multi-arch:
     name: Build and push multi-arch operator image
     runs-on: ubuntu-latest
+    if: github.repository == 'openshift-virtualization/virt-platform-autopilot'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
