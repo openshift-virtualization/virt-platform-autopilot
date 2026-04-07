@@ -10,6 +10,7 @@ jobs:
   update-crds:
     name: Check and update CRDs from upstream
     runs-on: ubuntu-latest
+    if: github.repository == 'openshift-virtualization/virt-platform-autopilot'
     permissions:
       contents: write
       pull-requests: write
@@ -50,8 +51,51 @@ jobs:
             } >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: Create branch and open PR
+      - name: Check for existing open CRD update PR
         if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true'
+        id: existing_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing_branch=$(gh pr list --label "automated,crds" --state open --json headRefName --jq '.[0].headRefName // ""')
+          if [ -n "$existing_branch" ]; then
+            echo "branch=$existing_branch" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Update existing PR branch
+        if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true' && steps.existing_pr.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # The updated CRDs are in the working tree but not committed.
+          # Copy them aside, reset the working tree, switch to the existing PR
+          # branch, then restore so we can commit the freshest upstream state.
+          tmpdir=$(mktemp -d)
+          cp -r assets/crds/. "$tmpdir/"
+          git checkout -- assets/crds/
+
+          git fetch origin "${{ steps.existing_pr.outputs.branch }}"
+          git checkout "${{ steps.existing_pr.outputs.branch }}"
+
+          cp -r "$tmpdir/." assets/crds/
+          rm -rf "$tmpdir"
+
+          changed_files=$(git diff --name-only -- 'assets/crds/' | sort)
+          if [ -z "$changed_files" ]; then
+            echo "Existing PR already contains all current CRD changes, nothing to add."
+            exit 0
+          fi
+          commit_body=$(echo "$changed_files" | sed 's/^/- /')
+
+          git add assets/crds/
+          printf 'chore: update CRDs from upstream\n\nUpdated CRD files:\n%s\n' "$commit_body" | git commit -F -
+          git push origin "${{ steps.existing_pr.outputs.branch }}"
+
+      - name: Create branch and open PR
+        if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true' && steps.existing_pr.outputs.branch == ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHANGED_LIST: ${{ steps.changes.outputs.changed_list }}
