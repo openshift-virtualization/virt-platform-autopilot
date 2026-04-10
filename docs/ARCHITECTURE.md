@@ -78,7 +78,6 @@ Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The
 
 | Asset name | Group | Component | Notes |
 |---|---|---|---|
-| `hco-golden-config` | | HyperConverged | Applied first; omitting it skips golden config |
 | `prometheus-alerts` | | PrometheusRule | Soft dependency on Prometheus Operator CRD |
 | `swap-enable` | | MachineConfig | Always-on baseline |
 | `psi-enable` | `descheduler-loadaware` | MachineConfig | Gate CRD: KubeDescheduler; grouped with `descheduler-loadaware` for allowlist matching |
@@ -169,7 +168,7 @@ The autopilot follows a two-stage reconciliation process:
 
 The HyperConverged object (HCO) serves a dual role:
 
-1. **Managed resource**: The autopilot applies opinionated golden configurations to HCO
+1. **Managed resource**: The autopilot may apply configurations to HCO
 2. **Configuration source**: Other assets read HCO's effective state to inform their rendering
 
 This creates a dependency: HCO must be reconciled first so other assets can access its current state.
