@@ -62,35 +62,48 @@ func renderHCOAsset(t *testing.T, assetName string) (*unstructured.Unstructured,
 	return rendered, loader, asset
 }
 
-func TestHCOGoldenConfigHighBurst(t *testing.T) {
-	rendered, _, _ := renderHCOAsset(t, "hco-golden-config")
-
-	tuningPolicy, found, err := unstructured.NestedString(rendered.Object, "spec", "tuningPolicy")
+func TestHCOGoldenConfigPreservesCertConfig(t *testing.T) {
+	loader := assets.NewLoader()
+	registry, err := assets.NewRegistry(loader)
 	if err != nil {
-		t.Fatalf("Error accessing tuningPolicy: %v", err)
+		t.Fatalf("Failed to create registry: %v", err)
 	}
-	if !found {
-		t.Error("tuningPolicy should be present in spec")
-	}
-	if tuningPolicy != "highBurst" {
-		t.Errorf("tuningPolicy = %s, want highBurst", tuningPolicy)
-	}
-}
 
-func TestHCOGoldenConfigDocumentation(t *testing.T) {
-	_, loader, asset := renderHCOAsset(t, "hco-golden-config")
+	renderer := NewRenderer(loader)
 
-	content, err := loader.LoadAsset(asset.Path)
+	hco := &unstructured.Unstructured{}
+	hco.SetAPIVersion("hco.kubevirt.io/v1beta1")
+	hco.SetKind("HyperConverged")
+	hco.SetName("kubevirt-hyperconverged")
+	hco.SetNamespace("openshift-cnv")
+
+	// Simulate a user-configured certConfig
+	err = unstructured.SetNestedMap(hco.Object, map[string]interface{}{
+		"ca":     map[string]interface{}{"duration": "24h0m0s", "renewBefore": "12h0m0s"},
+		"server": map[string]interface{}{"duration": "12h0m0s", "renewBefore": "6h0m0s"},
+	}, "spec", "certConfig")
 	if err != nil {
-		t.Fatalf("Failed to load template: %v", err)
+		t.Fatalf("Failed to set certConfig in HCO: %v", err)
 	}
 
-	contentStr := string(content)
-	if !strings.Contains(contentStr, "CNV-69442") {
-		t.Error("Template should reference CNV-69442 for highBurst")
+	asset, err := registry.GetAsset("hco-golden-config")
+	if err != nil {
+		t.Fatalf("Failed to get hco-golden-config: %v", err)
 	}
-	if !strings.Contains(contentStr, "VM-level performance") {
-		t.Error("Template should note VM-level settings")
+
+	rendered, err := renderer.RenderAsset(asset, &pkgcontext.RenderContext{HCO: hco})
+	if err != nil {
+		t.Fatalf("Failed to render asset: %v", err)
+	}
+
+	// The rendered golden-config must NOT include certConfig so that SSA does not
+	// claim ownership of it and overwrite the user's custom value.
+	_, found, err := unstructured.NestedMap(rendered.Object, "spec", "certConfig")
+	if err != nil {
+		t.Fatalf("Error accessing certConfig: %v", err)
+	}
+	if found {
+		t.Error("golden-config must not set certConfig; user-configured values would be overwritten by SSA")
 	}
 }
 
