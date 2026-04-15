@@ -85,8 +85,8 @@ charts/*/charts/
 *.stackdump
 
 # Ignore collected CRDs (will be regenerated)
-internal/assets/crds/*.yaml
-!internal/assets/crds/README.md
+test/crds/*.yaml
+!test/crds/README.md
 
 # Debug files
 __debug_bin

@@ -32,7 +32,7 @@ const (
 // This simulates the scenario where CRDs are installed after startup
 // This function is idempotent - it's safe to call multiple times
 func InstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
-	crdDir := filepath.Join("..", "assets", "crds", string(crdSet))
+	crdDir := filepath.Join("crds", string(crdSet))
 
 	// Check if directory exists
 	if _, err := os.Stat(crdDir); os.IsNotExist(err) {
@@ -199,7 +199,7 @@ func waitForCRDDeletion(ctx context.Context, c client.Client, crdName string) er
 // This function is idempotent - it's safe to call multiple times
 // It waits for CRDs to be fully deleted before returning to avoid race conditions
 func UninstallCRDs(ctx context.Context, c client.Client, crdSet CRDSet) error {
-	crdDir := filepath.Join("..", "assets", "crds", string(crdSet))
+	crdDir := filepath.Join("crds", string(crdSet))
 	files, err := filepath.Glob(filepath.Join(crdDir, "*.yaml"))
 	if err != nil {
 		return fmt.Errorf("failed to list CRD files: %w", err)

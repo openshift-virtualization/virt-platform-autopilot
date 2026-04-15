@@ -18,5 +18,5 @@ package assets
 
 import "embed"
 
-//go:embed all:active all:crds all:tombstones
+//go:embed all:active all:tombstones
 var EmbeddedFS embed.FS

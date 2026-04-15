@@ -4,7 +4,7 @@ Automatically generates RBAC ClusterRole from asset templates.
 
 ## Overview
 
-The RBAC generator scans all asset files in `assets/` directory (excluding `assets/crds/`) and extracts the Kubernetes resource types (Group, Version, Kind) to automatically generate the required RBAC permissions in `config/rbac/role.yaml`.
+The RBAC generator scans all asset files in `assets/` directory and extracts the Kubernetes resource types (Group, Version, Kind) to automatically generate the required RBAC permissions in `config/rbac/role.yaml`.
 
 ## Usage
 
@@ -147,6 +147,6 @@ git diff config/rbac/role.yaml
 ```
 
 ### Missing permissions for a new resource type
-- Verify the asset file exists in `assets/` (not `assets/crds/`)
+- Verify the asset file exists in `assets/`
 - Check that the file has `.yaml` or `.yaml.tpl` extension
 - Run `make generate-rbac --dry-run` to see if the resource is detected
