@@ -26,6 +26,13 @@ ENVTEST_K8S_VERSION = 1.35.0
 ENVTEST = $(shell pwd)/bin/setup-envtest
 GINKGO = $(shell pwd)/bin/ginkgo
 
+# Tool versions derived from go.mod to stay in sync with the module dependency graph.
+# setup-envtest lives in a sub-module (tools/setup-envtest) that does not share the
+# parent module's vX.Y.Z tags. We use the branch reference (e.g. release-0.23) instead,
+# which is how the sub-module is published and what `go install @<branch>` resolves to.
+CONTROLLER_RUNTIME_BRANCH := $(shell grep 'sigs.k8s.io/controller-runtime ' go.mod | awk '{print $$2}' | sed 's/v\([0-9]*\.[0-9]*\)\..*/release-\1/')
+GINKGO_VERSION             := $(shell grep 'github.com/onsi/ginkgo/v2 ' go.mod | awk '{print $$2}')
+
 .PHONY: test-integration
 test-integration: envtest ginkgo ## Run integration tests with envtest
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(shell pwd)/bin -p path)" $(GINKGO) -v --trace ./test/
@@ -37,12 +44,12 @@ test-e2e: docker-build ## Run E2E tests on kind cluster
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary
 $(ENVTEST): $(LOCALBIN)
-	GOBIN=$(shell pwd)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	GOBIN=$(shell pwd)/bin go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(CONTROLLER_RUNTIME_BRANCH)
 
 .PHONY: ginkgo
 ginkgo: $(GINKGO) ## Download ginkgo locally if necessary
 $(GINKGO): $(LOCALBIN)
-	GOBIN=$(shell pwd)/bin go install github.com/onsi/ginkgo/v2/ginkgo@latest
+	GOBIN=$(shell pwd)/bin go install github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
