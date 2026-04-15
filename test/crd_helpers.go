@@ -26,6 +26,7 @@ const (
 	CRDSetOperators     CRDSet = "operators"     // MTV, MetalLB CRDs
 	CRDSetObservability CRDSet = "observability" // Cluster Monitoring Operator CRDs
 	CRDSetPrometheus    CRDSet = "prometheus"    // Prometheus CRDs
+	CRDSetTuned         CRDSet = "tuned"         // PerformanceProfile, Profile, Tuned CRDs
 )
 
 // InstallCRDs installs a CRD set dynamically during test execution

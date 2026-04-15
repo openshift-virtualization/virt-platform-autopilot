@@ -86,6 +86,7 @@ Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The
 | `kubelet-cpu-manager` | | KubeletConfig | Opt-in: CPUManager feature gate |
 | `node-health-check` | | NodeHealthCheck | Always-on baseline |
 | `descheduler-loadaware` | | KubeDescheduler | Soft dependency on KubeDescheduler CRD |
+| `tuned-default` | | Tuned | Always-on baseline; soft dependency on Tuned CRD |
 | `mtv-operator` | | ForkliftController | Opt-in: annotation condition |
 | `metallb-operator` | | MetalLB | Opt-in: annotation condition |
 | `observability-operator` | | UIPlugin | Opt-in: annotation condition |
