@@ -36,7 +36,7 @@ jobs:
         if: steps.verify.outputs.up_to_date == 'false'
         id: changes
         run: |
-          changed_files=$(git diff --name-only -- 'assets/crds/' | sort)
+          changed_files=$(git diff --name-only -- 'test/crds/' | sort)
           if [ -z "$changed_files" ]; then
             echo "has_changes=false" >> "${GITHUB_OUTPUT}"
           else
@@ -74,23 +74,23 @@ jobs:
           # Copy them aside, reset the working tree, switch to the existing PR
           # branch, then restore so we can commit the freshest upstream state.
           tmpdir=$(mktemp -d)
-          cp -r assets/crds/. "$tmpdir/"
-          git checkout -- assets/crds/
+          cp -r test/crds/. "$tmpdir/"
+          git checkout -- test/crds/
 
           git fetch origin "${{ steps.existing_pr.outputs.branch }}"
           git checkout "${{ steps.existing_pr.outputs.branch }}"
 
-          cp -r "$tmpdir/." assets/crds/
+          cp -r "$tmpdir/." test/crds/
           rm -rf "$tmpdir"
 
-          changed_files=$(git diff --name-only -- 'assets/crds/' | sort)
+          changed_files=$(git diff --name-only -- 'test/crds/' | sort)
           if [ -z "$changed_files" ]; then
             echo "Existing PR already contains all current CRD changes, nothing to add."
             exit 0
           fi
           commit_body=$(echo "$changed_files" | sed 's/^/- /')
 
-          git add assets/crds/
+          git add test/crds/
           printf 'chore: update CRDs from upstream\n\nUpdated CRD files:\n%s\n' "$commit_body" | git commit -F -
           git push origin "${{ steps.existing_pr.outputs.branch }}"
 
@@ -107,10 +107,10 @@ jobs:
           git checkout -b "$branch"
 
           # Build commit message with list of updated CRDs
-          changed_files=$(git diff --name-only -- 'assets/crds/' | sort)
+          changed_files=$(git diff --name-only -- 'test/crds/' | sort)
           commit_body=$(echo "$changed_files" | sed 's/^/- /')
 
-          git add assets/crds/
+          git add test/crds/
           printf 'chore: update CRDs from upstream\n\nUpdated CRD files:\n%s\n' "$commit_body" | git commit -F -
 
           git push origin "$branch"

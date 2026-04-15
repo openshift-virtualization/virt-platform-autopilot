@@ -94,7 +94,7 @@ create_namespace() {
 # Install HCO CRD (required for operator to start)
 install_hco_crd() {
     log_info "Installing HCO CRD"
-    kubectl apply --server-side --context "kind-$CLUSTER_NAME" -f assets/crds/kubevirt/hyperconverged-crd.yaml
+    kubectl apply --server-side --context "kind-$CLUSTER_NAME" -f test/crds/kubevirt/hyperconverged-crd.yaml
 
     # Wait for CRD to be established.
     # kubectl wait can fail immediately after apply if .status.conditions is still

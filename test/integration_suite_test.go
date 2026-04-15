@@ -59,7 +59,7 @@ var _ = BeforeSuite(func() {
 	// Tests can dynamically add more CRDs using InstallCRDs helper
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join("..", "assets", "crds", "kubevirt"),
+			filepath.Join("crds", "kubevirt"),
 		},
 		ErrorIfCRDPathMissing: true,
 		// AttachControlPlaneOutput: true, // Uncomment for debugging

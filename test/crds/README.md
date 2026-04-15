@@ -7,7 +7,7 @@ CRDs are automatically fetched from upstream repositories using `hack/update-crd
 ## Directory Structure
 
 ```
-assets/crds/
+test/crds/
 ├── kubevirt/          # KubeVirt ecosystem CRDs
 ├── openshift/         # OpenShift platform CRDs
 ├── remediation/       # Medik8s remediation CRDs
@@ -171,12 +171,12 @@ go test ./test/crd_test.go -v
 ```go
 testEnv = &envtest.Environment{
     CRDDirectoryPaths: []string{
-        filepath.Join("..", "assets", "crds", "kubevirt"),
-        filepath.Join("..", "assets", "crds", "openshift"),
-        filepath.Join("..", "assets", "crds", "remediation"),
-        filepath.Join("..", "assets", "crds", "operators"),
-        filepath.Join("..", "assets", "crds", "observability"),
-        filepath.Join("..", "assets", "crds", "oadp"),
+        filepath.Join("crds", "kubevirt"),
+        filepath.Join("crds", "openshift"),
+        filepath.Join("crds", "remediation"),
+        filepath.Join("crds", "operators"),
+        filepath.Join("crds", "observability"),
+        filepath.Join("crds", "oadp"),
     },
 }
 ```
@@ -184,12 +184,12 @@ testEnv = &envtest.Environment{
 ### Kind
 
 ```bash
-kubectl apply --server-side -f assets/crds/kubevirt/
-kubectl apply --server-side -f assets/crds/openshift/
-kubectl apply --server-side -f assets/crds/remediation/
-kubectl apply --server-side -f assets/crds/operators/
-kubectl apply --server-side -f assets/crds/observability/
-kubectl apply --server-side -f assets/crds/oadp/
+kubectl apply --server-side -f test/crds/kubevirt/
+kubectl apply --server-side -f test/crds/openshift/
+kubectl apply --server-side -f test/crds/remediation/
+kubectl apply --server-side -f test/crds/operators/
+kubectl apply --server-side -f test/crds/observability/
+kubectl apply --server-side -f test/crds/oadp/
 ```
 
 ## Maintenance

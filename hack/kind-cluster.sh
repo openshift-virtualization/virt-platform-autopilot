@@ -129,15 +129,15 @@ status() {
 
 # Function to install CRDs (for HCO and other dependencies)
 install_crds() {
-    echo "Installing CRDs from assets/crds/"
+    echo "Installing CRDs from test/crds/"
 
-    if [ ! -d "assets/crds" ]; then
+    if [ ! -d "test/crds" ]; then
         echo "ERROR: CRD directory not found. Run 'make update-crds' first."
         exit 1
     fi
 
     # Install all CRDs from the crds directory
-    for crd_file in assets/crds/**/*.yaml; do
+    for crd_file in test/crds/**/*.yaml; do
         if [ -f "$crd_file" ] && [ "$(basename "$crd_file")" != "README.md" ]; then
             echo "Installing CRD: $crd_file"
             kubectl apply --server-side -f "$crd_file" --context "kind-$CLUSTER_NAME" || true

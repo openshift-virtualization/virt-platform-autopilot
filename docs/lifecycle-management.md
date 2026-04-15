@@ -24,9 +24,11 @@ Tombstoning enables explicit deletion of legacy resources with built-in safety c
   │   ├── hco/
   │   ├── operators/
   │   └── metadata.yaml
-  ├── crds/            # CRDs (unchanged location)
   └── tombstones/      # Obsolete resources (Delete - Legacy)
       └── v1.1-cleanup/  # Optional organizational subfolders
+
+/test
+  └── crds/            # CRDs for testing (envtest/Kind) - not deployed by autopilot
 ```
 
 ### Tombstone File Format

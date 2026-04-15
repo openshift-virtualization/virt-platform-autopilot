@@ -60,10 +60,10 @@ func validateCRD(crd *apiextensionsv1.CustomResourceDefinition, filename string,
 	return nil
 }
 
-// TestCRDsCanBeLoaded verifies that all CRD files in assets/crds can be parsed
+// TestCRDsCanBeLoaded verifies that all CRD files in test/crds can be parsed
 // This ensures CRDs are valid YAML and conform to the CustomResourceDefinition schema
 func TestCRDsCanBeLoaded(t *testing.T) {
-	crdsDir := filepath.Join("..", "assets", "crds")
+	crdsDir := filepath.Join("crds")
 
 	// Verify directory exists
 	if _, err := os.Stat(crdsDir); os.IsNotExist(err) {
@@ -131,7 +131,7 @@ func reportResults(t *testing.T, totalCRDs, validCRDs int, errors []string) {
 
 // TestCRDDirectoryStructure verifies the expected directory structure exists
 func TestCRDDirectoryStructure(t *testing.T) {
-	crdsDir := filepath.Join("..", "assets", "crds")
+	crdsDir := filepath.Join("crds")
 
 	expectedDirs := []string{
 		"kubevirt",
@@ -152,7 +152,7 @@ func TestCRDDirectoryStructure(t *testing.T) {
 
 // TestREADMEExists verifies the CRD README exists
 func TestREADMEExists(t *testing.T) {
-	readmePath := filepath.Join("..", "assets", "crds", "README.md")
+	readmePath := filepath.Join("crds", "README.md")
 
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
 		t.Errorf("README.md does not exist at %s", readmePath)
