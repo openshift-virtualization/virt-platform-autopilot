@@ -122,6 +122,16 @@ assets:
       - type: feature-gate
         value: CPUManager
 
+  # Phase 1: Tuned - Default profiles
+  # https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/scalability_and_performance/using-node-tuning-operator#custom-tuning-default-profiles-set_node-tuning-operator
+  - name: tuned-default
+    path: active/tuned/tuned_default.yaml
+    phase: 1
+    install: always
+    component: Tuned
+    reconcile_order: 1
+    conditions: []
+
   # Phase 2: Opt-in - Advanced features
   # TODO: Implement these assets:
   # - vfio-assign (machine-config/04-vfio-assign.yaml.tpl)

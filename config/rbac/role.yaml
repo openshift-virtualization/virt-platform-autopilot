@@ -168,3 +168,14 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - tuned.openshift.io
+    resources:
+      - tuneds
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch

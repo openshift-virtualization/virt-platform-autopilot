@@ -117,6 +117,11 @@ declare -a CRD_METADATA=(
     "Medik8s Remediation|Self Node Remediation|medik8s/self-node-remediation|main|config/crd/bases/self-node-remediation.medik8s.io_selfnoderemediations.yaml|remediation/selfnoderemediations.self-node-remediation.medik8s.io.yaml"
     "Medik8s Remediation|Fence Agents Remediation|medik8s/fence-agents-remediation|main|config/crd/bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml|remediation/fenceagentsremediations.fence-agents-remediation.medik8s.io.yaml"
 
+    # Node Tuning Operator
+    "Node Tuning Operator|PerformanceProfile|openshift/cluster-node-tuning-operator|main|manifests/20-performance-profile.crd.yaml|tuned/20-performance-profile.crd.yaml"
+    "Node Tuning Operator|Profile|openshift/cluster-node-tuning-operator|main|manifests/20-profile.crd.yaml|tuned/20-profile.crd.yaml"
+    "Node Tuning Operator|Tuned|openshift/cluster-node-tuning-operator|main|manifests/20-tuned.crd.yaml|tuned/20-tuned.crd.yaml"
+
     # Third-Party Operators
     "Third-Party Operators|MTV (Forklift)|kubev2v/forklift|main|operator/config/crd/bases/forklift.konveyor.io_forkliftcontrollers.yaml|operators/forklift.konveyor.io_forkliftcontrollers.yaml"
     "Third-Party Operators|MetalLB|metallb/metallb-operator|main|config/crd/bases/metallb.io_metallbs.yaml|operators/metallb.io_metallbs.yaml"
