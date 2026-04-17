@@ -35,11 +35,16 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
+// driftChecker abstracts drift detection to allow injection in tests.
+type driftChecker interface {
+	DetectDrift(ctx context.Context, desired, live *unstructured.Unstructured) (bool, error)
+}
+
 // Patcher implements the Patched Baseline algorithm
 type Patcher struct {
 	renderer          *Renderer
 	applier           *Applier
-	driftDetector     *DriftDetector
+	driftDetector     driftChecker
 	throttle          *throttling.TokenBucket
 	thrashingDetector *throttling.ThrashingDetector
 	client            client.Client
@@ -273,11 +278,16 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	if liveExists {
 		hasDrift, err = p.driftDetector.DetectDrift(ctx, desired, live)
 		if err != nil {
-			// Fall back to simple check if SSA dry-run fails
-			logger.V(1).Info("SSA dry-run failed, using simple drift check",
+			// SSA dry-run failed due to an infrastructure error (e.g. webhook TLS issue,
+			// admission webhook unreachable). Do NOT fall back to SimpleDriftCheck here:
+			// SimpleDriftCheck compares the minimal rendered template against the fully
+			// webhook-defaulted live object, so it would always report drift and cause a
+			// false-positive cascade into the thrashing detector.
+			// Propagate the error so controller-runtime retries with proper backoff.
+			logger.Info("SSA dry-run failed, skipping reconciliation until resolved",
 				"error", err.Error(),
 			)
-			hasDrift = p.driftDetector.SimpleDriftCheck(desired, live)
+			return false, fmt.Errorf("drift detection failed: %w", err)
 		}
 	} else {
 		// Object doesn't exist - needs creation
