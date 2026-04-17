@@ -1,0 +1,19 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: velero-deletebackuprequest-rules
+spec:
+  component: oadp
+  labels:
+    ifo.kubevirt.io/correlation-group: data-protection
+    ifo.kubevirt.io/correlation-role: root
+  target:
+    group: velero.io
+    version: v1
+    resource: deletebackuprequests
+  rules:
+    - operation: Deleting
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "InProgress"

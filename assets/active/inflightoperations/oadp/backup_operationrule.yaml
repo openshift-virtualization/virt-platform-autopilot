@@ -1,0 +1,31 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: velero-backup-rules
+spec:
+  component: oadp
+  labels:
+    ifo.kubevirt.io/correlation-group: data-protection
+    ifo.kubevirt.io/correlation-role: root
+  target:
+    group: velero.io
+    version: v1
+    resource: backups
+  rules:
+    - operation: InProgress
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "InProgress"
+    - operation: WaitingForPluginOperations
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        (object.status.phase == "WaitingForPluginOperations" ||
+         object.status.phase == "WaitingForPluginOperationsPartiallyFailed")
+    - operation: Finalizing
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        (object.status.phase == "Finalizing" ||
+         object.status.phase == "FinalizingPartiallyFailed")

@@ -1,0 +1,16 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: nodemaintenance-rules
+spec:
+  component: nodemaintenance
+  target:
+    group: nodemaintenance.medik8s.io
+    version: v1beta1
+    resource: nodemaintenances
+  rules:
+    - operation: Draining
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Running"

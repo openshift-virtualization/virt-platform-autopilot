@@ -1,0 +1,39 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: csv-rules
+spec:
+  component: olm
+  labels:
+    ifo.kubevirt.io/correlation-group: olm-install
+    ifo.kubevirt.io/correlation-role: child
+  target:
+    group: operators.coreos.com
+    version: v1alpha1
+    resource: clusterserviceversions
+  rules:
+    - operation: Pending
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Pending"
+    - operation: Installing
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Installing"
+    - operation: Replacing
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Replacing"
+    - operation: Deleting
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Deleting"
+    - operation: Failing
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Failed"

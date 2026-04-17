@@ -1,0 +1,14 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: vm-export-rules
+spec:
+  component: kubevirt
+  target:
+    group: export.kubevirt.io
+    version: v1beta1
+    resource: virtualmachineexports
+  rules:
+    - operation: Pending
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Pending"

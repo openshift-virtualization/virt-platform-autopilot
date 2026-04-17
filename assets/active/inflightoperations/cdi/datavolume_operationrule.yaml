@@ -1,0 +1,87 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: datavolume-rules
+spec:
+  component: cdi
+  target:
+    group: cdi.kubevirt.io
+    version: v1beta1
+    resource: datavolumes
+  rules:
+    # === Import Operations ===
+    - operation: ImportScheduled
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "ImportScheduled"
+
+    - operation: ImportInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "ImportInProgress"
+
+    # === Clone Operations ===
+    - operation: CloneScheduled
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "CloneScheduled"
+
+    - operation: CloneInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "CloneInProgress"
+
+    - operation: SnapshotForSmartCloneInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "SnapshotForSmartCloneInProgress"
+
+    - operation: CloneFromSnapshotSourceInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "CloneFromSnapshotSourceInProgress"
+
+    - operation: SmartClonePVCInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "SmartClonePVCInProgress"
+
+    - operation: CSICloneInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "CSICloneInProgress"
+
+    # === Upload Operations ===
+    - operation: UploadScheduled
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "UploadScheduled"
+
+    - operation: UploadReady
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "UploadReady"
+
+    # === Waiting/Prep States ===
+    - operation: Pending
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Pending"
+
+    - operation: WaitForFirstConsumer
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "WaitForFirstConsumer"
+
+    - operation: PVCBound
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "PVCBound"
+
+    - operation: PendingPopulation
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "PendingPopulation"
+
+    - operation: PrepClaimInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "PrepClaimInProgress"
+
+    # === Other Operations ===
+    - operation: ExpansionInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "ExpansionInProgress"
+
+    - operation: NamespaceTransferInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "NamespaceTransferInProgress"
+
+    - operation: RebindInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "RebindInProgress"

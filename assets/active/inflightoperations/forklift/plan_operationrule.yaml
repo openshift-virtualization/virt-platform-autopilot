@@ -1,0 +1,16 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: plan-rules
+spec:
+  component: forklift
+  target:
+    group: forklift.konveyor.io
+    version: v1beta1
+    resource: plans
+  rules:
+    - operation: Executing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Executing")

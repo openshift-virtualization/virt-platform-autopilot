@@ -1,0 +1,28 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: fenceagentsremediation-rules
+spec:
+  component: far
+  target:
+    group: fence-agents-remediation.medik8s.io
+    version: v1alpha1
+    resource: fenceagentsremediations
+  rules:
+    - operation: Remediating
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Processing" && c.status == "True")
+    - operation: Failing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "FenceAgentActionSucceeded" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "FenceAgentActionSucceeded" && c.reason == "Failing")
+    - operation: TimingOut
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "FenceAgentActionSucceeded" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "FenceAgentActionSucceeded" && c.reason == "TimingOut")

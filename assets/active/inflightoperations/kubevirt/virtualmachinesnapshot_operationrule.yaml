@@ -1,0 +1,18 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: vm-snapshot-rules
+spec:
+  component: kubevirt
+  target:
+    group: snapshot.kubevirt.io
+    version: v1beta1
+    resource: virtualmachinesnapshots
+  rules:
+    - operation: InProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "InProgress"
+
+    - operation: Failed
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Failed"
