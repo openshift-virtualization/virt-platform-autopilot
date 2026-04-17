@@ -17,10 +17,25 @@ limitations under the License.
 package engine
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+// errApplyClient wraps a fake client and overrides Apply to simulate webhook/TLS failures.
+type errApplyClient struct {
+	client.Client
+	applyErr error
+}
+
+func (c *errApplyClient) Apply(_ context.Context, _ runtime.ApplyConfiguration, _ ...client.ApplyOption) error {
+	return c.applyErr
+}
 
 func makeObj(labels map[string]string, spec map[string]interface{}) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{
@@ -251,5 +266,30 @@ func TestCompareSpecs(t *testing.T) {
 				t.Errorf("CompareSpecs() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestDetectDriftPropagatesClientError verifies that DetectDrift surfaces errors from
+// the underlying client (e.g. a webhook TLS failure) rather than silently swallowing
+// them. This is important because the Patcher must propagate the error so that
+// controller-runtime backs off and retries — not fall back to SimpleDriftCheck,
+// which would produce a false-positive drift for any object with webhook-defaulted fields.
+func TestDetectDriftPropagatesClientError(t *testing.T) {
+	applyErr := fmt.Errorf("failed to perform dry-run apply: Internal error occurred: " +
+		"failed calling webhook \"mutate-hyperconverged-hco-v1beta1.kubevirt.io\": " +
+		"tls: failed to verify certificate: x509: certificate signed by unknown authority")
+
+	c := &errApplyClient{
+		Client:   fake.NewClientBuilder().Build(),
+		applyErr: applyErr,
+	}
+	dd := NewDriftDetector(c)
+
+	desired := makeObj(nil, map[string]interface{}{"key": "value"})
+	live := makeObj(nil, map[string]interface{}{"key": "value"})
+
+	_, err := dd.DetectDrift(context.Background(), desired, live)
+	if err == nil {
+		t.Fatal("DetectDrift() should propagate client errors, got nil")
 	}
 }
