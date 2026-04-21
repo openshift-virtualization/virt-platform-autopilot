@@ -31,7 +31,7 @@ spec:
       units:
       - contents: |
           [Unit]
-          Description=Enable swap
+          Description=OpenShift - Enable swap parition
           ConditionFirstBoot=no
           ConditionPathExists=/dev/disk/by-partlabel/OCPSWAP
 
@@ -40,12 +40,12 @@ spec:
           ExecStart=/bin/sh -c "sudo swapon --priority 100 /dev/disk/by-partlabel/OCPSWAP"
 
           [Install]
-          RequiredBy=kubelet-dependencies.target
+          Before=kubelet-dependencies.target
         enabled: true
         name: swap-disk-enable.service
       - contents: |
           [Unit]
-          Description=Enable OCP file swap
+          Description=OpenShift - Enable swap file
           ConditionFirstBoot=no
           ConditionPathExists=/var/tmp/ocpswap.file
 
@@ -54,12 +54,12 @@ spec:
           ExecStart=/bin/sh -c "sudo swapon --priority 10 /var/tmp/ocpswap.file"
 
           [Install]
-          RequiredBy=kubelet-dependencies.target
+          Before=kubelet-dependencies.target
         enabled: true
         name: ocpswap-file-enable.service
       - contents: |
           [Unit]
-          Description=KubeVirt adaptive watermark tuning for swap optimization
+          Description=OpenShift - KubeVirt adaptive watermark tuning for swap optimization
           After=kubelet.service
 
           [Service]
@@ -75,7 +75,7 @@ spec:
         name: kubevirt-tune-watermarks.service
       - contents: |
           [Unit]
-          Description=KubeVirt IO latency protection for swap devices
+          Description=OpenShift - KubeVirt IO latency protection for swap devices
           After=local-fs.target swap.target
           Wants=swap.target
 
@@ -92,7 +92,7 @@ spec:
         name: kubevirt-io-latency-setup.service
       - contents: |
           [Unit]
-          Description=Remove legacy OCI hook configuration
+          Description=OpenShift - Remove legacy WASP OCI hook configuration
           ConditionPathExists=/run/containers/oci/hooks.d/swap-for-burstable.json
 
           [Service]
@@ -100,12 +100,12 @@ spec:
           ExecStart=/bin/sh -c "rm -f /run/containers/oci/hooks.d/swap-for-burstable.json"
 
           [Install]
-          RequiredBy=kubelet-dependencies.target
+          Before=kubelet-dependencies.target
         enabled: true
         name: remove-swap-for-burstable-hook.service
       - contents: |
           [Unit]
-          Description=Remove legacy OCI hook swap script
+          Description=OpenShift - Remove legacy WASP OCI hook swap script
           ConditionPathExists=/opt/oci-hook-swap.sh
 
           [Service]
@@ -113,7 +113,7 @@ spec:
           ExecStart=/bin/sh -c "rm -f /opt/oci-hook-swap.sh"
 
           [Install]
-          RequiredBy=kubelet-dependencies.target
+          Before=kubelet-dependencies.target
         enabled: true
         name: remove-oci-hook-swap.service
       - dropins:
