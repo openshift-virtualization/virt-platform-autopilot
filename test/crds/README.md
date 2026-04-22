@@ -95,27 +95,6 @@ test/crds/
 - Local: `remediation/fenceagentsremediations.fence-agents-remediation.medik8s.io.yaml`
 
 
-### Node Tuning Operator
-
-**PerformanceProfile**
-- Repository: https://github.com/openshift/cluster-node-tuning-operator
-- Branch: `main`
-- Path: `manifests/20-performance-profile.crd.yaml`
-- Local: `tuned/20-performance-profile.crd.yaml`
-
-**Profile**
-- Repository: https://github.com/openshift/cluster-node-tuning-operator
-- Branch: `main`
-- Path: `manifests/20-profile.crd.yaml`
-- Local: `tuned/20-profile.crd.yaml`
-
-**Tuned**
-- Repository: https://github.com/openshift/cluster-node-tuning-operator
-- Branch: `main`
-- Path: `manifests/20-tuned.crd.yaml`
-- Local: `tuned/20-tuned.crd.yaml`
-
-
 ### Third-Party Operators
 
 **MTV (Forklift)**
