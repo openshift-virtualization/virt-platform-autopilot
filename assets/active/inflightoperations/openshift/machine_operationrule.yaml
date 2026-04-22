@@ -1,0 +1,26 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: machine-rules
+spec:
+  component: openshift
+  target:
+    group: machine.openshift.io
+    version: v1beta1
+    resource: machines
+  rules:
+    - operation: Provisioning
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Provisioning"
+
+    - operation: Provisioned
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Provisioned"
+
+    - operation: Deleting
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Deleting"
+
+    - operation: Failed
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Failed"

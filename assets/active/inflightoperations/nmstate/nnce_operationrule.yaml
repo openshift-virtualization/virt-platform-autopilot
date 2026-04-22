@@ -1,0 +1,29 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: nnce-rules
+spec:
+  component: nmstate
+  labels:
+    ifo.kubevirt.io/correlation-group: network-config
+    ifo.kubevirt.io/correlation-role: child
+  target:
+    group: nmstate.io
+    version: v1beta1
+    resource: nodenetworkconfigurationenactments
+  rules:
+    - operation: Configuring
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True")
+    - operation: Pending
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Pending" && c.status == "True")
+    - operation: Failing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Failing" && c.status == "True")

@@ -128,6 +128,9 @@ declare -a CRD_METADATA=(
     "Third-Party Operators|AAQ|kubevirt/hyperconverged-cluster-operator|main|deploy/crds/application-aware-quota00.crd.yaml|operators/aaq.kubevirt.io_aaqoperatorconfigs.yaml"
     "Third-Party Operators|NMState|nmstate/kubernetes-nmstate|main|bundle/manifests/nmstate.io_nmstates.yaml|operators/nmstate.io_nmstates.yaml"
     "Third-Party Operators|Node Maintenance Operator|medik8s/node-maintenance-operator|main|bundle/manifests/nodemaintenance.medik8s.io_nodemaintenances.yaml|operators/nodemaintenance.medik8s.io_nodemaintenances.yaml"
+
+    # InFlightOperations
+    "InFlightOperations|OperationRuleset|openshift-virtualization/inflightoperations|main|config/crd/bases/ifo.kubevirt.io_operationrulesets.yaml|inflightoperations/ifo.kubevirt.io_operationrulesets.yaml"
 )
 
 # Cluster Observability Operator CRDs (multiple files)
@@ -254,7 +257,8 @@ test/crds/
 ├── remediation/       # Medik8s remediation CRDs
 ├── operators/         # Third-party operator CRDs
 ├── observability/     # Cluster Observability Operator CRDs
-└── oadp/              # OADP backup/restore CRDs
+├── oadp/              # OADP backup/restore CRDs
+└── inflightoperations # InFlightOperations CRDs
 ```
 
 ## CRD Sources
@@ -354,6 +358,7 @@ testEnv = &envtest.Environment{
         filepath.Join("crds", "operators"),
         filepath.Join("crds", "observability"),
         filepath.Join("crds", "oadp"),
+        filepath.Join("crds", "inflightoperations"),
     },
 }
 ```
@@ -367,6 +372,7 @@ kubectl apply --server-side -f test/crds/remediation/
 kubectl apply --server-side -f test/crds/operators/
 kubectl apply --server-side -f test/crds/observability/
 kubectl apply --server-side -f test/crds/oadp/
+kubectl apply --server-side -f test/crds/inflightoperations/
 ```
 
 ## Maintenance

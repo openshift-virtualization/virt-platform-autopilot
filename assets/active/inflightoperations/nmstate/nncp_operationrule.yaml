@@ -1,0 +1,26 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: nncp-rules
+spec:
+  component: nmstate
+  labels:
+    ifo.kubevirt.io/correlation-group: network-config
+    ifo.kubevirt.io/correlation-role: root
+  target:
+    group: nmstate.io
+    version: v1
+    resource: nodenetworkconfigurationpolicies
+  rules:
+    - operation: Configuring
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        !object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: ConfiguringDegraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")

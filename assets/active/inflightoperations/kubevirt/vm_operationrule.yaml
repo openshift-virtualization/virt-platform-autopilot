@@ -1,0 +1,38 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: vm-lifecycle-rules
+spec:
+  component: kubevirt
+  target:
+    group: kubevirt.io
+    version: v1
+    resource: virtualmachines
+  rules:
+    - operation: Migrating
+      expression: |
+        has(object.status) &&
+        has(object.status.printableStatus) &&
+        object.status.printableStatus == "Migrating"
+    - operation: Starting
+      expression: |
+        has(object.status) &&
+        has(object.status.printableStatus) &&
+        object.status.printableStatus == "Starting"
+    - operation: Stopping
+      expression: |
+        has(object.status) &&
+        has(object.status.printableStatus) &&
+        object.status.printableStatus == "Stopping"
+    - operation: Provisioning
+      expression: |
+        has(object.status) && has(object.status.printableStatus) &&
+        object.status.printableStatus == "Provisioning"
+    - operation: Terminating
+      expression: |
+        has(object.status) && has(object.status.printableStatus) &&
+        object.status.printableStatus == "Terminating"
+    - operation: WaitingForReceiver
+      expression: |
+        has(object.status) && has(object.status.printableStatus) &&
+        object.status.printableStatus == "WaitingForReceiver"

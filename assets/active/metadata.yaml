@@ -132,6 +132,387 @@ assets:
     reconcile_order: 1
     conditions: []
 
+  # Phase 2: InflightOperations OperationRuleSet assets (opt-in, gated on IFO CRD)
+  - name: ifo-datavolume-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/cdi/datavolume_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-volumesnapshot-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/csi/volumesnapshot_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-fenceagentsremediation-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/far/fenceagentsremediation_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-plan-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/forklift/plan_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-aaq-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/aaq_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-cdi-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/cdi_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-cnao-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/cnao_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-hco-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/hco_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-hpp-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/hpp_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-kubevirt-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/kubevirt_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-ssp-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/hco-components/ssp_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vm-lifecycle-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/vm_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vmi-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/vmi_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vmim-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/vmim_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vm-clone-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/virtualmachineclone_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vm-export-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/virtualmachineexport_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vm-restore-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/virtualmachinerestore_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-vm-snapshot-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/kubevirt/virtualmachinesnapshot_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-nnce-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/nmstate/nnce_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-nncp-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/nmstate/nncp_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-nodemaintenance-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/nodemaintenance/nodemaintenance_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-backup-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/backup_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-datadownload-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/datadownload_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-dataupload-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/dataupload_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-deletebackuprequest-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/deletebackuprequest_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-podvolumebackup-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/podvolumebackup_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-podvolumerestore-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/podvolumerestore_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-velero-restore-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/oadp/restore_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-csv-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/olm/csv_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-installplan-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/olm/installplan_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-subscription-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/olm/subscription_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-build-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/build_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-clusteroperator-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/clusteroperator_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-clusterversion-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/clusterversion_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-machine-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/machine_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-machineconfigpool-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/machineconfigpool_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-machineset-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/machineset_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
+  - name: ifo-storageversionmigration-rules
+    group: inflightoperations
+    gate_crd: operationrulesets.ifo.kubevirt.io
+    path: active/inflightoperations/openshift/storageversionmigration_operationrule.yaml
+    phase: 2
+    install: always
+    component: OperationRuleSet
+    reconcile_order: 20
+    conditions: []
+
   # Phase 2: Opt-in - Advanced features
   # TODO: Implement these assets:
   # - vfio-assign (machine-config/04-vfio-assign.yaml.tpl)

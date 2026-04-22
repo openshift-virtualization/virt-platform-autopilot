@@ -1,0 +1,49 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: hpp-rules
+spec:
+  component: hco
+  labels:
+    ifo.kubevirt.io/correlation-group: hco-stack
+    ifo.kubevirt.io/correlation-role: child
+  target:
+    group: hostpathprovisioner.kubevirt.io
+    version: v1beta1
+    resource: hostpathprovisioners
+  rules:
+    - operation: Deploying
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "False")
+    - operation: Reconciling
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "False")
+    - operation: ReconcilingDegraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: Healing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: Failing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")

@@ -1,0 +1,24 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: machineset-rules
+spec:
+  component: openshift
+  target:
+    group: machine.openshift.io
+    version: v1beta1
+    resource: machinesets
+  rules:
+    - operation: ScalingUp
+      expression: |
+        has(object.spec.replicas) &&
+        has(object.status) &&
+        has(object.status.readyReplicas) &&
+        object.spec.replicas > object.status.readyReplicas
+
+    - operation: ScalingDown
+      expression: |
+        has(object.spec.replicas) &&
+        has(object.status) &&
+        has(object.status.readyReplicas) &&
+        object.spec.replicas < object.status.readyReplicas

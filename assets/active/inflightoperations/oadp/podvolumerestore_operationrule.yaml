@@ -1,0 +1,26 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: velero-podvolumerestore-rules
+spec:
+  component: oadp
+  labels:
+    ifo.kubevirt.io/correlation-group: data-protection
+    ifo.kubevirt.io/correlation-role: child
+  target:
+    group: velero.io
+    version: v1
+    resource: podvolumerestores
+  rules:
+    - operation: InProgress
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        (object.status.phase == "Accepted" ||
+         object.status.phase == "Prepared" ||
+         object.status.phase == "InProgress")
+    - operation: Canceling
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Canceling"

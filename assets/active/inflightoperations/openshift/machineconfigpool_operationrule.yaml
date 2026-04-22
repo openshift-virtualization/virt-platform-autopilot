@@ -1,0 +1,54 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: machineconfigpool-rules
+spec:
+  component: openshift
+  target:
+    group: machineconfiguration.openshift.io
+    version: v1
+    resource: machineconfigpools
+  rules:
+    - operation: Updating
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Updating" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "False")
+    - operation: UpdatingDegraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Updating" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: Degraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Updating" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: NodeDegraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "NodeDegraded" && c.status == "True")
+    - operation: RenderDegraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "RenderDegraded" && c.status == "True")
+    - operation: Paused
+      expression: |
+        has(object.spec) &&
+        has(object.spec.paused) &&
+        object.spec.paused == true
+    - operation: Building
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Building" && c.status == "True")
+    - operation: BuildFailed
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "BuildFailed" && c.status == "True")

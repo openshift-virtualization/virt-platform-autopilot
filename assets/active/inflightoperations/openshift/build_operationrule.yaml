@@ -1,0 +1,21 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: build-rules
+spec:
+  component: openshift
+  target:
+    group: build.openshift.io
+    version: v1
+    resource: builds
+  rules:
+    - operation: Pending
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Pending"
+    - operation: Running
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Running"

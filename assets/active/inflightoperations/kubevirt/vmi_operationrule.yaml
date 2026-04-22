@@ -1,0 +1,43 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: vmi-rules
+spec:
+  component: kubevirt
+  target:
+    group: kubevirt.io
+    version: v1
+    resource: virtualmachineinstances
+  rules:
+    # === Lifecycle Phases ===
+    - operation: Pending
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Pending"
+
+    - operation: Scheduling
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Scheduling"
+
+    - operation: Scheduled
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Scheduled"
+
+    - operation: WaitingForSync
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "WaitingForSync"
+
+    # === Condition-Based Operations ===
+    - operation: Provisioning
+      expression: |
+        has(object.status) && has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Provisioning" && c.status == "True")
+
+    - operation: VCPUChange
+      expression: |
+        has(object.status) && has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "HotVCPUChange" && c.status == "True")
+
+    - operation: MemoryChange
+      expression: |
+        has(object.status) && has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "HotMemoryChange" && c.status == "True")

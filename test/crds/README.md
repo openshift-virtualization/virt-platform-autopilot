@@ -13,7 +13,8 @@ test/crds/
 ├── remediation/       # Medik8s remediation CRDs
 ├── operators/         # Third-party operator CRDs
 ├── observability/     # Cluster Observability Operator CRDs
-└── oadp/              # OADP backup/restore CRDs
+├── oadp/              # OADP backup/restore CRDs
+└── inflightoperations # InFlightOperations CRDs
 ```
 
 ## CRD Sources
@@ -148,6 +149,15 @@ test/crds/
 - Local: `operators/nodemaintenance.medik8s.io_nodemaintenances.yaml`
 
 
+### InFlightOperations
+
+**OperationRuleset**
+- Repository: https://github.com/openshift-virtualization/inflightoperations
+- Branch: `main`
+- Path: `config/crd/bases/ifo.kubevirt.io_operationrulesets.yaml`
+- Local: `inflightoperations/ifo.kubevirt.io_operationrulesets.yaml`
+
+
 ### Cluster Observability Operator
 
 **Multiple CRDs** (Perses, UIPlugin, Monitoring)
@@ -198,6 +208,7 @@ testEnv = &envtest.Environment{
         filepath.Join("crds", "operators"),
         filepath.Join("crds", "observability"),
         filepath.Join("crds", "oadp"),
+        filepath.Join("crds", "inflightoperations"),
     },
 }
 ```
@@ -211,6 +222,7 @@ kubectl apply --server-side -f test/crds/remediation/
 kubectl apply --server-side -f test/crds/operators/
 kubectl apply --server-side -f test/crds/observability/
 kubectl apply --server-side -f test/crds/oadp/
+kubectl apply --server-side -f test/crds/inflightoperations/
 ```
 
 ## Maintenance

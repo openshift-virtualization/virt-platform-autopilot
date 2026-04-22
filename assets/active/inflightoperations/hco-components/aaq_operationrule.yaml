@@ -1,0 +1,59 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: aaq-rules
+spec:
+  component: hco
+  labels:
+    ifo.kubevirt.io/correlation-group: hco-stack
+    ifo.kubevirt.io/correlation-role: child
+  target:
+    group: aaq.kubevirt.io
+    version: v1alpha1
+    resource: aaqs
+  rules:
+    - operation: Deploying
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "False")
+    - operation: Reconciling
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "False")
+    - operation: ReconcilingDegraded
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: Healing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "True") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: Failing
+      expression: |
+        has(object.status) &&
+        has(object.status.conditions) &&
+        object.status.conditions.exists(c, c.type == "Available" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Progressing" && c.status == "False") &&
+        object.status.conditions.exists(c, c.type == "Degraded" && c.status == "True")
+    - operation: Deleting
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Deleting"
+    - operation: Upgrading
+      expression: |
+        has(object.status) &&
+        has(object.status.phase) &&
+        object.status.phase == "Upgrading"

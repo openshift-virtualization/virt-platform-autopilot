@@ -1,0 +1,26 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: vm-clone-rules
+spec:
+  component: kubevirt
+  target:
+    group: clone.kubevirt.io
+    version: v1beta1
+    resource: virtualmachineclones
+  rules:
+    - operation: SnapshotInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "SnapshotInProgress"
+
+    - operation: CreatingTargetVM
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "CreatingTargetVM"
+
+    - operation: RestoreInProgress
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "RestoreInProgress"
+
+    - operation: Failed
+      expression: |
+        has(object.status) && has(object.status.phase) && object.status.phase == "Failed"
