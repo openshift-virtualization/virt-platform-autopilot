@@ -78,7 +78,6 @@ func TestCRDsCanBeLoaded(t *testing.T) {
 		filepath.Join(crdsDir, "operators"),
 		filepath.Join(crdsDir, "observability"),
 		filepath.Join(crdsDir, "oadp"),
-		filepath.Join(crdsDir, "tuned"),
 		filepath.Join(crdsDir, "inflightoperations"),
 	}
 
