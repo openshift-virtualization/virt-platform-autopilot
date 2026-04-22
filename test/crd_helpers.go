@@ -20,13 +20,14 @@ type CRDSet string
 
 const (
 	// CRD sets for testing different scenarios
-	CRDSetCore          CRDSet = "kubevirt"      // HCO CRD (always loaded in BeforeSuite)
-	CRDSetOpenShift     CRDSet = "openshift"     // MachineConfig CRDs
-	CRDSetRemediation   CRDSet = "remediation"   // NodeHealthCheck, SNR, FAR CRDs
-	CRDSetOperators     CRDSet = "operators"     // MTV, MetalLB CRDs
-	CRDSetObservability CRDSet = "observability" // Cluster Monitoring Operator CRDs
-	CRDSetPrometheus    CRDSet = "prometheus"    // Prometheus CRDs
-	CRDSetTuned         CRDSet = "tuned"         // PerformanceProfile, Profile, Tuned CRDs
+	CRDSetCore          CRDSet = "kubevirt"           // HCO CRD (always loaded in BeforeSuite)
+	CRDSetOpenShift     CRDSet = "openshift"          // MachineConfig CRDs
+	CRDSetRemediation   CRDSet = "remediation"        // NodeHealthCheck, SNR, FAR CRDs
+	CRDSetOperators     CRDSet = "operators"          // MTV, MetalLB CRDs
+	CRDSetObservability CRDSet = "observability"      // Cluster Monitoring Operator CRDs
+	CRDSetPrometheus    CRDSet = "prometheus"         // Prometheus CRDs
+	CRDSetTuned         CRDSet = "tuned"              // PerformanceProfile, Profile, Tuned CRDs
+	CRDSetIFO           CRDSet = "inflightoperations" // OperationRuleSet
 )
 
 // InstallCRDs installs a CRD set dynamically during test execution
