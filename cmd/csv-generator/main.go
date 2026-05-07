@@ -27,6 +27,7 @@ limitations under the License.
 //	  --operator-image=quay.io/openshift-virtualization/virt-platform-autopilot@sha256:... \
 //	  --operator-version=0.1.0 \
 //	  [--pull-policy=IfNotPresent] \
+//	  [--additional-images=ENVKEY1:registry.redhat.io/image1,ENVKEY2:registry.redhat.io/image2] \
 //	  [--dump-crds]
 package main
 
@@ -38,6 +39,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/kubevirt/virt-platform-autopilot/assets"
+	"github.com/kubevirt/virt-platform-autopilot/cmd/csv-generator/parser"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/rbac"
 )
 
@@ -108,6 +110,7 @@ type Container struct {
 	ImagePullPolicy string               `json:"imagePullPolicy,omitempty"`
 	Command         []string             `json:"command,omitempty"`
 	Args            []string             `json:"args,omitempty"`
+	Env             []parser.EnvVar      `json:"env,omitempty"`
 	Resources       ResourceRequirements `json:"resources,omitempty"`
 	SecurityContext *SecurityContext     `json:"securityContext,omitempty"`
 	LivenessProbe   *Probe               `json:"livenessProbe,omitempty"`
@@ -171,6 +174,11 @@ type NamedEntity struct {
 	Name string `json:"name"`
 }
 
+type RelatedImage struct {
+	Name  string `json:"name,omitempty"`
+	Image string `json:"image"`
+}
+
 type CSVSpec struct {
 	DisplayName               string                    `json:"displayName"`
 	Description               string                    `json:"description"`
@@ -183,6 +191,7 @@ type CSVSpec struct {
 	CustomResourceDefinitions CustomResourceDefinitions `json:"customresourcedefinitions,omitempty"`
 	InstallModes              []InstallMode             `json:"installModes"`
 	Install                   NamedInstallStrategy      `json:"install"`
+	RelatedImages             []RelatedImage            `json:"relatedImages,omitempty"`
 }
 
 type CSVMetadata struct {
@@ -206,6 +215,7 @@ func main() {
 	operatorImage := flag.String("operator-image", "quay.io/openshift-virtualization/virt-platform-autopilot:latest", "Operator container image reference")
 	operatorVersion := flag.String("operator-version", "", "Operator version string (defaults to csv-version)")
 	pullPolicy := flag.String("pull-policy", "IfNotPresent", "Image pull policy")
+	additionalImages := flag.String("additional-images", "", "Comma-separated list of ENVKEY:image pairs to inject as environment variables")
 	dumpCRDs := flag.Bool("dump-crds", false, "Dump owned CRDs (virt-platform-autopilot owns none; flag accepted for pipeline compatibility)")
 	flag.Parse()
 
@@ -226,7 +236,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	csv := buildCSV(*csvVersion, *namespace, *operatorImage, *operatorVersion, *pullPolicy, rules)
+	// Parse additional images from comma-separated ENVKEY:image pairs.
+	imageEnvVars := parser.ParseAdditionalImages(*additionalImages)
+
+	csv := buildCSV(*csvVersion, *namespace, *operatorImage, *operatorVersion, *pullPolicy, imageEnvVars, rules)
 
 	data, err := yaml.Marshal(csv)
 	if err != nil {
@@ -242,7 +255,7 @@ func main() {
 }
 
 // buildCSV constructs the ClusterServiceVersion for virt-platform-autopilot.
-func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy string, rules []rbac.Rule) ClusterServiceVersion {
+func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy string, additionalImageEnvVars []parser.EnvVar, rules []rbac.Rule) ClusterServiceVersion {
 	falseVal := false
 	trueVal := true
 	gracePeriod := int64(10)
@@ -253,6 +266,9 @@ func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy 
 	}
 
 	permissions := buildClusterPermissions(rules)
+
+	// Build relatedImages list: operator image + all additional images.
+	relatedImages := buildRelatedImages(operatorImage, additionalImageEnvVars)
 
 	return ClusterServiceVersion{
 		APIVersion: "operators.coreos.com/v1alpha1",
@@ -340,6 +356,7 @@ through the existing HyperConverged resource.`,
 													"--leader-elect",
 													fmt.Sprintf("--namespace=%s", namespace),
 												},
+												Env: additionalImageEnvVars,
 												SecurityContext: &SecurityContext{
 													AllowPrivilegeEscalation: &falseVal,
 													Capabilities:             &Capabilities{Drop: []string{"ALL"}},
@@ -367,6 +384,7 @@ through the existing HyperConverged resource.`,
 					},
 				},
 			},
+			RelatedImages: relatedImages,
 		},
 	}
 }
@@ -388,4 +406,21 @@ func buildClusterPermissions(rules []rbac.Rule) []StrategyDeploymentPermissions 
 			Rules:              policyRules,
 		},
 	}
+}
+
+// buildRelatedImages constructs the relatedImages list from the operator image
+// and any additional images passed via --additional-images.
+func buildRelatedImages(operatorImage string, additionalImageEnvVars []parser.EnvVar) []RelatedImage {
+	relatedImages := []RelatedImage{
+		{Image: operatorImage},
+	}
+
+	// Add all additional images to relatedImages.
+	for _, envVar := range additionalImageEnvVars {
+		relatedImages = append(relatedImages, RelatedImage{
+			Image: envVar.Value,
+		})
+	}
+
+	return relatedImages
 }
