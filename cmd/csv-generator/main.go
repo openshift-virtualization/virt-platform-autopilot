@@ -174,6 +174,11 @@ type NamedEntity struct {
 	Name string `json:"name"`
 }
 
+type RelatedImage struct {
+	Name  string `json:"name,omitempty"`
+	Image string `json:"image"`
+}
+
 type CSVSpec struct {
 	DisplayName               string                    `json:"displayName"`
 	Description               string                    `json:"description"`
@@ -186,6 +191,7 @@ type CSVSpec struct {
 	CustomResourceDefinitions CustomResourceDefinitions `json:"customresourcedefinitions,omitempty"`
 	InstallModes              []InstallMode             `json:"installModes"`
 	Install                   NamedInstallStrategy      `json:"install"`
+	RelatedImages             []RelatedImage            `json:"relatedImages,omitempty"`
 }
 
 type CSVMetadata struct {
@@ -260,6 +266,9 @@ func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy 
 	}
 
 	permissions := buildClusterPermissions(rules)
+
+	// Build relatedImages list: operator image + all additional images.
+	relatedImages := buildRelatedImages(operatorImage, additionalImageEnvVars)
 
 	return ClusterServiceVersion{
 		APIVersion: "operators.coreos.com/v1alpha1",
@@ -375,6 +384,7 @@ through the existing HyperConverged resource.`,
 					},
 				},
 			},
+			RelatedImages: relatedImages,
 		},
 	}
 }
@@ -396,4 +406,21 @@ func buildClusterPermissions(rules []rbac.Rule) []StrategyDeploymentPermissions 
 			Rules:              policyRules,
 		},
 	}
+}
+
+// buildRelatedImages constructs the relatedImages list from the operator image
+// and any additional images passed via --additional-images.
+func buildRelatedImages(operatorImage string, additionalImageEnvVars []parser.EnvVar) []RelatedImage {
+	relatedImages := []RelatedImage{
+		{Image: operatorImage},
+	}
+
+	// Add all additional images to relatedImages.
+	for _, envVar := range additionalImageEnvVars {
+		relatedImages = append(relatedImages, RelatedImage{
+			Image: envVar.Value,
+		})
+	}
+
+	return relatedImages
 }
