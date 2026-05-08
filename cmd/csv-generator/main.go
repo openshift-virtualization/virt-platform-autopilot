@@ -423,12 +423,16 @@ func buildClusterPermissions(rules []rbac.Rule) []StrategyDeploymentPermissions 
 // and any additional images passed via --additional-images.
 func buildRelatedImages(operatorImage string, additionalImageEnvVars []parser.EnvVar) []RelatedImage {
 	relatedImages := []RelatedImage{
-		{Image: operatorImage},
+		{
+			Name:  operatorImage,
+			Image: operatorImage,
+		},
 	}
 
 	// Add all additional images to relatedImages.
 	for _, envVar := range additionalImageEnvVars {
 		relatedImages = append(relatedImages, RelatedImage{
+			Name:  envVar.Value,
 			Image: envVar.Value,
 		})
 	}
