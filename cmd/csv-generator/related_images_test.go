@@ -35,7 +35,10 @@ func TestBuildRelatedImages(t *testing.T) {
 			operatorImage:          "quay.io/test/autopilot@sha256:abc123",
 			additionalImageEnvVars: nil,
 			expected: []RelatedImage{
-				{Image: "quay.io/test/autopilot@sha256:abc123"},
+				{
+					Name:  "quay.io/test/autopilot@sha256:abc123",
+					Image: "quay.io/test/autopilot@sha256:abc123",
+				},
 			},
 		},
 		{
@@ -43,7 +46,10 @@ func TestBuildRelatedImages(t *testing.T) {
 			operatorImage:          "quay.io/test/autopilot@sha256:abc123",
 			additionalImageEnvVars: []parser.EnvVar{},
 			expected: []RelatedImage{
-				{Image: "quay.io/test/autopilot@sha256:abc123"},
+				{
+					Name:  "quay.io/test/autopilot@sha256:abc123",
+					Image: "quay.io/test/autopilot@sha256:abc123",
+				},
 			},
 		},
 		{
@@ -53,8 +59,14 @@ func TestBuildRelatedImages(t *testing.T) {
 				{Name: "NETWORK_RESOURCES_INJECTOR_IMAGE", Value: "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456"},
 			},
 			expected: []RelatedImage{
-				{Image: "quay.io/test/autopilot@sha256:abc123"},
-				{Image: "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456"},
+				{
+					Name:  "quay.io/test/autopilot@sha256:abc123",
+					Image: "quay.io/test/autopilot@sha256:abc123",
+				},
+				{
+					Name:  "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456",
+					Image: "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456",
+				},
 			},
 		},
 		{
@@ -66,10 +78,22 @@ func TestBuildRelatedImages(t *testing.T) {
 				{Name: "THIRD_IMAGE", Value: "registry.example.com/test/third:v1.0"},
 			},
 			expected: []RelatedImage{
-				{Image: "quay.io/test/autopilot@sha256:abc123"},
-				{Image: "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456"},
-				{Image: "quay.io/test/another@sha256:xyz789"},
-				{Image: "registry.example.com/test/third:v1.0"},
+				{
+					Name:  "quay.io/test/autopilot@sha256:abc123",
+					Image: "quay.io/test/autopilot@sha256:abc123",
+				},
+				{
+					Name:  "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456",
+					Image: "registry.redhat.io/openshift4/ose-sriov-dp-admission-controller-rhel9@sha256:def456",
+				},
+				{
+					Name:  "quay.io/test/another@sha256:xyz789",
+					Image: "quay.io/test/another@sha256:xyz789",
+				},
+				{
+					Name:  "registry.example.com/test/third:v1.0",
+					Image: "registry.example.com/test/third:v1.0",
+				},
 			},
 		},
 	}
