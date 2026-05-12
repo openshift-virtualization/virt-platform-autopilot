@@ -883,6 +883,16 @@ assets:
     component: PersesDashboard
     reconcile_order: 3
     conditions: *kubevirt-metrics-exporter-conditions
+  
+  - name: vm-drain-shutdown-inhibitor
+    path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml
+    phase: 2
+    install: opt-in
+    component: MachineConfig
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/vm-drain-shutdown-inhibitor
+        value: "true"
 
   # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
   # (picks alphabetically first RWX Filesystem class). Omits field when none found.
