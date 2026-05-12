@@ -25,6 +25,9 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      priorityClassName: system-cluster-critical
       containers:
         - name: manager
           image: quay.io/openshift-virtualization/virt-platform-autopilot:latest
@@ -39,6 +42,9 @@ spec:
             capabilities:
               drop:
                 - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           livenessProbe:
             httpGet:
               path: /healthz
@@ -52,11 +58,8 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
-            limits:
-              cpu: 500m
-              memory: 512Mi
             requests:
               cpu: 100m
               memory: 128Mi
       serviceAccountName: virt-platform-autopilot
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: 30
