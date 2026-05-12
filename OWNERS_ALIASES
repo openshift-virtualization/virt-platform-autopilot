@@ -1,0 +1,14 @@
+aliases:
+  cnv-autopilot-approvers:
+    - tiraboschi
+    - fabiand
+    - dominikholler
+  cnv-autopilot-reviewers:
+    - tiraboschi
+    - fabiand
+    - dominikholler
+    - Barakmor1
+    - tal-hason
+    - nirdothan
+    - mansam
+    - enp0s3
