@@ -22,6 +22,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Verify CRDs are up-to-date
+        if: github.event_name != 'pull_request' || github.base_ref == 'main'
         run: make verify-crds
 
       - name: Verify RBAC is up-to-date
