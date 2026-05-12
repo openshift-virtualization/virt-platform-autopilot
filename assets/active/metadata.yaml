@@ -503,6 +503,16 @@ assets:
     reconcile_order: 20
     conditions: []
 
+  - name: vm-drain-shutdown-inhibitor
+    path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml
+    phase: 2
+    install: opt-in
+    component: MachineConfig
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/vm-drain-shutdown-inhibitor
+        value: "true"
+
   # Phase 2: Opt-in - Advanced features
   # TODO: Implement these assets:
   # - vfio-assign (machine-config/04-vfio-assign.yaml.tpl)
