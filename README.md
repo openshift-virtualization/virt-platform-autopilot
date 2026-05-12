@@ -32,7 +32,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 
 - OpenShift cluster with OpenShift Virtualization (HCO) installed
 - `kubectl` or `oc` CLI access
-- Go 1.26+ (for development)
+- Go 1.25+ (for development)
 
 ### Installation
 
