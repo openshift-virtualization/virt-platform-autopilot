@@ -96,10 +96,16 @@ type PodSpec struct {
 	ServiceAccountName            string              `json:"serviceAccountName,omitempty"`
 	SecurityContext               *PodSecurityContext `json:"securityContext,omitempty"`
 	TerminationGracePeriodSeconds *int64              `json:"terminationGracePeriodSeconds,omitempty"`
+	PriorityClassName             string              `json:"priorityClassName,omitempty"`
+}
+
+type SeccompProfile struct {
+	Type string `json:"type"`
 }
 
 type PodSecurityContext struct {
-	RunAsNonRoot *bool `json:"runAsNonRoot,omitempty"`
+	RunAsNonRoot   *bool           `json:"runAsNonRoot,omitempty"`
+	SeccompProfile *SeccompProfile `json:"seccompProfile,omitempty"`
 }
 
 type Container struct {
@@ -120,8 +126,10 @@ type ResourceRequirements struct {
 }
 
 type SecurityContext struct {
-	AllowPrivilegeEscalation *bool         `json:"allowPrivilegeEscalation,omitempty"`
-	Capabilities             *Capabilities `json:"capabilities,omitempty"`
+	AllowPrivilegeEscalation *bool           `json:"allowPrivilegeEscalation,omitempty"`
+	Capabilities             *Capabilities   `json:"capabilities,omitempty"`
+	RunAsNonRoot             *bool           `json:"runAsNonRoot,omitempty"`
+	SeccompProfile           *SeccompProfile `json:"seccompProfile,omitempty"`
 }
 
 type Capabilities struct {
@@ -245,7 +253,7 @@ func main() {
 func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy string, rules []rbac.Rule) ClusterServiceVersion {
 	falseVal := false
 	trueVal := true
-	gracePeriod := int64(10)
+	gracePeriod := int64(30)
 
 	labels := map[string]string{
 		"app":           "virt-platform-autopilot",
@@ -327,8 +335,10 @@ through the existing HyperConverged resource.`,
 									Spec: PodSpec{
 										ServiceAccountName:            "virt-platform-autopilot",
 										TerminationGracePeriodSeconds: &gracePeriod,
+										PriorityClassName:             "system-cluster-critical",
 										SecurityContext: &PodSecurityContext{
-											RunAsNonRoot: &trueVal,
+											RunAsNonRoot:   &trueVal,
+											SeccompProfile: &SeccompProfile{Type: "RuntimeDefault"},
 										},
 										Containers: []Container{
 											{
@@ -343,9 +353,10 @@ through the existing HyperConverged resource.`,
 												SecurityContext: &SecurityContext{
 													AllowPrivilegeEscalation: &falseVal,
 													Capabilities:             &Capabilities{Drop: []string{"ALL"}},
+													RunAsNonRoot:             &trueVal,
+													SeccompProfile:           &SeccompProfile{Type: "RuntimeDefault"},
 												},
 												Resources: ResourceRequirements{
-													Limits:   map[string]string{"cpu": "500m", "memory": "512Mi"},
 													Requests: map[string]string{"cpu": "100m", "memory": "128Mi"},
 												},
 												LivenessProbe: &Probe{
