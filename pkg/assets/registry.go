@@ -221,6 +221,21 @@ func crdNameFromGVK(apiVersion, kind string) string {
 	if len(parts) == 1 {
 		return "" // core API, no CRD
 	}
+
+	// Built-in Kubernetes API groups (not CRDs)
+	// Most built-in groups end with .k8s.io or .apiserver.k8s.io
+	// A few legacy groups have no suffix
+	group := parts[0]
+	if strings.HasSuffix(group, ".k8s.io") || strings.HasSuffix(group, ".apiserver.k8s.io") {
+		return "" // built-in API group, no CRD
+	}
+
+	// Legacy built-in API groups without the .k8s.io suffix
+	switch group {
+	case "apps", "batch", "policy", "autoscaling":
+		return "" // built-in API group, no CRD
+	}
+
 	return pluralizeKind(kind) + "." + parts[0]
 }
 
