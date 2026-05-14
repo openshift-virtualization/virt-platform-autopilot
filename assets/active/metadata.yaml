@@ -102,6 +102,119 @@ assets:
         key: platform.kubevirt.io/enable-observability
         value: "true"
 
+  # Phase 1: Network Resources Injector
+  - name: nri-serviceaccount
+    path: active/operators/network_resources_injector/serviceaccount.yaml.tpl
+    phase: 1
+    install: always
+    component: ServiceAccount
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-secret
+    path: active/operators/network_resources_injector/secret.yaml.tpl
+    phase: 1
+    install: always
+    component: Secret
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrole-main
+    path: active/operators/network_resources_injector/clusterrole-main.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRole
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrole-secrets
+    path: active/operators/network_resources_injector/clusterrole-secrets.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRole
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrole-webhook-configs
+    path: active/operators/network_resources_injector/clusterrole-webhook-configs.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRole
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrole-service
+    path: active/operators/network_resources_injector/clusterrole-service.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRole
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrole-configmaps
+    path: active/operators/network_resources_injector/clusterrole-configmaps.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRole
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrolebinding-main
+    path: active/operators/network_resources_injector/clusterrolebinding-main.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRoleBinding
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrolebinding-secrets
+    path: active/operators/network_resources_injector/clusterrolebinding-secrets.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRoleBinding
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrolebinding-webhook-configs
+    path: active/operators/network_resources_injector/clusterrolebinding-webhook-configs.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRoleBinding
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrolebinding-service
+    path: active/operators/network_resources_injector/clusterrolebinding-service.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRoleBinding
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-clusterrolebinding-configmaps
+    path: active/operators/network_resources_injector/clusterrolebinding-configmaps.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRoleBinding
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-service
+    path: active/operators/network_resources_injector/service.yaml.tpl
+    phase: 1
+    install: always
+    component: Service
+    reconcile_order: 1
+    conditions: []
+
+  - name: nri-deployment
+    path: active/operators/network_resources_injector/deployment.yaml.tpl
+    phase: 1
+    install: always
+    component: Deployment
+    reconcile_order: 1
+    conditions: []
+
   # Phase 1: Auto-enabled when Descheduler CRD is present (soft dependency)
   - name: descheduler-loadaware
     path: active/descheduler/recommended.yaml.tpl

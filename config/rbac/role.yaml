@@ -121,6 +121,52 @@ rules:
   # ========================================
   # Managed Resources (Dynamic - from assets/)
   # ========================================
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+      - serviceaccounts
+      - services
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - cert-manager.io
+    resources:
+      - certificates
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # Migration Toolkit for Virtualization (MTV)
   - apiGroups:
       - forklift.konveyor.io
@@ -220,6 +266,7 @@ rules:
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
+      - clusterrolebindings
       - clusterroles
     verbs:
       - create
