@@ -535,7 +535,7 @@ func TestCrdNameFromGVK(t *testing.T) {
 			kind:       "Service",
 			want:       "",
 		},
-		
+
 		// Built-in API groups with .k8s.io suffix
 		{
 			name:       "rbac clusterrole",
@@ -579,7 +579,7 @@ func TestCrdNameFromGVK(t *testing.T) {
 			kind:       "Event",
 			want:       "",
 		},
-		
+
 		// Built-in API groups with .apiserver.k8s.io suffix
 		{
 			name:       "flowcontrol prioritylevelconfiguration",
@@ -587,7 +587,7 @@ func TestCrdNameFromGVK(t *testing.T) {
 			kind:       "PriorityLevelConfiguration",
 			want:       "",
 		},
-		
+
 		// Legacy built-in API groups (no suffix)
 		{
 			name:       "apps deployment",
@@ -613,7 +613,7 @@ func TestCrdNameFromGVK(t *testing.T) {
 			kind:       "HorizontalPodAutoscaler",
 			want:       "",
 		},
-		
+
 		// Custom Resource Definitions (should return CRD name)
 		{
 			name:       "kubevirt hyperconverged",
