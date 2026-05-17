@@ -91,6 +91,33 @@ func StaticRules() []Rule {
 			Resources: []string{"infrastructures"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
+		// Rule 6: Transitive RBAC for managed ClusterRoles (workload resources)
+		// Required to create ClusterRoles that grant permissions on pods, replicasets, etc.
+		// (Kubernetes privilege escalation prevention).
+		{
+			APIGroups: []string{"", "apps", "extensions", "k8s.cni.cncf.io"},
+			Resources: []string{"pods", "replicasets", "replicationcontrollers", "daemonsets", "statefulsets", "network-attachment-definitions"},
+			Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+		},
+		// Rule 7: Transitive RBAC for managed ClusterRoles (webhook registration)
+		{
+			APIGroups: []string{"admissionregistration.k8s.io"},
+			Resources: []string{"mutatingwebhookconfigurations", "validatingwebhookconfigurations"},
+			Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+		},
+		// Rule 8: Transitive RBAC for managed ClusterRoles (configmap access)
+		{
+			APIGroups: []string{""},
+			Resources: []string{"configmaps"},
+			Verbs:     []string{"get"},
+		},
+		// Rule 9: Transitive RBAC for managed ClusterRoles (secrets/services delete)
+		// Separate rule needed because dynamic rules don't include delete for these resources
+		{
+			APIGroups: []string{""},
+			Resources: []string{"secrets", "services"},
+			Verbs:     []string{"delete"},
+		},
 	}
 }
 
