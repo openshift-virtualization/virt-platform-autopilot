@@ -68,6 +68,54 @@ rules:
       - get
       - list
       - watch
+  # Transitive RBAC: workload resources (for managed ClusterRoles)
+  - apiGroups:
+      - ""
+      - apps
+      - extensions
+      - k8s.cni.cncf.io
+    resources:
+      - pods
+      - replicasets
+      - replicationcontrollers
+      - daemonsets
+      - statefulsets
+      - network-attachment-definitions
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  # Transitive RBAC: webhook registration (for managed ClusterRoles)
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  # Transitive RBAC: configmap access (for managed ClusterRoles)
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+  # Transitive RBAC: secrets/services delete (for managed ClusterRoles)
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+      - services
+    verbs:
+      - delete
   # ========================================
   # Managed Resources (Dynamic - from assets/)
   # ========================================
