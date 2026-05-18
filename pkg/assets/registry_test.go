@@ -514,3 +514,151 @@ func TestOptInAssetsHaveConditions(t *testing.T) {
 			len(violations), violations)
 	}
 }
+
+func TestCrdNameFromGVK(t *testing.T) {
+	tests := []struct {
+		name       string
+		apiVersion string
+		kind       string
+		want       string
+	}{
+		// Core API (no group)
+		{
+			name:       "core v1 pod",
+			apiVersion: "v1",
+			kind:       "Pod",
+			want:       "",
+		},
+		{
+			name:       "core v1 service",
+			apiVersion: "v1",
+			kind:       "Service",
+			want:       "",
+		},
+
+		// Built-in API groups with .k8s.io suffix
+		{
+			name:       "rbac clusterrole",
+			apiVersion: "rbac.authorization.k8s.io/v1",
+			kind:       "ClusterRole",
+			want:       "",
+		},
+		{
+			name:       "networking ingress",
+			apiVersion: "networking.k8s.io/v1",
+			kind:       "Ingress",
+			want:       "",
+		},
+		{
+			name:       "admissionregistration mutatingwebhook",
+			apiVersion: "admissionregistration.k8s.io/v1",
+			kind:       "MutatingWebhookConfiguration",
+			want:       "",
+		},
+		{
+			name:       "storage storageclass",
+			apiVersion: "storage.k8s.io/v1",
+			kind:       "StorageClass",
+			want:       "",
+		},
+		{
+			name:       "apiextensions crd",
+			apiVersion: "apiextensions.k8s.io/v1",
+			kind:       "CustomResourceDefinition",
+			want:       "",
+		},
+		{
+			name:       "coordination lease",
+			apiVersion: "coordination.k8s.io/v1",
+			kind:       "Lease",
+			want:       "",
+		},
+		{
+			name:       "events event",
+			apiVersion: "events.k8s.io/v1",
+			kind:       "Event",
+			want:       "",
+		},
+
+		// Built-in API groups with .apiserver.k8s.io suffix
+		{
+			name:       "flowcontrol prioritylevelconfiguration",
+			apiVersion: "flowcontrol.apiserver.k8s.io/v1",
+			kind:       "PriorityLevelConfiguration",
+			want:       "",
+		},
+
+		// Legacy built-in API groups (no suffix)
+		{
+			name:       "apps deployment",
+			apiVersion: "apps/v1",
+			kind:       "Deployment",
+			want:       "",
+		},
+		{
+			name:       "batch job",
+			apiVersion: "batch/v1",
+			kind:       "Job",
+			want:       "",
+		},
+		{
+			name:       "policy poddisruptionbudget",
+			apiVersion: "policy/v1",
+			kind:       "PodDisruptionBudget",
+			want:       "",
+		},
+		{
+			name:       "autoscaling hpa",
+			apiVersion: "autoscaling/v2",
+			kind:       "HorizontalPodAutoscaler",
+			want:       "",
+		},
+
+		// Custom Resource Definitions (should return CRD name)
+		{
+			name:       "kubevirt hyperconverged",
+			apiVersion: "hco.kubevirt.io/v1beta1",
+			kind:       "HyperConverged",
+			want:       "hyperconvergeds.hco.kubevirt.io",
+		},
+		{
+			name:       "forklift controller",
+			apiVersion: "forklift.konveyor.io/v1beta1",
+			kind:       "ForkliftController",
+			want:       "forkliftcontrollers.forklift.konveyor.io",
+		},
+		{
+			name:       "metallb",
+			apiVersion: "metallb.io/v1beta1",
+			kind:       "MetalLB",
+			want:       "metallbs.metallb.io",
+		},
+		{
+			name:       "monitoring prometheusrule",
+			apiVersion: "monitoring.coreos.com/v1",
+			kind:       "PrometheusRule",
+			want:       "prometheusrules.monitoring.coreos.com",
+		},
+		{
+			name:       "openshift machineconfig",
+			apiVersion: "machineconfiguration.openshift.io/v1",
+			kind:       "MachineConfig",
+			want:       "machineconfigs.machineconfiguration.openshift.io",
+		},
+		{
+			name:       "medik8s nodehealthcheck",
+			apiVersion: "remediation.medik8s.io/v1alpha1",
+			kind:       "NodeHealthCheck",
+			want:       "nodehealthchecks.remediation.medik8s.io",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := crdNameFromGVK(tt.apiVersion, tt.kind)
+			if got != tt.want {
+				t.Errorf("crdNameFromGVK(%q, %q) = %q, want %q", tt.apiVersion, tt.kind, got, tt.want)
+			}
+		})
+	}
+}
