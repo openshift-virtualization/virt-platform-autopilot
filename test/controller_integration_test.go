@@ -223,7 +223,7 @@ var _ = Describe("Platform Controller Integration", func() {
 
 			hco := &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "hco.kubevirt.io/v1beta1",
+					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
 					"metadata": map[string]interface{}{
 						"name":      "kubevirt-hyperconverged", // HCO CRD requires this exact name
@@ -312,16 +312,18 @@ var _ = Describe("Platform Controller Integration", func() {
 			By("creating an HCO without the managed-by label")
 			hco := &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "hco.kubevirt.io/v1beta1",
+					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
 					"metadata": map[string]interface{}{
 						"name":      "kubevirt-hyperconverged",
 						"namespace": testNs,
 					},
 					"spec": map[string]interface{}{
-						"liveMigrationConfig": map[string]interface{}{
-							"parallelMigrationsPerCluster":      5,
-							"parallelOutboundMigrationsPerNode": 2,
+						"virtualization": map[string]interface{}{
+							"liveMigrationConfig": map[string]interface{}{
+								"parallelMigrationsPerCluster":      5,
+								"parallelOutboundMigrationsPerNode": 2,
+							},
 						},
 					},
 				},
@@ -333,7 +335,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			created := &unstructured.Unstructured{}
 			created.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "hco.kubevirt.io",
-				Version: "v1beta1",
+				Version: "v1",
 				Kind:    "HyperConverged",
 			})
 			Expect(k8sClient.Get(ctx, key, created)).To(Succeed())

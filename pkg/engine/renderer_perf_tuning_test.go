@@ -38,7 +38,7 @@ func renderHCOAsset(t *testing.T, assetName string) (*unstructured.Unstructured,
 	renderer := NewRenderer(loader)
 
 	hco := &unstructured.Unstructured{}
-	hco.SetAPIVersion("hco.kubevirt.io/v1beta1")
+	hco.SetAPIVersion("hco.kubevirt.io/v1")
 	hco.SetKind("HyperConverged")
 	hco.SetName("kubevirt-hyperconverged")
 	hco.SetNamespace("openshift-cnv")
@@ -72,7 +72,7 @@ func TestHCOGoldenConfigPreservesCertConfig(t *testing.T) {
 	renderer := NewRenderer(loader)
 
 	hco := &unstructured.Unstructured{}
-	hco.SetAPIVersion("hco.kubevirt.io/v1beta1")
+	hco.SetAPIVersion("hco.kubevirt.io/v1")
 	hco.SetKind("HyperConverged")
 	hco.SetName("kubevirt-hyperconverged")
 	hco.SetNamespace("openshift-cnv")
@@ -173,13 +173,13 @@ func TestKubeletPerfSettingsMaxPodsCustom(t *testing.T) {
 	renderer := NewRenderer(loader)
 
 	hco := &unstructured.Unstructured{}
-	hco.SetAPIVersion("hco.kubevirt.io/v1beta1")
+	hco.SetAPIVersion("hco.kubevirt.io/v1")
 	hco.SetKind("HyperConverged")
 	hco.SetName("kubevirt-hyperconverged")
 	hco.SetNamespace("openshift-cnv")
 
 	// Set custom maxPods
-	err = unstructured.SetNestedField(hco.Object, int64(250), "spec", "infra", "nodePlacement", "maxPods")
+	err = unstructured.SetNestedField(hco.Object, int64(250), "spec", "deployment", "nodePlacements", "infra", "maxPods")
 	if err != nil {
 		t.Fatalf("Failed to set maxPods in HCO: %v", err)
 	}

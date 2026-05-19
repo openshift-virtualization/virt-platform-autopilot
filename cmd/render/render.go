@@ -177,7 +177,7 @@ func loadHCOFromCluster(ctx context.Context, kubeconfigPath string) (*unstructur
 
 	hcoList := &unstructured.UnstructuredList{}
 	hcoList.SetGroupVersionKind(pkgcontext.HCOGVK)
-	hcoList.SetAPIVersion("hco.kubevirt.io/v1beta1")
+	hcoList.SetAPIVersion("hco.kubevirt.io/v1")
 
 	if err := k8sClient.List(ctx, hcoList); err != nil {
 		return nil, fmt.Errorf("failed to list HCO: %w", err)

@@ -76,7 +76,7 @@ var _ = Describe("Controller E2E Tests", func() {
 			existingHCO := &unstructured.Unstructured{}
 			existingHCO.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "hco.kubevirt.io",
-				Version: "v1beta1",
+				Version: "v1",
 				Kind:    "HyperConverged",
 			})
 			err := k8sClient.Get(ctx, types.NamespacedName{
@@ -99,7 +99,7 @@ var _ = Describe("Controller E2E Tests", func() {
 			By("creating unlabeled HCO instance")
 			hco = &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "hco.kubevirt.io/v1beta1",
+					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
 					"metadata": map[string]interface{}{
 						"name":      hcoName,
@@ -121,7 +121,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				fetched := &unstructured.Unstructured{}
 				fetched.SetGroupVersionKind(schema.GroupVersionKind{
 					Group:   "hco.kubevirt.io",
-					Version: "v1beta1",
+					Version: "v1",
 					Kind:    "HyperConverged",
 				})
 				if err := k8sClient.Get(ctx, types.NamespacedName{

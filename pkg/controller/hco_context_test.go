@@ -641,7 +641,7 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 
 		hco := &unstructured.Unstructured{
 			Object: map[string]interface{}{
-				"apiVersion": "hco.kubevirt.io/v1beta1",
+				"apiVersion": "hco.kubevirt.io/v1",
 				"kind":       "HyperConverged",
 				"metadata": map[string]interface{}{
 					"name":      "test-hco",

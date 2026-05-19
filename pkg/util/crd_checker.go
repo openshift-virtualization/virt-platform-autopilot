@@ -117,7 +117,7 @@ func (c *CRDChecker) updateDependencyMetric(crdName string, missing bool) {
 
 	// Use a default version for metrics (doesn't affect functionality)
 	// The actual version doesn't matter for our "is this CRD missing?" metric
-	version := "v1beta1"
+	version := "v1"
 
 	observability.SetMissingDependency(group, version, kind, missing)
 }

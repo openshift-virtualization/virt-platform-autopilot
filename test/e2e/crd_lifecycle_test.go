@@ -41,7 +41,7 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		By("ensuring clean HCO instance for lifecycle tests")
 		hco = &unstructured.Unstructured{
 			Object: map[string]interface{}{
-				"apiVersion": "hco.kubevirt.io/v1beta1",
+				"apiVersion": "hco.kubevirt.io/v1",
 				"kind":       "HyperConverged",
 				"metadata": map[string]interface{}{
 					"name":      hcoName,

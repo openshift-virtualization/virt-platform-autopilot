@@ -320,7 +320,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getRenderContext(ctx context.Context) (*pkgcontext.RenderContext, error) {
 	hcoList := &unstructured.UnstructuredList{}
 	hcoList.SetGroupVersionKind(pkgcontext.HCOGVK)
-	hcoList.SetAPIVersion("hco.kubevirt.io/v1beta1")
+	hcoList.SetAPIVersion("hco.kubevirt.io/v1")
 
 	if err := s.client.List(ctx, hcoList); err != nil {
 		return nil, fmt.Errorf("failed to list HCO: %w", err)

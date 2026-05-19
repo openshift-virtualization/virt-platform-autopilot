@@ -363,17 +363,26 @@ func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstruct
 	r.conditionEvaluator.Annotations = hco.GetAnnotations()
 }
 
-// extractFeatureGates extracts feature gates from HCO spec
+// extractFeatureGates extracts feature gates from HCO v1 spec.
+// In v1 the field is an array of {name: string, state: "Enabled"|"Disabled"} objects.
 func extractFeatureGates(hco *unstructured.Unstructured) map[string]bool {
 	gates := make(map[string]bool)
 
-	featureGates, found, err := unstructured.NestedStringSlice(hco.Object, "spec", "featureGates")
+	featureGates, found, err := unstructured.NestedSlice(hco.Object, "spec", "featureGates")
 	if err != nil || !found {
 		return gates
 	}
 
-	for _, gate := range featureGates {
-		gates[gate] = true
+	for _, item := range featureGates {
+		gate, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := gate["name"].(string)
+		state, _ := gate["state"].(string)
+		if name != "" {
+			gates[name] = (state != "Disabled")
+		}
 	}
 
 	return gates

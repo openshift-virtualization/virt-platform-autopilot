@@ -322,7 +322,7 @@ through the existing HyperConverged resource.`,
 				Required: []CRDDescription{
 					{
 						Name:        "hyperconvergeds.hco.kubevirt.io",
-						Version:     "v1beta1",
+						Version:     "v1",
 						Kind:        "HyperConverged",
 						DisplayName: "HyperConverged",
 						Description: "HyperConverged is the configuration API for the KubeVirt ecosystem.",
