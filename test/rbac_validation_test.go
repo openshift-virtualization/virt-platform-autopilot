@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/yaml"
+
+	"github.com/kubevirt/virt-platform-autopilot/pkg/rbac"
 )
 
 var _ = Describe("RBAC Permissions Validation", func() {
@@ -322,8 +324,8 @@ var _ = Describe("RBAC Permissions Validation", func() {
 		// Verify that dynamically generated rules with delete verb are properly formatted
 		// Static rules (like leader election) may have different verb ordering
 		for i, rule := range clusterRole.Rules {
-			// Skip static infrastructure rules (first 5 rules)
-			if i < 5 {
+			// Skip static infrastructure rules (there are 6)
+			if i < len(rbac.StaticRules()) {
 				continue
 			}
 
@@ -337,12 +339,7 @@ var _ = Describe("RBAC Permissions Validation", func() {
 			}
 
 			if hasDelete {
-				// If delete verb exists in dynamic rules, it should be first (alphabetical order)
-				Expect(rule.Verbs[0]).To(Equal("delete"),
-					"Delete verb should be first in alphabetical order for dynamic rule with API group: %v, resources: %v",
-					rule.APIGroups, rule.Resources)
-
-				// Rule should also have create verb
+				// Rule should also have create verb (tombstoned resources still need full CRUD)
 				hasCreate := false
 				for _, v := range rule.Verbs {
 					if v == "create" {
@@ -363,8 +360,8 @@ var _ = Describe("RBAC Permissions Validation", func() {
 		// This ensures deterministic RBAC generation for CI verification
 		// Only check dynamic rules (from assets), as static rules may have custom ordering
 		for i, rule := range clusterRole.Rules {
-			// Skip static infrastructure rules (first 5 rules)
-			if i < 5 {
+			// Skip static infrastructure rules (there are 6)
+			if i < len(rbac.StaticRules()) {
 				continue
 			}
 
