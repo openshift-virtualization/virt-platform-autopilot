@@ -18,6 +18,7 @@ package engine
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"text/template"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	embeddedassets "github.com/kubevirt/virt-platform-autopilot/assets"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 )
@@ -228,6 +230,20 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// prometheusRuleHasRecordingRule checks if a PrometheusRule contains a specific recording rule
 		// Usage: {{ prometheusRuleHasRecordingRule "openshift-kube-descheduler-operator" "descheduler-rules" "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m" }}
 		"prometheusRuleHasRecordingRule": r.prometheusRuleHasRecordingRuleFunc(),
+
+		"readAsset": readAsset,
+
+		"gzip": func(s string) (string, error) {
+			var buf bytes.Buffer
+			w := gzip.NewWriter(&buf)
+			if _, err := w.Write([]byte(s)); err != nil {
+				return "", err
+			}
+			if err := w.Close(); err != nil {
+				return "", err
+			}
+			return buf.String(), nil
+		},
 	}
 }
 
@@ -507,4 +523,14 @@ func (r *Renderer) prometheusRuleHasRecordingRuleFunc() func(string, string, str
 
 		return false
 	}
+}
+
+// readAsset reads a raw asset file from the embedded FS by path relative to the active/ root.
+// Used as a template function to embed file contents (e.g. scripts) into rendered assets.
+func readAsset(path string) (string, error) {
+	data, err := embeddedassets.EmbeddedFS.ReadFile("active/" + path)
+	if err != nil {
+		return "", fmt.Errorf("readAsset %s: %w", path, err)
+	}
+	return string(data), nil
 }
