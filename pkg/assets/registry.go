@@ -177,6 +177,9 @@ func (r *Registry) ShouldApply(ctx context.Context, asset *AssetMetadata, evalCo
 // IsManagedCRD reports whether crdName is the required CRD of at least one declared asset.
 // Used by the CRD event handler to decide whether a CRD install/removal is relevant.
 func (r *Registry) IsManagedCRD(crdName string) bool {
+	if crdName == "" {
+		return false
+	}
 	for i := range r.catalog.Assets {
 		if r.catalog.Assets[i].RequiredCRD == crdName {
 			return true
@@ -260,7 +263,7 @@ func preprocessAssetTemplate(content []byte) []byte {
 	backtickRe := regexp.MustCompile("\\{\\{`[^`]*`\\}\\}")
 	content = backtickRe.ReplaceAll(content, []byte(`dummy-value`))
 	exprRe := regexp.MustCompile(`\{\{[^}]+\}\}`)
-	return exprRe.ReplaceAll(content, []byte(`"dummy-value"`))
+	return exprRe.ReplaceAll(content, []byte(`dummy-value`))
 }
 
 // ConditionEvaluator defines the interface for evaluating asset conditions
