@@ -26,7 +26,7 @@ const (
 	HCOGroup = "hco.kubevirt.io"
 
 	// HCOVersion is the API version for HyperConverged
-	HCOVersion = "v1beta1"
+	HCOVersion = "v1"
 
 	// HCOKind is the kind for HyperConverged
 	HCOKind = "HyperConverged"

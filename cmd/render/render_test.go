@@ -33,14 +33,15 @@ import (
 
 func TestLoadHCOFromFile(t *testing.T) {
 	// Create temp HCO file
-	hcoYAML := `apiVersion: hco.kubevirt.io/v1beta1
+	hcoYAML := `apiVersion: hco.kubevirt.io/v1
 kind: HyperConverged
 metadata:
   name: kubevirt-hyperconverged
   namespace: openshift-cnv
 spec:
   featureGates:
-    deployKubeSecondaryDNS: true
+    - name: deployKubeSecondaryDNS
+      state: Enabled
 `
 
 	tmpDir := t.TempDir()

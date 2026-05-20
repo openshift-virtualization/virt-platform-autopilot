@@ -98,7 +98,7 @@ var _ = Describe("Event Recording Integration", func() {
 		renderCtx = &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "hco.kubevirt.io/v1beta1",
+					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
 					"metadata": map[string]interface{}{
 						"name":      "kubevirt-hyperconverged",

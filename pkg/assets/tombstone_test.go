@@ -165,7 +165,7 @@ var _ = Describe("Tombstone Loader", func() {
 	Describe("TombstoneMetadata", func() {
 		It("should correctly extract GVK from tombstone object", func() {
 			obj := &unstructured.Unstructured{}
-			obj.SetAPIVersion("hco.kubevirt.io/v1beta1")
+			obj.SetAPIVersion("hco.kubevirt.io/v1")
 			obj.SetKind("HyperConverged")
 			obj.SetName("test")
 			obj.SetLabels(map[string]string{
@@ -181,7 +181,7 @@ var _ = Describe("Tombstone Loader", func() {
 			}
 
 			Expect(ts.GVK.Group).To(Equal("hco.kubevirt.io"))
-			Expect(ts.GVK.Version).To(Equal("v1beta1"))
+			Expect(ts.GVK.Version).To(Equal("v1"))
 			Expect(ts.GVK.Kind).To(Equal("HyperConverged"))
 			Expect(ts.Name).To(Equal("test"))
 		})

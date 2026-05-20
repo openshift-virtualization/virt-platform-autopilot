@@ -222,15 +222,17 @@ var _ = Describe("Real-Time Drift Detection", func() {
 			By("creating an HCO instance")
 			hco := &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": "hco.kubevirt.io/v1beta1",
+					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
 					"metadata": map[string]interface{}{
 						"name":      "kubevirt-hyperconverged",
 						"namespace": testNs,
 					},
 					"spec": map[string]interface{}{
-						"liveMigrationConfig": map[string]interface{}{
-							"parallelMigrationsPerCluster": int64(5),
+						"virtualization": map[string]interface{}{
+							"liveMigrationConfig": map[string]interface{}{
+								"parallelMigrationsPerCluster": int64(5),
+							},
 						},
 					},
 				},
@@ -249,15 +251,13 @@ var _ = Describe("Real-Time Drift Detection", func() {
 			fetched := &unstructured.Unstructured{}
 			fetched.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "hco.kubevirt.io",
-				Version: "v1beta1",
+				Version: "v1",
 				Kind:    "HyperConverged",
 			})
 			Expect(k8sClient.Get(ctx, key, fetched)).To(Succeed())
 
 			// User changes parallelMigrationsPerCluster
-			spec, _, _ := unstructured.NestedMap(fetched.Object, "spec")
-			liveMigration := spec["liveMigrationConfig"].(map[string]interface{})
-			liveMigration["parallelMigrationsPerCluster"] = int64(10) // Changed from 5
+			Expect(unstructured.SetNestedField(fetched.Object, int64(10), "spec", "virtualization", "liveMigrationConfig", "parallelMigrationsPerCluster")).To(Succeed())
 			Expect(k8sClient.Update(ctx, fetched)).To(Succeed())
 
 			By("detecting drift")
@@ -271,15 +271,16 @@ var _ = Describe("Real-Time Drift Detection", func() {
 			final := &unstructured.Unstructured{}
 			final.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   "hco.kubevirt.io",
-				Version: "v1beta1",
+				Version: "v1",
 				Kind:    "HyperConverged",
 			})
 			Expect(k8sClient.Get(ctx, key, final)).To(Succeed())
 
-			finalSpec, _, _ := unstructured.NestedMap(final.Object, "spec")
-			finalLiveMigration := finalSpec["liveMigrationConfig"].(map[string]interface{})
 			// SSA should restore to desired value of 5
-			Expect(finalLiveMigration["parallelMigrationsPerCluster"]).To(BeEquivalentTo(5))
+			finalPMC, found, err := unstructured.NestedFieldNoCopy(final.Object, "spec", "virtualization", "liveMigrationConfig", "parallelMigrationsPerCluster")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue(), "spec.virtualization.liveMigrationConfig.parallelMigrationsPerCluster should exist")
+			Expect(finalPMC).To(BeEquivalentTo(5))
 		})
 	})
 

@@ -44,7 +44,7 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 		By("ensuring clean HCO instance for drift tests")
 		hco = &unstructured.Unstructured{
 			Object: map[string]interface{}{
-				"apiVersion": "hco.kubevirt.io/v1beta1",
+				"apiVersion": "hco.kubevirt.io/v1",
 				"kind":       "HyperConverged",
 				"metadata": map[string]interface{}{
 					"name":      hcoName,

@@ -40,12 +40,12 @@ func TestExtractFeatureGates(t *testing.T) {
 		{
 			name: "with feature gates",
 			hco: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"featureGates": []interface{}{
-							"FeatureGate1",
-							"FeatureGate2",
-							"ExperimentalFeature",
+				Object: map[string]any{
+					"spec": map[string]any{
+						"featureGates": []any{
+							map[string]any{"name": "FeatureGate1"},
+							map[string]any{"name": "FeatureGate2"},
+							map[string]any{"name": "ExperimentalFeature"},
 						},
 					},
 				},
@@ -57,11 +57,43 @@ func TestExtractFeatureGates(t *testing.T) {
 			},
 		},
 		{
+			name: "disabled feature gate",
+			hco: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"featureGates": []any{
+							map[string]any{"name": "EnabledGate"},
+							map[string]any{"name": "DisabledGate", "state": "Disabled"},
+						},
+					},
+				},
+			},
+			want: map[string]bool{
+				"EnabledGate":  true,
+				"DisabledGate": false,
+			},
+		},
+		{
+			name: "feature gate with no state defaults to enabled",
+			hco: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"featureGates": []any{
+							map[string]any{"name": "NoStateGate"},
+						},
+					},
+				},
+			},
+			want: map[string]bool{
+				"NoStateGate": true,
+			},
+		},
+		{
 			name: "empty feature gates",
 			hco: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"featureGates": []interface{}{},
+				Object: map[string]any{
+					"spec": map[string]any{
+						"featureGates": []any{},
 					},
 				},
 			},
@@ -70,8 +102,8 @@ func TestExtractFeatureGates(t *testing.T) {
 		{
 			name: "no feature gates field",
 			hco: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{},
+				Object: map[string]any{
+					"spec": map[string]any{},
 				},
 			},
 			want: map[string]bool{},
@@ -79,17 +111,17 @@ func TestExtractFeatureGates(t *testing.T) {
 		{
 			name: "no spec field",
 			hco: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			want: map[string]bool{},
 		},
 		{
 			name: "single feature gate",
 			hco: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
-						"featureGates": []interface{}{
-							"SingleFeature",
+				Object: map[string]any{
+					"spec": map[string]any{
+						"featureGates": []any{
+							map[string]any{"name": "SingleFeature"},
 						},
 					},
 				},
@@ -605,9 +637,9 @@ func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hco := &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							overrides.AnnotationAutopilotEnabled: tt.annotationValue,
 						},
 					},

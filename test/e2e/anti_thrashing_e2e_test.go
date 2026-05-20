@@ -44,7 +44,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 		By("ensuring HCO instance exists with opt-in annotation")
 		hco = &unstructured.Unstructured{
 			Object: map[string]interface{}{
-				"apiVersion": "hco.kubevirt.io/v1beta1",
+				"apiVersion": "hco.kubevirt.io/v1",
 				"kind":       "HyperConverged",
 				"metadata": map[string]interface{}{
 					"name":      hcoName,

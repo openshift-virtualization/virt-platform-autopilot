@@ -60,7 +60,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 		hco = &unstructured.Unstructured{}
 		hco.SetGroupVersionKind(schema.GroupVersionKind{
 			Group:   "hco.kubevirt.io",
-			Version: "v1beta1",
+			Version: "v1",
 			Kind:    "HyperConverged",
 		})
 		hco.SetName("kubevirt-hyperconverged")
