@@ -64,7 +64,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(found).To(BeTrue(), "spec field should exist")
 
-		specMap, ok := spec.(map[string]interface{})
+		specMap, ok := spec.(map[string]any)
 		Expect(ok).To(BeTrue(), "spec should be a map")
 
 		groups, found, err := unstructured.NestedSlice(specMap, "groups")
@@ -73,40 +73,40 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		Expect(groups).To(HaveLen(2), "should have 2 rule groups (critical + warning)")
 
 		By("verifying critical alert group")
-		criticalGroup := groups[0].(map[string]interface{})
+		criticalGroup := groups[0].(map[string]any)
 		Expect(criticalGroup["name"]).To(Equal("virt-platform-autopilot.critical"))
 
-		criticalRules := criticalGroup["rules"].([]interface{})
+		criticalRules := criticalGroup["rules"].([]any)
 		Expect(criticalRules).To(HaveLen(1), "critical group should have 1 alert")
 
-		syncFailedAlert := criticalRules[0].(map[string]interface{})
+		syncFailedAlert := criticalRules[0].(map[string]any)
 		Expect(syncFailedAlert["alert"]).To(Equal("VirtPlatformSyncFailed"))
 		Expect(syncFailedAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_compliance_status == 0"))
 		Expect(syncFailedAlert["for"]).To(Equal("15m"))
 
-		labels := syncFailedAlert["labels"].(map[string]interface{})
+		labels := syncFailedAlert["labels"].(map[string]any)
 		Expect(labels["severity"]).To(Equal("critical"))
 
 		By("verifying warning alert group")
-		warningGroup := groups[1].(map[string]interface{})
+		warningGroup := groups[1].(map[string]any)
 		Expect(warningGroup["name"]).To(Equal("virt-platform-autopilot.warning"))
 
-		warningRules := warningGroup["rules"].([]interface{})
+		warningRules := warningGroup["rules"].([]any)
 		Expect(warningRules).To(HaveLen(3), "warning group should have 3 alerts")
 
 		// Verify thrashing alert
-		thrashingAlert := warningRules[0].(map[string]interface{})
+		thrashingAlert := warningRules[0].(map[string]any)
 		Expect(thrashingAlert["alert"]).To(Equal("VirtPlatformThrashingDetected"))
 		Expect(thrashingAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_paused_resources > 0"))
 
 		// Verify dependency alert
-		dependencyAlert := warningRules[1].(map[string]interface{})
+		dependencyAlert := warningRules[1].(map[string]any)
 		Expect(dependencyAlert["alert"]).To(Equal("VirtPlatformDependencyMissing"))
 		Expect(dependencyAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_missing_dependency == 1"))
 		Expect(dependencyAlert["for"]).To(Equal("5m"))
 
 		// Verify tombstone alert
-		tombstoneAlert := warningRules[2].(map[string]interface{})
+		tombstoneAlert := warningRules[2].(map[string]any)
 		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformTombstoneStuck"))
 		Expect(tombstoneAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_tombstone_status < 0"))
 		Expect(tombstoneAlert["for"]).To(Equal("30m"))
@@ -116,12 +116,12 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		By("extracting all rules from all groups")
 		groups, _, _ := unstructured.NestedSlice(prometheusRuleObj.Object, "spec", "groups")
 
-		allAlerts := []map[string]interface{}{}
+		allAlerts := []map[string]any{}
 		for _, group := range groups {
-			groupMap := group.(map[string]interface{})
-			rules := groupMap["rules"].([]interface{})
+			groupMap := group.(map[string]any)
+			rules := groupMap["rules"].([]any)
 			for _, rule := range rules {
-				allAlerts = append(allAlerts, rule.(map[string]interface{}))
+				allAlerts = append(allAlerts, rule.(map[string]any))
 			}
 		}
 
@@ -130,7 +130,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 			alertName := alert["alert"].(string)
 
 			// Verify labels
-			labels, labelsExist := alert["labels"].(map[string]interface{})
+			labels, labelsExist := alert["labels"].(map[string]any)
 			Expect(labelsExist).To(BeTrue(), "Alert %s should have labels", alertName)
 			Expect(labels["severity"]).ToNot(BeEmpty(), "Alert %s should have severity label", alertName)
 			Expect(labels["operator"]).To(Equal("virt-platform-autopilot"), "Alert %s should have operator label", alertName)
@@ -139,7 +139,7 @@ var _ = Describe("Prometheus Alert Rules", func() {
 			Expect(labels["operator_health_impact"]).To(Equal(labels["severity"]), "Alert %s operator_health_impact should match severity", alertName)
 
 			// Verify annotations
-			annotations, annotationsExist := alert["annotations"].(map[string]interface{})
+			annotations, annotationsExist := alert["annotations"].(map[string]any)
 			Expect(annotationsExist).To(BeTrue(), "Alert %s should have annotations", alertName)
 			Expect(annotations["summary"]).ToNot(BeEmpty(), "Alert %s should have summary annotation", alertName)
 			Expect(annotations["description"]).ToNot(BeEmpty(), "Alert %s should have description annotation", alertName)
@@ -184,10 +184,10 @@ var _ = Describe("Prometheus Alert Rules", func() {
 		groups, _, _ := unstructured.NestedSlice(prometheusRuleObj.Object, "spec", "groups")
 
 		// Get VirtPlatformSyncFailed alert annotations
-		criticalGroup := groups[0].(map[string]interface{})
-		criticalRules := criticalGroup["rules"].([]interface{})
-		syncFailedAlert := criticalRules[0].(map[string]interface{})
-		annotations := syncFailedAlert["annotations"].(map[string]interface{})
+		criticalGroup := groups[0].(map[string]any)
+		criticalRules := criticalGroup["rules"].([]any)
+		syncFailedAlert := criticalRules[0].(map[string]any)
+		annotations := syncFailedAlert["annotations"].(map[string]any)
 
 		summary := annotations["summary"].(string)
 		description := annotations["description"].(string)
@@ -200,12 +200,12 @@ var _ = Describe("Prometheus Alert Rules", func() {
 
 		By("verifying all alerts have properly escaped Prometheus variables")
 		for _, group := range groups {
-			groupMap := group.(map[string]interface{})
-			rules := groupMap["rules"].([]interface{})
+			groupMap := group.(map[string]any)
+			rules := groupMap["rules"].([]any)
 			for _, rule := range rules {
-				alert := rule.(map[string]interface{})
+				alert := rule.(map[string]any)
 				alertName := alert["alert"].(string)
-				alertAnnotations := alert["annotations"].(map[string]interface{})
+				alertAnnotations := alert["annotations"].(map[string]any)
 
 				alertSummary := alertAnnotations["summary"].(string)
 				alertDescription := alertAnnotations["description"].(string)

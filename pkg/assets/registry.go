@@ -200,7 +200,7 @@ func extractRequiredCRD(content []byte, isTemplate bool) string {
 		if doc == "" {
 			continue
 		}
-		var obj map[string]interface{}
+		var obj map[string]any
 		if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
 			continue
 		}

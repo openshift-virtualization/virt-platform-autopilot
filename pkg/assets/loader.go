@@ -150,9 +150,9 @@ func ParseYAML(data []byte) (*unstructured.Unstructured, error) {
 }
 
 // calculateDepth recursively calculates the maximum nesting depth of a map structure
-func calculateDepth(obj interface{}) int {
+func calculateDepth(obj any) int {
 	switch v := obj.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		maxDepth := 0
 		for _, value := range v {
 			depth := calculateDepth(value)
@@ -161,7 +161,7 @@ func calculateDepth(obj interface{}) int {
 			}
 		}
 		return 1 + maxDepth
-	case []interface{}:
+	case []any:
 		maxDepth := 0
 		for _, item := range v {
 			depth := calculateDepth(item)

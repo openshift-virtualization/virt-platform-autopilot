@@ -104,7 +104,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 			resource.SetLabels(map[string]string{
 				assets.TombstoneLabel: assets.TombstoneLabelValue,
 			})
-			resource.Object["data"] = map[string]interface{}{"key": "value"}
+			resource.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(fakeClient.Create(ctx, resource)).To(Succeed())
 
@@ -128,7 +128,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 			resource.SetKind("ConfigMap")
 			resource.SetName("test-config")
 			resource.SetNamespace("default")
-			resource.Object["data"] = map[string]interface{}{"key": "value"}
+			resource.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(fakeClient.Create(ctx, resource)).To(Succeed())
 
@@ -155,7 +155,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 			resource.SetLabels(map[string]string{
 				assets.TombstoneLabel: "wrong-value",
 			})
-			resource.Object["data"] = map[string]interface{}{"key": "value"}
+			resource.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(fakeClient.Create(ctx, resource)).To(Succeed())
 
@@ -213,7 +213,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 			resource.SetLabels(map[string]string{
 				assets.TombstoneLabel: assets.TombstoneLabelValue,
 			})
-			resource.Object["spec"] = map[string]interface{}{"config": "test"}
+			resource.Object["spec"] = map[string]any{"config": "test"}
 
 			Expect(fakeClient.Create(ctx, resource)).To(Succeed())
 
@@ -240,7 +240,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 			resource.SetLabels(map[string]string{
 				assets.TombstoneLabel: assets.TombstoneLabelValue,
 			})
-			resource.Object["data"] = map[string]interface{}{"key": "value"}
+			resource.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(fakeClient.Create(ctx, resource)).To(Succeed())
 
@@ -261,7 +261,7 @@ var _ = Describe("Tombstone Reconciler", func() {
 			resource.SetKind("ConfigMap")
 			resource.SetName("test-config")
 			resource.SetNamespace("default")
-			resource.Object["data"] = map[string]interface{}{"key": "value"}
+			resource.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(fakeClient.Create(ctx, resource)).To(Succeed())
 

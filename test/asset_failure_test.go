@@ -45,14 +45,14 @@ var _ = Describe("Asset Failure Handling", func() {
 		It("should continue processing after one asset fails and report aggregated error", func() {
 			// Valid ConfigMap 1
 			validCM1 := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-cm-1",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value1",
 					},
 				},
@@ -60,14 +60,14 @@ var _ = Describe("Asset Failure Handling", func() {
 
 			// Invalid ConfigMap - missing name (will fail validation)
 			invalidCM := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"namespace": testNs,
 						// Missing "name" field - required by Kubernetes
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "invalid",
 					},
 				},
@@ -75,14 +75,14 @@ var _ = Describe("Asset Failure Handling", func() {
 
 			// Valid ConfigMap 2
 			validCM2 := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-cm-2",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value2",
 					},
 				},
@@ -124,10 +124,10 @@ var _ = Describe("Asset Failure Handling", func() {
 		It("should handle multiple simultaneous failures", func() {
 			// Create 2 invalid and 1 valid asset
 			invalid1 := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"namespace": testNs,
 						// Missing name
 					},
@@ -135,24 +135,24 @@ var _ = Describe("Asset Failure Handling", func() {
 			}
 
 			valid := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "valid-cm",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"test": "value",
 					},
 				},
 			}
 
 			invalid2 := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"namespace": testNs,
 						// Missing name
 					},
@@ -188,14 +188,14 @@ var _ = Describe("Asset Failure Handling", func() {
 			// Create 3 valid ConfigMaps
 			for i := 0; i < 3; i++ {
 				cm := &unstructured.Unstructured{
-					Object: map[string]interface{}{
+					Object: map[string]any{
 						"apiVersion": "v1",
 						"kind":       "ConfigMap",
-						"metadata": map[string]interface{}{
+						"metadata": map[string]any{
 							"name":      fmt.Sprintf("cm-%d", i),
 							"namespace": testNs,
 						},
-						"data": map[string]interface{}{
+						"data": map[string]any{
 							"index": fmt.Sprintf("%d", i),
 						},
 					},
@@ -245,14 +245,14 @@ var _ = Describe("Asset Failure Handling", func() {
 			By("applying a ConfigMap to a namespace that does not exist")
 			missingNs := "missing-ns-" + randString()
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-cm",
 						"namespace": missingNs,
 					},
-					"data": map[string]interface{}{"key": "value"},
+					"data": map[string]any{"key": "value"},
 				},
 			}
 

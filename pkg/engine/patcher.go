@@ -524,7 +524,7 @@ func isNamespaceNotFound(err error) bool {
 // countJSONPatchOperations counts the number of operations in a JSON patch string
 // Returns the count or 0 if parsing fails
 func countJSONPatchOperations(patchStr string) int {
-	var patch []map[string]interface{}
+	var patch []map[string]any
 	if err := json.Unmarshal([]byte(patchStr), &patch); err != nil {
 		return 0
 	}

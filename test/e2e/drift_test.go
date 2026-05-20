@@ -43,20 +43,20 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 	BeforeAll(func() {
 		By("ensuring clean HCO instance for drift tests")
 		hco = &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "hco.kubevirt.io/v1",
 				"kind":       "HyperConverged",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      hcoName,
 					"namespace": operatorNamespace,
-					"labels": map[string]interface{}{
+					"labels": map[string]any{
 						driftManagedByLabel: driftManagedByValue,
 					},
-					"annotations": map[string]interface{}{
+					"annotations": map[string]any{
 						autopilotAnnotation: autopilotEnabled,
 					},
 				},
-				"spec": map[string]interface{}{},
+				"spec": map[string]any{},
 			},
 		}
 
@@ -150,7 +150,7 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 })
 
 // setNestedField sets a value in an unstructured object at the given field path.
-func setNestedField(obj *unstructured.Unstructured, value interface{}, fields ...string) error {
+func setNestedField(obj *unstructured.Unstructured, value any, fields ...string) error {
 	return unstructured.SetNestedField(obj.Object, value, fields...)
 }
 

@@ -83,7 +83,7 @@ var _ = Describe("Tombstone Integration", func() {
 			cm.SetLabels(map[string]string{
 				assets.TombstoneLabel: assets.TombstoneLabelValue,
 			})
-			cm.Object["data"] = map[string]interface{}{"key": "value"}
+			cm.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 
@@ -123,7 +123,7 @@ var _ = Describe("Tombstone Integration", func() {
 			cm.SetKind("ConfigMap")
 			cm.SetName("unmanaged-config")
 			cm.SetNamespace(testNs)
-			cm.Object["data"] = map[string]interface{}{"key": "value"}
+			cm.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 
@@ -165,7 +165,7 @@ var _ = Describe("Tombstone Integration", func() {
 			cm.SetLabels(map[string]string{
 				assets.TombstoneLabel: "some-other-operator",
 			})
-			cm.Object["data"] = map[string]interface{}{"key": "value"}
+			cm.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 
@@ -195,7 +195,7 @@ var _ = Describe("Tombstone Integration", func() {
 			cm.SetLabels(map[string]string{
 				assets.TombstoneLabel: assets.TombstoneLabelValue,
 			})
-			cm.Object["data"] = map[string]interface{}{"key": "value"}
+			cm.Object["data"] = map[string]any{"key": "value"}
 
 			Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 

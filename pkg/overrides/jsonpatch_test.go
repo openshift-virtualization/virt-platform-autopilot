@@ -34,13 +34,13 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "no patch annotation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -51,16 +51,16 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "add operation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "add", "path": "/data/newKey", "value": "newValue"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -80,16 +80,16 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "replace operation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "replace", "path": "/data/key", "value": "newValue"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -106,16 +106,16 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "remove operation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "remove", "path": "/data/key"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key":   "value",
 						"other": "data",
 					},
@@ -136,19 +136,19 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "multiple operations",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							PatchAnnotation: `[
 								{"op": "replace", "path": "/data/key", "value": "updated"},
 								{"op": "add", "path": "/data/new", "value": "added"}
 							]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -168,12 +168,12 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "invalid patch JSON",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							PatchAnnotation: `not valid json`,
 						},
 					},
@@ -185,12 +185,12 @@ func TestApplyJSONPatch(t *testing.T) {
 		{
 			name: "invalid patch operation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "invalid", "path": "/data/key"}]`,
 						},
 					},

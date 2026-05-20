@@ -199,20 +199,20 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 	Context("Pause Annotation", func() {
 		It("should skip reconciliation when pause annotation is present", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "paused-cm",
 						"namespace": testNs,
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
 						},
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.AnnotationReconcilePaused: "true",
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -227,20 +227,20 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 
 		It("should allow reconciliation when pause annotation is removed", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "recoverable-cm",
 						"namespace": testNs,
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
 						},
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.AnnotationReconcilePaused: "true",
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -348,17 +348,17 @@ var _ = Describe("Anti-Thrashing Integration", func() {
 
 			By("creating resource to test pause annotation")
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "fight-cm",
 						"namespace": testNs,
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							"platform.kubevirt.io/managed-by": "virt-platform-autopilot",
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "original",
 					},
 				},

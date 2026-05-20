@@ -53,9 +53,9 @@ var _ = Describe("Descheduler CRD Version Compatibility", func() {
 		// Create mock HCO with custom eviction limits
 		hco = pkgcontext.NewMockHCO("kubevirt-hyperconverged", ns.GetName())
 		// Set custom eviction limits to verify they're extracted correctly (v1 paths)
-		hcoSpec := map[string]interface{}{
-			"virtualization": map[string]interface{}{
-				"liveMigrationConfig": map[string]interface{}{
+		hcoSpec := map[string]any{
+			"virtualization": map[string]any{
+				"liveMigrationConfig": map[string]any{
 					"parallelMigrationsPerCluster":      int64(45),
 					"parallelOutboundMigrationsPerNode": int64(20),
 				},
@@ -266,9 +266,9 @@ var _ = Describe("Descheduler CRD Version Compatibility", func() {
 
 			// Create HCO with only total limit set
 			partialHCO := pkgcontext.NewMockHCO("test-hco", ns.GetName())
-			partialHCO.Object["spec"] = map[string]interface{}{
-				"virtualization": map[string]interface{}{
-					"liveMigrationConfig": map[string]interface{}{
+			partialHCO.Object["spec"] = map[string]any{
+				"virtualization": map[string]any{
+					"liveMigrationConfig": map[string]any{
 						"parallelMigrationsPerCluster": int64(100),
 						// parallelOutboundMigrationsPerNode omitted
 					},

@@ -67,14 +67,14 @@ var _ = Describe("Metrics Integration", func() {
 	Context("Compliance Status Metrics", func() {
 		It("should set compliance=1 when asset is successfully applied", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-cm",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -99,10 +99,10 @@ var _ = Describe("Metrics Integration", func() {
 
 		It("should set compliance=0 when asset fails to apply", func() {
 			invalidCM := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"namespace": testNs,
 						// Missing required "name" field
 					},
@@ -129,26 +129,26 @@ var _ = Describe("Metrics Integration", func() {
 
 		It("should track compliance for multiple resources independently", func() {
 			cm1 := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "cm-synced",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{"k": "v"},
+					"data": map[string]any{"k": "v"},
 				},
 			}
 
 			cm2 := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "cm-failed",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{"k": "v"},
+					"data": map[string]any{"k": "v"},
 				},
 			}
 
@@ -168,14 +168,14 @@ var _ = Describe("Metrics Integration", func() {
 
 		It("should update compliance metric when state changes", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "cm-changing",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{"k": "v"},
+					"data": map[string]any{"k": "v"},
 				},
 			}
 
@@ -212,10 +212,10 @@ var _ = Describe("Metrics Integration", func() {
 	Context("Thrashing Counter Metrics", func() {
 		It("should increment thrashing counter when throttled", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "thrashing-cm",
 						"namespace": testNs,
 					},
@@ -298,17 +298,17 @@ var _ = Describe("Metrics Integration", func() {
 	Context("Customization Info Metrics", func() {
 		It("should track patch customization", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "patched-cm",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.PatchAnnotation: `[{"op":"add","path":"/data/foo","value":"bar"}]`,
 						},
 					},
-					"data": map[string]interface{}{"key": "value"},
+					"data": map[string]any{"key": "value"},
 				},
 			}
 
@@ -411,14 +411,14 @@ var _ = Describe("Metrics Integration", func() {
 	Context("Reconcile Duration Metrics", func() {
 		It("should record reconciliation duration", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "timed-cm",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{"k": "v"},
+					"data": map[string]any{"k": "v"},
 				},
 			}
 
@@ -434,10 +434,10 @@ var _ = Describe("Metrics Integration", func() {
 
 		It("should record duration using timer pattern", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "timer-cm",
 						"namespace": testNs,
 					},
@@ -478,17 +478,17 @@ var _ = Describe("Metrics Integration", func() {
 	Context("End-to-End Metric Emission", func() {
 		It("should emit all relevant metrics during successful reconciliation", func() {
 			cm := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "e2e-cm",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.PatchAnnotation: `[{"op":"add","path":"/data/patched","value":"true"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"original": "value",
 					},
 				},
@@ -532,10 +532,10 @@ var _ = Describe("Metrics Integration", func() {
 
 		It("should handle failed reconciliation with correct metrics", func() {
 			invalidCM := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"namespace": testNs,
 						// Missing name - will fail
 					},

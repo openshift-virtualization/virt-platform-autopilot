@@ -38,7 +38,7 @@ type Event struct {
 	Message   string
 }
 
-func (f *FakeRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+func (f *FakeRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
 	message := fmt.Sprintf(note, args...)
 	f.Events = append(f.Events, Event{
 		EventType: eventtype,

@@ -37,12 +37,12 @@ func (c *errApplyClient) Apply(_ context.Context, _ runtime.ApplyConfiguration, 
 	return c.applyErr
 }
 
-func makeObj(labels map[string]string, spec map[string]interface{}) *unstructured.Unstructured {
+func makeObj(labels map[string]string, spec map[string]any) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       "ConfigMap",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name":      "test",
 				"namespace": "default",
 			},
@@ -68,20 +68,20 @@ func TestSimpleDriftCheck(t *testing.T) {
 	}{
 		{
 			name:    "identical objects, no labels",
-			desired: makeObj(nil, map[string]interface{}{"key": "value"}),
-			live:    makeObj(nil, map[string]interface{}{"key": "value"}),
+			desired: makeObj(nil, map[string]any{"key": "value"}),
+			live:    makeObj(nil, map[string]any{"key": "value"}),
 			want:    false,
 		},
 		{
 			name:    "both have managed-by label, spec equal",
-			desired: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
-			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			desired: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]any{"key": "value"}),
+			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]any{"key": "value"}),
 			want:    false,
 		},
 		{
 			name:    "spec differs",
-			desired: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "a"}),
-			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "b"}),
+			desired: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]any{"key": "a"}),
+			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]any{"key": "b"}),
 			want:    true,
 		},
 		{
@@ -91,8 +91,8 @@ func TestSimpleDriftCheck(t *testing.T) {
 			// always present on the live object will show up as spurious drift on
 			// every reconciliation cycle, causing unnecessary applies and events.
 			name:    "regression: managed-by label only on live causes false drift when desired not labeled",
-			desired: makeObj(nil, map[string]interface{}{"key": "value"}),
-			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			desired: makeObj(nil, map[string]any{"key": "value"}),
+			live:    makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]any{"key": "value"}),
 			want:    true, // this is the bug: drift is wrongly detected
 		},
 		{
@@ -101,11 +101,11 @@ func TestSimpleDriftCheck(t *testing.T) {
 			// spurious drift is reported.
 			name: "fix: no spurious drift when desired is labeled before comparison",
 			desired: func() *unstructured.Unstructured {
-				obj := makeObj(nil, map[string]interface{}{"key": "value"})
+				obj := makeObj(nil, map[string]any{"key": "value"})
 				ensureManagedByLabel(obj) // what ReconcileAsset now does before drift check
 				return obj
 			}(),
-			live: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]interface{}{"key": "value"}),
+			live: makeObj(map[string]string{ManagedByLabel: ManagedByValue}, map[string]any{"key": "value"}),
 			want: false,
 		},
 		{
@@ -149,8 +149,8 @@ func TestCompareSpecs(t *testing.T) {
 			name: "first nil",
 			obj1: nil,
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{"replicas": 3},
+				Object: map[string]any{
+					"spec": map[string]any{"replicas": 3},
 				},
 			},
 			want: false,
@@ -158,8 +158,8 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "second nil",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{"replicas": 3},
+				Object: map[string]any{
+					"spec": map[string]any{"replicas": 3},
 				},
 			},
 			obj2: nil,
@@ -168,18 +168,18 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "identical specs",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
-						"selector": map[string]interface{}{"app": "test"},
+						"selector": map[string]any{"app": "test"},
 					},
 				},
 			},
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
-						"selector": map[string]interface{}{"app": "test"},
+						"selector": map[string]any{"app": "test"},
 					},
 				},
 			},
@@ -188,13 +188,13 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "different specs",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{"replicas": int64(3)},
+				Object: map[string]any{
+					"spec": map[string]any{"replicas": int64(3)},
 				},
 			},
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{"replicas": int64(5)},
+				Object: map[string]any{
+					"spec": map[string]any{"replicas": int64(5)},
 				},
 			},
 			want: false,
@@ -202,13 +202,13 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "both have no spec",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "test"},
+				Object: map[string]any{
+					"metadata": map[string]any{"name": "test"},
 				},
 			},
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "test"},
+				Object: map[string]any{
+					"metadata": map[string]any{"name": "test"},
 				},
 			},
 			want: true,
@@ -216,13 +216,13 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "only first has spec",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{"replicas": int64(3)},
+				Object: map[string]any{
+					"spec": map[string]any{"replicas": int64(3)},
 				},
 			},
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "test"},
+				Object: map[string]any{
+					"metadata": map[string]any{"name": "test"},
 				},
 			},
 			want: false,
@@ -230,13 +230,13 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "only second has spec",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "test"},
+				Object: map[string]any{
+					"metadata": map[string]any{"name": "test"},
 				},
 			},
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{"replicas": int64(3)},
+				Object: map[string]any{
+					"spec": map[string]any{"replicas": int64(3)},
 				},
 			},
 			want: false,
@@ -244,15 +244,15 @@ func TestCompareSpecs(t *testing.T) {
 		{
 			name: "metadata differs but specs identical",
 			obj1: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "test1"},
-					"spec":     map[string]interface{}{"replicas": int64(3)},
+				Object: map[string]any{
+					"metadata": map[string]any{"name": "test1"},
+					"spec":     map[string]any{"replicas": int64(3)},
 				},
 			},
 			obj2: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{"name": "test2"},
-					"spec":     map[string]interface{}{"replicas": int64(3)},
+				Object: map[string]any{
+					"metadata": map[string]any{"name": "test2"},
+					"spec":     map[string]any{"replicas": int64(3)},
 				},
 			},
 			want: true,
@@ -285,8 +285,8 @@ func TestDetectDriftPropagatesClientError(t *testing.T) {
 	}
 	dd := NewDriftDetector(c)
 
-	desired := makeObj(nil, map[string]interface{}{"key": "value"})
-	live := makeObj(nil, map[string]interface{}{"key": "value"})
+	desired := makeObj(nil, map[string]any{"key": "value"})
+	live := makeObj(nil, map[string]any{"key": "value"})
 
 	_, err := dd.DetectDrift(context.Background(), desired, live)
 	if err == nil {

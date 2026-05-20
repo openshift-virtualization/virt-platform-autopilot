@@ -31,9 +31,9 @@ func TestHasManagedByLabel(t *testing.T) {
 		{
 			name: "has correct managed-by label",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"labels": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{
 							ManagedByLabel: ManagedByValue,
 						},
 					},
@@ -44,9 +44,9 @@ func TestHasManagedByLabel(t *testing.T) {
 		{
 			name: "has label with wrong value",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"labels": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{
 							ManagedByLabel: "wrong-value",
 						},
 					},
@@ -57,8 +57,8 @@ func TestHasManagedByLabel(t *testing.T) {
 		{
 			name: "has no labels",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{},
+				Object: map[string]any{
+					"metadata": map[string]any{},
 				},
 			},
 			want: false,
@@ -66,9 +66,9 @@ func TestHasManagedByLabel(t *testing.T) {
 		{
 			name: "has other labels but not managed-by",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"labels": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{
 							"app": "test",
 						},
 					},
@@ -79,9 +79,9 @@ func TestHasManagedByLabel(t *testing.T) {
 		{
 			name: "has managed-by label among others",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"labels": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{
 							"app":          "test",
 							ManagedByLabel: ManagedByValue,
 							"environment":  "prod",
