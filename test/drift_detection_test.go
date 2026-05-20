@@ -47,18 +47,18 @@ var _ = Describe("Real-Time Drift Detection", func() {
 
 			By("creating a MachineConfig with managed-by label")
 			mc := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "machineconfiguration.openshift.io/v1",
 					"kind":       "MachineConfig",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test-drift-detection",
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							engine.ManagedByLabel: engine.ManagedByValue,
 						},
 					},
-					"spec": map[string]interface{}{
-						"config": map[string]interface{}{
-							"ignition": map[string]interface{}{
+					"spec": map[string]any{
+						"config": map[string]any{
+							"ignition": map[string]any{
 								"version": "3.2.0",
 							},
 						},
@@ -131,24 +131,24 @@ var _ = Describe("Real-Time Drift Detection", func() {
 
 			By("creating a NodeHealthCheck with managed-by label")
 			nhc := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "remediation.medik8s.io/v1alpha1",
 					"kind":       "NodeHealthCheck",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-nhc-drift",
 						"namespace": testNs,
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							engine.ManagedByLabel: engine.ManagedByValue,
 						},
 					},
-					"spec": map[string]interface{}{
-						"selector": map[string]interface{}{
-							"matchLabels": map[string]interface{}{
+					"spec": map[string]any{
+						"selector": map[string]any{
+							"matchLabels": map[string]any{
 								"test": "drift",
 							},
 						},
-						"unhealthyConditions": []interface{}{
-							map[string]interface{}{
+						"unhealthyConditions": []any{
+							map[string]any{
 								"type":     "Ready",
 								"status":   "False",
 								"duration": "300s",
@@ -178,8 +178,8 @@ var _ = Describe("Real-Time Drift Detection", func() {
 
 			// Modify duration (simulating user/other controller changing it)
 			spec, _, _ := unstructured.NestedMap(fetched.Object, "spec")
-			unhealthyConditions := spec["unhealthyConditions"].([]interface{})
-			condition := unhealthyConditions[0].(map[string]interface{})
+			unhealthyConditions := spec["unhealthyConditions"].([]any)
+			condition := unhealthyConditions[0].(map[string]any)
 			condition["duration"] = "600s" // Changed from 300s
 			Expect(k8sClient.Update(ctx, fetched)).To(Succeed())
 
@@ -199,8 +199,8 @@ var _ = Describe("Real-Time Drift Detection", func() {
 			Expect(k8sClient.Get(ctx, key, final)).To(Succeed())
 
 			finalSpec, _, _ := unstructured.NestedMap(final.Object, "spec")
-			finalConditions := finalSpec["unhealthyConditions"].([]interface{})
-			finalCondition := finalConditions[0].(map[string]interface{})
+			finalConditions := finalSpec["unhealthyConditions"].([]any)
+			finalCondition := finalConditions[0].(map[string]any)
 			// SSA should restore to desired state
 			Expect(finalCondition["duration"]).To(Equal("300s"))
 		})
@@ -221,16 +221,16 @@ var _ = Describe("Real-Time Drift Detection", func() {
 
 			By("creating an HCO instance")
 			hco := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "kubevirt-hyperconverged",
 						"namespace": testNs,
 					},
-					"spec": map[string]interface{}{
-						"virtualization": map[string]interface{}{
-							"liveMigrationConfig": map[string]interface{}{
+					"spec": map[string]any{
+						"virtualization": map[string]any{
+							"liveMigrationConfig": map[string]any{
 								"parallelMigrationsPerCluster": int64(5),
 							},
 						},
@@ -310,18 +310,18 @@ var _ = Describe("Real-Time Drift Detection", func() {
 
 			By("creating a MachineConfig")
 			mc := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "machineconfiguration.openshift.io/v1",
 					"kind":       "MachineConfig",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test-perf",
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							engine.ManagedByLabel: engine.ManagedByValue,
 						},
 					},
-					"spec": map[string]interface{}{
-						"config": map[string]interface{}{
-							"ignition": map[string]interface{}{
+					"spec": map[string]any{
+						"config": map[string]any{
+							"ignition": map[string]any{
 								"version": "3.2.0",
 							},
 						},

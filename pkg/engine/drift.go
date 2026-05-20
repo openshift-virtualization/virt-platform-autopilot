@@ -105,7 +105,7 @@ func (d *DriftDetector) SimpleDriftCheck(desired, live *unstructured.Unstructure
 }
 
 // sanitizeObject removes fields that should not be compared for drift
-func sanitizeObject(obj *unstructured.Unstructured) map[string]interface{} {
+func sanitizeObject(obj *unstructured.Unstructured) map[string]any {
 	if obj == nil {
 		return nil
 	}
@@ -113,7 +113,7 @@ func sanitizeObject(obj *unstructured.Unstructured) map[string]interface{} {
 	sanitized := obj.DeepCopy().Object
 
 	// Remove metadata fields that change on every update
-	if metadata, ok := sanitized["metadata"].(map[string]interface{}); ok {
+	if metadata, ok := sanitized["metadata"].(map[string]any); ok {
 		// Keep: name, namespace, labels, annotations
 		// Remove: resourceVersion, generation, uid, creationTimestamp, managedFields, etc.
 		fieldsToKeep := map[string]bool{
@@ -123,7 +123,7 @@ func sanitizeObject(obj *unstructured.Unstructured) map[string]interface{} {
 			"annotations": true,
 		}
 
-		sanitizedMetadata := make(map[string]interface{})
+		sanitizedMetadata := make(map[string]any)
 		for key, value := range metadata {
 			if fieldsToKeep[key] {
 				sanitizedMetadata[key] = value
@@ -142,29 +142,29 @@ func sanitizeObject(obj *unstructured.Unstructured) map[string]interface{} {
 // structuredDiff returns a map containing only the fields that differ between
 // live and desired. Leaf differences are represented as {"live": <v>, "desired": <v>},
 // so the result can be logged directly as a structured value.
-func structuredDiff(live, desired map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func structuredDiff(live, desired map[string]any) map[string]any {
+	result := make(map[string]any)
 
 	for k, liveVal := range live {
 		desiredVal, ok := desired[k]
 		if !ok {
-			result[k] = map[string]interface{}{"live": liveVal, "desired": nil}
+			result[k] = map[string]any{"live": liveVal, "desired": nil}
 			continue
 		}
-		liveMap, liveIsMap := liveVal.(map[string]interface{})
-		desiredMap, desiredIsMap := desiredVal.(map[string]interface{})
+		liveMap, liveIsMap := liveVal.(map[string]any)
+		desiredMap, desiredIsMap := desiredVal.(map[string]any)
 		if liveIsMap && desiredIsMap {
 			if sub := structuredDiff(liveMap, desiredMap); len(sub) > 0 {
 				result[k] = sub
 			}
 		} else if !equality.Semantic.DeepEqual(liveVal, desiredVal) {
-			result[k] = map[string]interface{}{"live": liveVal, "desired": desiredVal}
+			result[k] = map[string]any{"live": liveVal, "desired": desiredVal}
 		}
 	}
 
 	for k, desiredVal := range desired {
 		if _, ok := live[k]; !ok {
-			result[k] = map[string]interface{}{"live": nil, "desired": desiredVal}
+			result[k] = map[string]any{"live": nil, "desired": desiredVal}
 		}
 	}
 

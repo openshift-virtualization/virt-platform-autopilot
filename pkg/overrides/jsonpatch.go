@@ -66,7 +66,7 @@ func ApplyJSONPatch(obj *unstructured.Unstructured) (bool, error) {
 	}
 
 	// Unmarshal back into the object
-	var patchedObj map[string]interface{}
+	var patchedObj map[string]any
 	if err := json.Unmarshal(patchedJSON, &patchedObj); err != nil {
 		return false, fmt.Errorf("failed to unmarshal patched JSON: %w", err)
 	}

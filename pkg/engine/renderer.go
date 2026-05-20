@@ -233,7 +233,7 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 
 // dig safely accesses nested fields with a default value
 // This is already provided by sprig, but we include it for clarity
-func dig(keys ...interface{}) interface{} {
+func dig(keys ...any) any {
 	if len(keys) < 2 {
 		return nil
 	}
@@ -250,7 +250,7 @@ func dig(keys ...interface{}) interface{} {
 	// Navigate through the path
 	current := obj
 	for _, key := range pathKeys {
-		if m, ok := current.(map[string]interface{}); ok {
+		if m, ok := current.(map[string]any); ok {
 			keyStr, ok := key.(string)
 			if !ok {
 				return defaultVal
@@ -269,9 +269,9 @@ func dig(keys ...interface{}) interface{} {
 }
 
 // has checks if a slice contains a value
-func has(needle interface{}, haystack interface{}) bool {
+func has(needle any, haystack any) bool {
 	switch h := haystack.(type) {
-	case []interface{}:
+	case []any:
 		for _, item := range h {
 			if item == needle {
 				return true
@@ -470,30 +470,30 @@ func (r *Renderer) prometheusRuleHasRecordingRuleFunc() func(string, string, str
 		}
 
 		// Navigate to spec.groups[].rules[]
-		spec, ok := obj.Object["spec"].(map[string]interface{})
+		spec, ok := obj.Object["spec"].(map[string]any)
 		if !ok {
 			return false
 		}
 
-		groups, ok := spec["groups"].([]interface{})
+		groups, ok := spec["groups"].([]any)
 		if !ok {
 			return false
 		}
 
 		// Search through all groups and rules
 		for _, group := range groups {
-			groupMap, ok := group.(map[string]interface{})
+			groupMap, ok := group.(map[string]any)
 			if !ok {
 				continue
 			}
 
-			rules, ok := groupMap["rules"].([]interface{})
+			rules, ok := groupMap["rules"].([]any)
 			if !ok {
 				continue
 			}
 
 			for _, rule := range rules {
-				ruleMap, ok := rule.(map[string]interface{})
+				ruleMap, ok := rule.(map[string]any)
 				if !ok {
 					continue
 				}

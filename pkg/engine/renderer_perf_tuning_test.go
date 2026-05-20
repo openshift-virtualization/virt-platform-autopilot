@@ -78,9 +78,9 @@ func TestHCOGoldenConfigPreservesCertConfig(t *testing.T) {
 	hco.SetNamespace("openshift-cnv")
 
 	// Simulate a user-configured certConfig
-	err = unstructured.SetNestedMap(hco.Object, map[string]interface{}{
-		"ca":     map[string]interface{}{"duration": "24h0m0s", "renewBefore": "12h0m0s"},
-		"server": map[string]interface{}{"duration": "12h0m0s", "renewBefore": "6h0m0s"},
+	err = unstructured.SetNestedMap(hco.Object, map[string]any{
+		"ca":     map[string]any{"duration": "24h0m0s", "renewBefore": "12h0m0s"},
+		"server": map[string]any{"duration": "12h0m0s", "renewBefore": "6h0m0s"},
 	}, "spec", "certConfig")
 	if err != nil {
 		t.Fatalf("Failed to set certConfig in HCO: %v", err)
@@ -290,14 +290,14 @@ func TestCPUManagerReservedMemory(t *testing.T) {
 		t.Errorf("reservedMemory length = %d, want 1", len(reservedMem))
 	}
 
-	node0, ok := reservedMem[0].(map[string]interface{})
+	node0, ok := reservedMem[0].(map[string]any)
 	if !ok {
 		t.Fatal("reservedMemory[0] is not a map")
 	}
 	if numa, ok := node0["numaNode"].(int64); !ok || numa != 0 {
 		t.Errorf("numaNode = %v, want 0", node0["numaNode"])
 	}
-	limits, ok := node0["limits"].(map[string]interface{})
+	limits, ok := node0["limits"].(map[string]any)
 	if !ok {
 		t.Fatal("limits is not a map")
 	}

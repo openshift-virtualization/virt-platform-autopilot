@@ -57,7 +57,6 @@ linters:
           disabled: true
         - name: useless-break
         - name: use-any
-          disabled: true
         - name: var-declaration
         - name: var-naming
           disabled: true

@@ -45,7 +45,7 @@ type RecordedEvent struct {
 	Message   string
 }
 
-func (f *FakeEventRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...interface{}) {
+func (f *FakeEventRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
 	message := fmt.Sprintf(note, args...)
 	f.Events = append(f.Events, RecordedEvent{
 		EventType: eventtype,
@@ -97,10 +97,10 @@ var _ = Describe("Event Recording Integration", func() {
 		// Create minimal render context with HCO
 		renderCtx = &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "kubevirt-hyperconverged",
 						"namespace": testNs,
 					},
@@ -114,14 +114,14 @@ var _ = Describe("Event Recording Integration", func() {
 		It("should emit AssetApplied and DriftCorrected events on successful apply", func() {
 			// Create initial object
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "event-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value1",
 					},
 				},
@@ -132,7 +132,7 @@ var _ = Describe("Event Recording Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Manually modify to create drift
-			obj.Object["data"] = map[string]interface{}{
+			obj.Object["data"] = map[string]any{
 				"key": "value2",
 			}
 			err = k8sClient.Update(ctx, obj)
@@ -143,14 +143,14 @@ var _ = Describe("Event Recording Integration", func() {
 			// Reconcile by reapplying original state (should detect and correct drift)
 			// Create a fresh object to avoid managedFields issues
 			obj = &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "event-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value1",
 					},
 				},
@@ -188,14 +188,14 @@ var _ = Describe("Event Recording Integration", func() {
 		It("should emit DriftDetected event when drift is found", func() {
 			// Create initial object
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "drift-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value1",
 					},
 				},
@@ -206,7 +206,7 @@ var _ = Describe("Event Recording Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Manually modify to create drift
-			obj.Object["data"] = map[string]interface{}{
+			obj.Object["data"] = map[string]any{
 				"key": "value2",
 			}
 			err = k8sClient.Update(ctx, obj)
@@ -241,17 +241,17 @@ var _ = Describe("Event Recording Integration", func() {
 		It("should emit PatchApplied event when JSON patch is applied", func() {
 			// Create object with valid JSON patch
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "patch-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.PatchAnnotation: `[{"op": "add", "path": "/data/patched", "value": "yes"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"original": "value",
 					},
 				},
@@ -281,17 +281,17 @@ var _ = Describe("Event Recording Integration", func() {
 		It("should emit InvalidPatch event when JSON patch is invalid", func() {
 			// Create object with invalid JSON patch
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "invalid-patch-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.PatchAnnotation: `[{"op": "invalid", "path": "/data/test"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"original": "value",
 					},
 				},
@@ -323,17 +323,17 @@ var _ = Describe("Event Recording Integration", func() {
 		It("should emit UnmanagedMode event when resource is unmanaged", func() {
 			// Create unmanaged object
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "unmanaged-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.AnnotationMode: overrides.ModeUnmanaged,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -365,14 +365,14 @@ var _ = Describe("Event Recording Integration", func() {
 		It("should not crash when event recorder is nil", func() {
 			// Create object
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "no-events",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},

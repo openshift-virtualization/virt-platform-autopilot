@@ -30,7 +30,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			obj.SetKind("ConfigMap")
 			obj.SetName("test-ssa")
 			obj.SetNamespace("default")
-			obj.Object["data"] = map[string]interface{}{
+			obj.Object["data"] = map[string]any{
 				"key1": "value1",
 			}
 
@@ -78,7 +78,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			obj.SetKind("ConfigMap")
 			obj.SetName("test-drift")
 			obj.SetNamespace("default")
-			obj.Object["data"] = map[string]interface{}{
+			obj.Object["data"] = map[string]any{
 				"key1": "original-value",
 			}
 
@@ -97,7 +97,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// User modifies the value
-			fetched.Object["data"] = map[string]interface{}{
+			fetched.Object["data"] = map[string]any{
 				"key1": "user-modified-value",
 			}
 			err = k8sClient.Update(ctx, fetched)
@@ -111,7 +111,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			desired.SetKind("ConfigMap")
 			desired.SetName("test-drift")
 			desired.SetNamespace("default")
-			desired.Object["data"] = map[string]interface{}{
+			desired.Object["data"] = map[string]any{
 				"key1": "original-value",
 			}
 
@@ -149,7 +149,7 @@ var _ = Describe("Platform Controller Integration", func() {
 			obj.SetKind("ConfigMap")
 			obj.SetName("test-conflict")
 			obj.SetNamespace("default")
-			obj.Object["data"] = map[string]interface{}{
+			obj.Object["data"] = map[string]any{
 				"key1": "manager1-value",
 			}
 
@@ -160,7 +160,7 @@ var _ = Describe("Platform Controller Integration", func() {
 
 			By("second manager modifying same field with ForceOwnership")
 			obj2 := obj.DeepCopy()
-			obj2.Object["data"] = map[string]interface{}{
+			obj2.Object["data"] = map[string]any{
 				"key1": "manager2-value",
 			}
 			// Clear managedFields for SSA (required by API server)
@@ -222,14 +222,14 @@ var _ = Describe("Platform Controller Integration", func() {
 			}()
 
 			hco := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "kubevirt-hyperconverged", // HCO CRD requires this exact name
 						"namespace": testNs,
 					},
-					"spec": map[string]interface{}{},
+					"spec": map[string]any{},
 				},
 			}
 
@@ -311,16 +311,16 @@ var _ = Describe("Platform Controller Integration", func() {
 
 			By("creating an HCO without the managed-by label")
 			hco := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "kubevirt-hyperconverged",
 						"namespace": testNs,
 					},
-					"spec": map[string]interface{}{
-						"virtualization": map[string]interface{}{
-							"liveMigrationConfig": map[string]interface{}{
+					"spec": map[string]any{
+						"virtualization": map[string]any{
+							"liveMigrationConfig": map[string]any{
 								"parallelMigrationsPerCluster":      5,
 								"parallelOutboundMigrationsPerNode": 2,
 							},
@@ -346,14 +346,14 @@ var _ = Describe("Platform Controller Integration", func() {
 			// The applier's Apply method should automatically label objects
 			// even if they don't have the managed-by label initially
 			testObj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-adoption-cm",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},

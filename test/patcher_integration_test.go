@@ -57,14 +57,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should successfully reconcile a static asset", func() {
 			// Create a simple ConfigMap asset for testing
 			asset := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "test-config",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key1": "value1",
 					},
 				},
@@ -96,14 +96,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should detect and apply drift", func() {
 			// Create initial object
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "drift-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"replicas": "3",
 					},
 				},
@@ -154,17 +154,17 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should apply JSON patch from annotation", func() {
 			// Create object with patch annotation
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "patch-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.PatchAnnotation: `[{"op": "add", "path": "/data/newKey", "value": "patched"}]`,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"original": "value",
 					},
 				},
@@ -203,17 +203,17 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should mask ignored fields", func() {
 			// Create initial object in cluster
 			live := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "mask-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.AnnotationIgnoreFields: "/data/userManaged",
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"userManaged":     "user-value",
 						"operatorManaged": "operator-value",
 					},
@@ -226,14 +226,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 
 			// Create desired state (operator wants to change both fields)
 			desired := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "mask-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"userManaged":     "operator-new-value",
 						"operatorManaged": "operator-new-value",
 					},
@@ -253,17 +253,17 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should skip reconciliation for unmanaged resources", func() {
 			// Create object with unmanaged annotation
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "unmanaged-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.AnnotationMode: overrides.ModeUnmanaged,
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "user-value",
 					},
 				},
@@ -332,14 +332,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 	Describe("SSA Field Ownership", func() {
 		It("should track field ownership with SSA", func() {
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "ssa-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"field1": "value1",
 					},
 				},
@@ -375,14 +375,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 
 		It("should handle conflicts with different field managers", func() {
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "conflict-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"shared": "operator-value",
 					},
 				},
@@ -432,18 +432,18 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should handle patch + mask + drift + throttle in one flow", func() {
 			// Create initial object in cluster (simulating existing resource)
 			live := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "combined-test",
 						"namespace": testNs,
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							overrides.PatchAnnotation:        `[{"op": "add", "path": "/data/patched", "value": "yes"}]`,
 							overrides.AnnotationIgnoreFields: "/data/userField",
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"userField":     "user-controlled",
 						"operatorField": "old-operator-value",
 					},
@@ -463,14 +463,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 
 			// Create desired state (what operator wants)
 			desiredState := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "combined-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"userField":     "operator-wants-to-change-this",
 						"operatorField": "new-operator-value",
 					},
@@ -539,14 +539,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should automatically label managed objects", func() {
 			// Create an object that will be managed
 			obj := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "label-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},
@@ -575,17 +575,17 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should adopt existing unlabeled objects", func() {
 			// Create an object without the managed-by label (simulating pre-existing resource)
 			unlabeled := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "adoption-test",
 						"namespace": testNs,
-						"labels": map[string]interface{}{
+						"labels": map[string]any{
 							"existing-label": "keep-me",
 						},
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"original": "data",
 					},
 				},
@@ -607,14 +607,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 
 			// Now apply using the applier - it should adopt the object by adding the label
 			updated := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "adoption-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"original": "data",
 						"added":    "by-operator",
 					},
@@ -650,14 +650,14 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 		It("should re-label objects if label is removed", func() {
 			// Create a labeled object
 			labeled := &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      "relabel-test",
 						"namespace": testNs,
 					},
-					"data": map[string]interface{}{
+					"data": map[string]any{
 						"key": "value",
 					},
 				},

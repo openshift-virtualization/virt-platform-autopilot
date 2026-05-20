@@ -105,8 +105,8 @@ type TopologyContext struct {
 }
 
 // AsMap converts TopologyContext to a flat map for condition evaluation.
-func (t *TopologyContext) AsMap() map[string]interface{} {
-	return map[string]interface{}{
+func (t *TopologyContext) AsMap() map[string]any {
+	return map[string]any{
 		"isHCP":                t.IsHCP,
 		"isCompact":            t.IsCompact,
 		"controlPlaneTopology": t.ControlPlaneTopology,

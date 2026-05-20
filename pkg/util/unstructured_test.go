@@ -26,16 +26,16 @@ import (
 func TestSetNestedFieldWithDefault(t *testing.T) {
 	tests := []struct {
 		name      string
-		obj       map[string]interface{}
-		value     interface{}
+		obj       map[string]any
+		value     any
 		fields    []string
 		wantErr   bool
-		wantValue interface{}
+		wantValue any
 	}{
 		{
 			name: "set field when not present",
-			obj: map[string]interface{}{
-				"metadata": map[string]interface{}{},
+			obj: map[string]any{
+				"metadata": map[string]any{},
 			},
 			value:     "test-value",
 			fields:    []string{"metadata", "name"},
@@ -44,8 +44,8 @@ func TestSetNestedFieldWithDefault(t *testing.T) {
 		},
 		{
 			name: "do not override existing field",
-			obj: map[string]interface{}{
-				"metadata": map[string]interface{}{
+			obj: map[string]any{
+				"metadata": map[string]any{
 					"name": "existing-value",
 				},
 			},
@@ -63,8 +63,8 @@ func TestSetNestedFieldWithDefault(t *testing.T) {
 		},
 		{
 			name: "set nested field multiple levels",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{},
+			obj: map[string]any{
+				"spec": map[string]any{},
 			},
 			value:     int64(3),
 			fields:    []string{"spec", "replicas"},
@@ -98,15 +98,15 @@ func TestSetNestedFieldWithDefault(t *testing.T) {
 func TestGetNestedString(t *testing.T) {
 	tests := []struct {
 		name      string
-		obj       map[string]interface{}
+		obj       map[string]any
 		fields    []string
 		wantValue string
 		wantFound bool
 	}{
 		{
 			name: "get existing string",
-			obj: map[string]interface{}{
-				"metadata": map[string]interface{}{
+			obj: map[string]any{
+				"metadata": map[string]any{
 					"name": "test-name",
 				},
 			},
@@ -116,8 +116,8 @@ func TestGetNestedString(t *testing.T) {
 		},
 		{
 			name: "field not found",
-			obj: map[string]interface{}{
-				"metadata": map[string]interface{}{},
+			obj: map[string]any{
+				"metadata": map[string]any{},
 			},
 			fields:    []string{"metadata", "missing"},
 			wantValue: "",
@@ -125,7 +125,7 @@ func TestGetNestedString(t *testing.T) {
 		},
 		{
 			name: "wrong type returns not found",
-			obj: map[string]interface{}{
+			obj: map[string]any{
 				"count": 123,
 			},
 			fields:    []string{"count"},
@@ -150,15 +150,15 @@ func TestGetNestedString(t *testing.T) {
 func TestGetNestedInt64(t *testing.T) {
 	tests := []struct {
 		name      string
-		obj       map[string]interface{}
+		obj       map[string]any
 		fields    []string
 		wantValue int64
 		wantFound bool
 	}{
 		{
 			name: "get existing int64",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{
+			obj: map[string]any{
+				"spec": map[string]any{
 					"replicas": int64(5),
 				},
 			},
@@ -168,8 +168,8 @@ func TestGetNestedInt64(t *testing.T) {
 		},
 		{
 			name: "field not found",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{},
+			obj: map[string]any{
+				"spec": map[string]any{},
 			},
 			fields:    []string{"spec", "missing"},
 			wantValue: 0,
@@ -177,7 +177,7 @@ func TestGetNestedInt64(t *testing.T) {
 		},
 		{
 			name: "wrong type returns not found",
-			obj: map[string]interface{}{
+			obj: map[string]any{
 				"name": "string-value",
 			},
 			fields:    []string{"name"},
@@ -202,15 +202,15 @@ func TestGetNestedInt64(t *testing.T) {
 func TestGetNestedBool(t *testing.T) {
 	tests := []struct {
 		name      string
-		obj       map[string]interface{}
+		obj       map[string]any
 		fields    []string
 		wantValue bool
 		wantFound bool
 	}{
 		{
 			name: "get existing bool true",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{
+			obj: map[string]any{
+				"spec": map[string]any{
 					"enabled": true,
 				},
 			},
@@ -220,8 +220,8 @@ func TestGetNestedBool(t *testing.T) {
 		},
 		{
 			name: "get existing bool false",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{
+			obj: map[string]any{
+				"spec": map[string]any{
 					"enabled": false,
 				},
 			},
@@ -231,8 +231,8 @@ func TestGetNestedBool(t *testing.T) {
 		},
 		{
 			name: "field not found",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{},
+			obj: map[string]any{
+				"spec": map[string]any{},
 			},
 			fields:    []string{"spec", "missing"},
 			wantValue: false,
@@ -256,16 +256,16 @@ func TestGetNestedBool(t *testing.T) {
 func TestGetNestedStringSlice(t *testing.T) {
 	tests := []struct {
 		name      string
-		obj       map[string]interface{}
+		obj       map[string]any
 		fields    []string
 		wantValue []string
 		wantFound bool
 	}{
 		{
 			name: "get existing string slice",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"args": []interface{}{"arg1", "arg2"},
+			obj: map[string]any{
+				"spec": map[string]any{
+					"args": []any{"arg1", "arg2"},
 				},
 			},
 			fields:    []string{"spec", "args"},
@@ -274,8 +274,8 @@ func TestGetNestedStringSlice(t *testing.T) {
 		},
 		{
 			name: "field not found",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{},
+			obj: map[string]any{
+				"spec": map[string]any{},
 			},
 			fields:    []string{"spec", "missing"},
 			wantValue: nil,
@@ -283,9 +283,9 @@ func TestGetNestedStringSlice(t *testing.T) {
 		},
 		{
 			name: "empty slice",
-			obj: map[string]interface{}{
-				"spec": map[string]interface{}{
-					"args": []interface{}{},
+			obj: map[string]any{
+				"spec": map[string]any{
+					"args": []any{},
 				},
 			},
 			fields:    []string{"spec", "args"},
@@ -385,19 +385,19 @@ func TestCloneUnstructured(t *testing.T) {
 		{
 			name: "clone non-nil object",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
 					},
 				},
 			},
 			want: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "v1",
 					"kind":       "ConfigMap",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name": "test",
 					},
 				},

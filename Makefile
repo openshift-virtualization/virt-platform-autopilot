@@ -21,8 +21,6 @@ goimport:
 test: fmt vet goimport ## Run unit tests
 	go test ./pkg/... -coverprofile cover.out
 
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.35.0
 ENVTEST = $(shell pwd)/bin/setup-envtest
 GINKGO = $(shell pwd)/bin/ginkgo
 
@@ -32,6 +30,10 @@ GINKGO = $(shell pwd)/bin/ginkgo
 # which is how the sub-module is published and what `go install @<branch>` resolves to.
 CONTROLLER_RUNTIME_BRANCH := $(shell grep 'sigs.k8s.io/controller-runtime ' go.mod | awk '{print $$2}' | sed 's/v\([0-9]*\.[0-9]*\)\..*/release-\1/')
 GINKGO_VERSION             := $(shell grep 'github.com/onsi/ginkgo/v2 ' go.mod | awk '{print $$2}')
+# k8s.io/client-go v0.X.Y → envtest Kubernetes version 1.X.0
+ENVTEST_K8S_VERSION        := $(shell grep 'k8s.io/client-go ' go.mod | awk '{print $$2}' | sed 's/v0\.\([0-9]*\)\..*/1.\1.0/')
+# Go toolchain constraint for golangci-lint, matched to the go directive in go.mod
+GOTOOLCHAIN                := go$(shell grep '^go ' go.mod | awk '{print $$2}')
 
 .PHONY: test-integration
 test-integration: envtest ginkgo ## Run integration tests with envtest
@@ -174,7 +176,7 @@ lint: ## Run golangci-lint
 		echo "golangci-lint v2 not found. Installing..."; \
 		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest; \
 	fi
-	$(GOLANGCI_LINT) run
+	GOTOOLCHAIN=$(GOTOOLCHAIN) $(GOLANGCI_LINT) run
 
 SHELLCHECK ?= $(shell which shellcheck)
 

@@ -33,10 +33,10 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 	t.Run("objectExists returns true when object exists", func(t *testing.T) {
 		// Create a fake PrometheusRule
 		prometheusRule := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "monitoring.coreos.com/v1",
 				"kind":       "PrometheusRule",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "descheduler-rules",
 					"namespace": "openshift-kube-descheduler-operator",
 				},
@@ -82,23 +82,23 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 	t.Run("prometheusRuleHasRecordingRule returns true when rule exists", func(t *testing.T) {
 		// Create a PrometheusRule with the specific recording rule
 		prometheusRule := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "monitoring.coreos.com/v1",
 				"kind":       "PrometheusRule",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "descheduler-rules",
 					"namespace": "openshift-kube-descheduler-operator",
 				},
-				"spec": map[string]interface{}{
-					"groups": []interface{}{
-						map[string]interface{}{
+				"spec": map[string]any{
+					"groups": []any{
+						map[string]any{
 							"name": "descheduler",
-							"rules": []interface{}{
-								map[string]interface{}{
+							"rules": []any{
+								map[string]any{
 									"record": "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m",
 									"expr":   "some_query",
 								},
-								map[string]interface{}{
+								map[string]any{
 									"record": "some_other_rule",
 									"expr":   "some_other_query",
 								},
@@ -130,19 +130,19 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 	t.Run("prometheusRuleHasRecordingRule returns false when rule does not exist", func(t *testing.T) {
 		// Create a PrometheusRule without the specific rule
 		prometheusRule := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "monitoring.coreos.com/v1",
 				"kind":       "PrometheusRule",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "descheduler-rules",
 					"namespace": "openshift-kube-descheduler-operator",
 				},
-				"spec": map[string]interface{}{
-					"groups": []interface{}{
-						map[string]interface{}{
+				"spec": map[string]any{
+					"groups": []any{
+						map[string]any{
 							"name": "descheduler",
-							"rules": []interface{}{
-								map[string]interface{}{
+							"rules": []any{
+								map[string]any{
 									"record": "some_other_rule",
 									"expr":   "some_query",
 								},
@@ -174,19 +174,19 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 	t.Run("template renders with devActualUtilizationProfile based on PrometheusRule", func(t *testing.T) {
 		// Create a PrometheusRule with the k3 rule
 		prometheusRule := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "monitoring.coreos.com/v1",
 				"kind":       "PrometheusRule",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "descheduler-rules",
 					"namespace": "openshift-kube-descheduler-operator",
 				},
-				"spec": map[string]interface{}{
-					"groups": []interface{}{
-						map[string]interface{}{
+				"spec": map[string]any{
+					"groups": []any{
+						map[string]any{
 							"name": "descheduler",
-							"rules": []interface{}{
-								map[string]interface{}{
+							"rules": []any{
+								map[string]any{
 									"record": "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m",
 									"expr":   "some_query",
 								},
@@ -235,18 +235,18 @@ devActualUtilizationProfile: {{ $devActualUtilizationProfile }}
 	t.Run("template uses fallback profile when k3 rule not found", func(t *testing.T) {
 		// Create a PrometheusRule without the k3 rule
 		prometheusRule := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "monitoring.coreos.com/v1",
 				"kind":       "PrometheusRule",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "descheduler-rules",
 					"namespace": "openshift-kube-descheduler-operator",
 				},
-				"spec": map[string]interface{}{
-					"groups": []interface{}{
-						map[string]interface{}{
+				"spec": map[string]any{
+					"groups": []any{
+						map[string]any{
 							"name":  "descheduler",
-							"rules": []interface{}{},
+							"rules": []any{},
 						},
 					},
 				},

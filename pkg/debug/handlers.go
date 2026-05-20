@@ -423,7 +423,7 @@ func (s *Server) writeRenderResponse(w http.ResponseWriter, outputs []pkgrender.
 
 // writeResponse writes the response in the requested format (used for
 // non-render endpoints such as /debug/exclusions and /debug/tombstones).
-func (s *Server) writeResponse(w http.ResponseWriter, data interface{}, format string) {
+func (s *Server) writeResponse(w http.ResponseWriter, data any, format string) {
 	var contentType string
 	var output []byte
 	var err error

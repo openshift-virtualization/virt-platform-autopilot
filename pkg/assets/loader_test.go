@@ -366,7 +366,7 @@ func TestLoader_ListAssets(t *testing.T) {
 func TestCalculateDepth(t *testing.T) {
 	tests := []struct {
 		name        string
-		obj         interface{}
+		obj         any
 		expectedMax int
 		description string
 	}{
@@ -384,13 +384,13 @@ func TestCalculateDepth(t *testing.T) {
 		},
 		{
 			name:        "empty map",
-			obj:         map[string]interface{}{},
+			obj:         map[string]any{},
 			expectedMax: 1,
 			description: "Empty map has depth 1",
 		},
 		{
 			name: "flat map",
-			obj: map[string]interface{}{
+			obj: map[string]any{
 				"key1": "value1",
 				"key2": "value2",
 			},
@@ -399,9 +399,9 @@ func TestCalculateDepth(t *testing.T) {
 		},
 		{
 			name: "nested map",
-			obj: map[string]interface{}{
-				"level1": map[string]interface{}{
-					"level2": map[string]interface{}{
+			obj: map[string]any{
+				"level1": map[string]any{
+					"level2": map[string]any{
 						"level3": "value",
 					},
 				},
@@ -411,7 +411,7 @@ func TestCalculateDepth(t *testing.T) {
 		},
 		{
 			name: "array of strings",
-			obj: []interface{}{
+			obj: []any{
 				"item1",
 				"item2",
 			},
@@ -420,8 +420,8 @@ func TestCalculateDepth(t *testing.T) {
 		},
 		{
 			name: "array of maps",
-			obj: []interface{}{
-				map[string]interface{}{
+			obj: []any{
+				map[string]any{
 					"nested": "value",
 				},
 			},
@@ -430,19 +430,19 @@ func TestCalculateDepth(t *testing.T) {
 		},
 		{
 			name: "complex nested structure",
-			obj: map[string]interface{}{
-				"metadata": map[string]interface{}{
+			obj: map[string]any{
+				"metadata": map[string]any{
 					"name": "test",
-					"labels": map[string]interface{}{
+					"labels": map[string]any{
 						"app": "myapp",
 					},
 				},
-				"spec": map[string]interface{}{
+				"spec": map[string]any{
 					"replicas": 3,
-					"template": map[string]interface{}{
-						"spec": map[string]interface{}{
-							"containers": []interface{}{
-								map[string]interface{}{
+					"template": map[string]any{
+						"spec": map[string]any{
+							"containers": []any{
+								map[string]any{
 									"name":  "nginx",
 									"image": "nginx:latest",
 								},
@@ -456,17 +456,17 @@ func TestCalculateDepth(t *testing.T) {
 		},
 		{
 			name:        "empty array",
-			obj:         []interface{}{},
+			obj:         []any{},
 			expectedMax: 1,
 			description: "Empty array has depth 1",
 		},
 		{
 			name: "deeply nested maps",
-			obj: map[string]interface{}{
-				"l1": map[string]interface{}{
-					"l2": map[string]interface{}{
-						"l3": map[string]interface{}{
-							"l4": map[string]interface{}{
+			obj: map[string]any{
+				"l1": map[string]any{
+					"l2": map[string]any{
+						"l3": map[string]any{
+							"l4": map[string]any{
 								"l5": "deep",
 							},
 						},

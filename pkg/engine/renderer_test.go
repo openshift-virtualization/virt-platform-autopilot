@@ -29,17 +29,17 @@ import (
 func TestDig(t *testing.T) {
 	tests := []struct {
 		name string
-		keys []interface{}
-		want interface{}
+		keys []any
+		want any
 	}{
 		{
 			name: "access nested field successfully",
-			keys: []interface{}{
+			keys: []any{
 				"spec",
 				"replicas",
 				"default",
-				map[string]interface{}{
-					"spec": map[string]interface{}{
+				map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(5),
 					},
 				},
@@ -48,12 +48,12 @@ func TestDig(t *testing.T) {
 		},
 		{
 			name: "field not found returns default",
-			keys: []interface{}{
+			keys: []any{
 				"spec",
 				"missing",
 				"default-value",
-				map[string]interface{}{
-					"spec": map[string]interface{}{
+				map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(5),
 					},
 				},
@@ -62,16 +62,16 @@ func TestDig(t *testing.T) {
 		},
 		{
 			name: "deep nesting",
-			keys: []interface{}{
+			keys: []any{
 				"spec",
 				"template",
 				"spec",
 				"containers",
 				99,
-				map[string]interface{}{
-					"spec": map[string]interface{}{
-						"template": map[string]interface{}{
-							"spec": map[string]interface{}{
+				map[string]any{
+					"spec": map[string]any{
+						"template": map[string]any{
+							"spec": map[string]any{
 								"containers": "found",
 							},
 						},
@@ -82,17 +82,17 @@ func TestDig(t *testing.T) {
 		},
 		{
 			name: "less than 2 arguments returns nil",
-			keys: []interface{}{
-				map[string]interface{}{},
+			keys: []any{
+				map[string]any{},
 			},
 			want: nil,
 		},
 		{
 			name: "non-string key returns default",
-			keys: []interface{}{
+			keys: []any{
 				123, // non-string key
 				"default",
-				map[string]interface{}{
+				map[string]any{
 					"field": "value",
 				},
 			},
@@ -100,7 +100,7 @@ func TestDig(t *testing.T) {
 		},
 		{
 			name: "non-map object returns default",
-			keys: []interface{}{
+			keys: []any{
 				"field",
 				"default",
 				"not-a-map",
@@ -122,8 +122,8 @@ func TestDig(t *testing.T) {
 func TestHas(t *testing.T) {
 	tests := []struct {
 		name     string
-		needle   interface{}
-		haystack interface{}
+		needle   any
+		haystack any
 		want     bool
 	}{
 		{
@@ -141,13 +141,13 @@ func TestHas(t *testing.T) {
 		{
 			name:     "value in interface slice",
 			needle:   "test",
-			haystack: []interface{}{"test", "other"},
+			haystack: []any{"test", "other"},
 			want:     true,
 		},
 		{
 			name:     "value not in interface slice",
 			needle:   "missing",
-			haystack: []interface{}{"test", "other"},
+			haystack: []any{"test", "other"},
 			want:     false,
 		},
 		{
@@ -165,7 +165,7 @@ func TestHas(t *testing.T) {
 		{
 			name:     "empty interface slice",
 			needle:   "value",
-			haystack: []interface{}{},
+			haystack: []any{},
 			want:     false,
 		},
 		{
@@ -244,7 +244,7 @@ func TestSafeFuncMap(t *testing.T) {
 }
 
 // assertFunctionsExist checks that all expected functions are present in the funcMap
-func assertFunctionsExist(t *testing.T, funcMap map[string]interface{}, expectedFuncs []string) {
+func assertFunctionsExist(t *testing.T, funcMap map[string]any, expectedFuncs []string) {
 	t.Helper()
 	for _, name := range expectedFuncs {
 		if _, exists := funcMap[name]; !exists {
@@ -254,7 +254,7 @@ func assertFunctionsExist(t *testing.T, funcMap map[string]interface{}, expected
 }
 
 // assertFunctionsNotExist checks that dangerous functions are not present in the funcMap
-func assertFunctionsNotExist(t *testing.T, funcMap map[string]interface{}, dangerousFuncs []string) {
+func assertFunctionsNotExist(t *testing.T, funcMap map[string]any, dangerousFuncs []string) {
 	t.Helper()
 	for _, name := range dangerousFuncs {
 		if _, exists := funcMap[name]; exists {
@@ -312,8 +312,8 @@ func TestRenderTemplate(t *testing.T) {
 	t.Run("renders simple template", func(t *testing.T) {
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name": "test-hco",
 					},
 				},
@@ -335,8 +335,8 @@ func TestRenderTemplate(t *testing.T) {
 	t.Run("uses safe functions", func(t *testing.T) {
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
 						"name": "test",
 					},
 				},
@@ -356,9 +356,9 @@ func TestRenderTemplate(t *testing.T) {
 	})
 
 	t.Run("uses custom dig function", func(t *testing.T) {
-		hcoObj := map[string]interface{}{
-			"spec": map[string]interface{}{
-				"nested": map[string]interface{}{
+		hcoObj := map[string]any{
+			"spec": map[string]any{
+				"nested": map[string]any{
 					"field": "value",
 				},
 			},
@@ -384,7 +384,7 @@ func TestRenderTemplate(t *testing.T) {
 	t.Run("handles hardware context", func(t *testing.T) {
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 			Hardware: &pkgcontext.HardwareContext{
 				GPUPresent: true,
@@ -405,7 +405,7 @@ func TestRenderTemplate(t *testing.T) {
 	t.Run("returns error for invalid template", func(t *testing.T) {
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 		}
 
@@ -419,7 +419,7 @@ func TestRenderTemplate(t *testing.T) {
 	t.Run("returns error for undefined function", func(t *testing.T) {
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 		}
 
@@ -444,7 +444,7 @@ func TestRenderAsset(t *testing.T) {
 
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 		}
 
@@ -469,7 +469,7 @@ func TestRenderAsset(t *testing.T) {
 
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 		}
 
@@ -496,7 +496,7 @@ func TestRenderMultiAsset(t *testing.T) {
 
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 		}
 
@@ -521,7 +521,7 @@ func TestRenderMultiAsset(t *testing.T) {
 
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]interface{}{},
+				Object: map[string]any{},
 			},
 		}
 

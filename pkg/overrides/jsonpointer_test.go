@@ -33,15 +33,15 @@ func TestMaskIgnoredFields(t *testing.T) {
 		{
 			name: "no ignore-fields annotation",
 			desired: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
 					},
 				},
 			},
 			live: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(5),
 					},
 				},
@@ -57,25 +57,25 @@ func TestMaskIgnoredFields(t *testing.T) {
 		{
 			name: "mask single field",
 			desired: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
-						"template": map[string]interface{}{
+						"template": map[string]any{
 							"spec": "desired",
 						},
 					},
 				},
 			},
 			live: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationIgnoreFields: "/spec/replicas",
 						},
 					},
-					"spec": map[string]interface{}{
+					"spec": map[string]any{
 						"replicas": int64(5),
-						"template": map[string]interface{}{
+						"template": map[string]any{
 							"spec": "live",
 						},
 					},
@@ -96,8 +96,8 @@ func TestMaskIgnoredFields(t *testing.T) {
 		{
 			name: "mask multiple fields",
 			desired: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
 						"image":    "desired:v1",
 						"port":     int64(8080),
@@ -105,13 +105,13 @@ func TestMaskIgnoredFields(t *testing.T) {
 				},
 			},
 			live: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationIgnoreFields: "/spec/replicas, /spec/image",
 						},
 					},
-					"spec": map[string]interface{}{
+					"spec": map[string]any{
 						"replicas": int64(5),
 						"image":    "live:v2",
 						"port":     int64(9090),
@@ -137,20 +137,20 @@ func TestMaskIgnoredFields(t *testing.T) {
 		{
 			name: "field exists in live but not in desired",
 			desired: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
 					},
 				},
 			},
 			live: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationIgnoreFields: "/spec/image",
 						},
 					},
-					"spec": map[string]interface{}{
+					"spec": map[string]any{
 						"replicas": int64(5),
 						"image":    "user-set:v1",
 					},
@@ -167,21 +167,21 @@ func TestMaskIgnoredFields(t *testing.T) {
 		{
 			name: "field doesn't exist in live",
 			desired: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
 						"image":    "desired:v1",
 					},
 				},
 			},
 			live: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationIgnoreFields: "/spec/image",
 						},
 					},
-					"spec": map[string]interface{}{
+					"spec": map[string]any{
 						"replicas": int64(5),
 					},
 				},
@@ -203,8 +203,8 @@ func TestMaskIgnoredFields(t *testing.T) {
 		{
 			name: "nil live object",
 			desired: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"spec": map[string]interface{}{
+				Object: map[string]any{
+					"spec": map[string]any{
 						"replicas": int64(3),
 					},
 				},

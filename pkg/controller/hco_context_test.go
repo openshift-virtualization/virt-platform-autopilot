@@ -405,14 +405,14 @@ func workerOnlyNode(name string) corev1.Node {
 }
 
 func infraCR(cpTopology, platformType string) *unstructured.Unstructured {
-	status := map[string]interface{}{"controlPlaneTopology": cpTopology}
+	status := map[string]any{"controlPlaneTopology": cpTopology}
 	if platformType != "" {
-		status["platformStatus"] = map[string]interface{}{"type": platformType}
+		status["platformStatus"] = map[string]any{"type": platformType}
 	}
-	return &unstructured.Unstructured{Object: map[string]interface{}{
+	return &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "config.openshift.io/v1",
 		"kind":       "Infrastructure",
-		"metadata":   map[string]interface{}{"name": "cluster"},
+		"metadata":   map[string]any{"name": "cluster"},
 		"status":     status,
 	}}
 }
@@ -640,10 +640,10 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 		builder := NewRenderContextBuilder(fakeClient)
 
 		hco := &unstructured.Unstructured{
-			Object: map[string]interface{}{
+			Object: map[string]any{
 				"apiVersion": "hco.kubevirt.io/v1",
 				"kind":       "HyperConverged",
-				"metadata": map[string]interface{}{
+				"metadata": map[string]any{
 					"name":      "test-hco",
 					"namespace": "test-namespace",
 				},

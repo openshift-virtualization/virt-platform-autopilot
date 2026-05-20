@@ -24,7 +24,7 @@ import (
 )
 
 // SetNestedFieldWithDefault sets a nested field with a default value if not already set
-func SetNestedFieldWithDefault(obj map[string]interface{}, value interface{}, fields ...string) error {
+func SetNestedFieldWithDefault(obj map[string]any, value any, fields ...string) error {
 	if obj == nil {
 		return fmt.Errorf("object is nil")
 	}
@@ -39,7 +39,7 @@ func SetNestedFieldWithDefault(obj map[string]interface{}, value interface{}, fi
 }
 
 // GetNestedString safely gets a nested string field
-func GetNestedString(obj map[string]interface{}, fields ...string) (string, bool) {
+func GetNestedString(obj map[string]any, fields ...string) (string, bool) {
 	val, found, err := unstructured.NestedString(obj, fields...)
 	if err != nil || !found {
 		return "", false
@@ -48,7 +48,7 @@ func GetNestedString(obj map[string]interface{}, fields ...string) (string, bool
 }
 
 // GetNestedInt64 safely gets a nested int64 field
-func GetNestedInt64(obj map[string]interface{}, fields ...string) (int64, bool) {
+func GetNestedInt64(obj map[string]any, fields ...string) (int64, bool) {
 	val, found, err := unstructured.NestedInt64(obj, fields...)
 	if err != nil || !found {
 		return 0, false
@@ -57,7 +57,7 @@ func GetNestedInt64(obj map[string]interface{}, fields ...string) (int64, bool) 
 }
 
 // GetNestedBool safely gets a nested bool field
-func GetNestedBool(obj map[string]interface{}, fields ...string) (bool, bool) {
+func GetNestedBool(obj map[string]any, fields ...string) (bool, bool) {
 	val, found, err := unstructured.NestedBool(obj, fields...)
 	if err != nil || !found {
 		return false, false
@@ -66,7 +66,7 @@ func GetNestedBool(obj map[string]interface{}, fields ...string) (bool, bool) {
 }
 
 // GetNestedStringSlice safely gets a nested string slice field
-func GetNestedStringSlice(obj map[string]interface{}, fields ...string) ([]string, bool) {
+func GetNestedStringSlice(obj map[string]any, fields ...string) ([]string, bool) {
 	val, found, err := unstructured.NestedStringSlice(obj, fields...)
 	if err != nil || !found {
 		return nil, false

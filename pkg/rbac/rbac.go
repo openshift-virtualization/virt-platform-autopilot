@@ -305,7 +305,7 @@ func processAssetFile(content []byte, seen map[string]bool, resources *[]Resourc
 			continue
 		}
 
-		var doc map[string]interface{}
+		var doc map[string]any
 		if err := yaml.Unmarshal([]byte(docStr), &doc); err != nil {
 			continue // template remnants or invalid YAML — skip
 		}

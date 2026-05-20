@@ -39,10 +39,10 @@ func TestValidatePatchSecurity(t *testing.T) {
 		{
 			name: "patch on allowed kind (ConfigMap)",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "add", "path": "/data/key", "value": "val"}]`,
 						},
 					},
@@ -53,10 +53,10 @@ func TestValidatePatchSecurity(t *testing.T) {
 		{
 			name: "patch on sensitive kind (MachineConfig)",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "MachineConfig",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "add", "path": "/spec/config", "value": {}}]`,
 						},
 					},
@@ -68,10 +68,10 @@ func TestValidatePatchSecurity(t *testing.T) {
 		{
 			name: "no patch on sensitive kind (MachineConfig)",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "MachineConfig",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{},
+					"metadata": map[string]any{
+						"annotations": map[string]any{},
 					},
 				},
 			},
@@ -80,7 +80,7 @@ func TestValidatePatchSecurity(t *testing.T) {
 		{
 			name: "object without annotations",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
 				},
 			},
@@ -111,9 +111,9 @@ func TestIsUnmanaged(t *testing.T) {
 		{
 			name: "unmanaged annotation present",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationMode: ModeUnmanaged,
 						},
 					},
@@ -124,9 +124,9 @@ func TestIsUnmanaged(t *testing.T) {
 		{
 			name: "unmanaged annotation with different value",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationMode: "managed",
 						},
 					},
@@ -137,9 +137,9 @@ func TestIsUnmanaged(t *testing.T) {
 		{
 			name: "no mode annotation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{},
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{},
 					},
 				},
 			},
@@ -148,8 +148,8 @@ func TestIsUnmanaged(t *testing.T) {
 		{
 			name: "no annotations",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{},
+				Object: map[string]any{
+					"metadata": map[string]any{},
 				},
 			},
 			want: false,
@@ -180,9 +180,9 @@ func TestIsAutopilotEnabled(t *testing.T) {
 		{
 			name: "annotation set to true",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationAutopilotEnabled: "true",
 						},
 					},
@@ -193,9 +193,9 @@ func TestIsAutopilotEnabled(t *testing.T) {
 		{
 			name: "annotation set to comma-separated asset names",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationAutopilotEnabled: "swap-enable,descheduler-loadaware",
 						},
 					},
@@ -206,9 +206,9 @@ func TestIsAutopilotEnabled(t *testing.T) {
 		{
 			name: "annotation absent",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{},
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{},
 					},
 				},
 			},
@@ -217,9 +217,9 @@ func TestIsAutopilotEnabled(t *testing.T) {
 		{
 			name: "annotation set to empty string",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationAutopilotEnabled: "",
 						},
 					},
@@ -230,8 +230,8 @@ func TestIsAutopilotEnabled(t *testing.T) {
 		{
 			name: "no annotations",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"metadata": map[string]interface{}{},
+				Object: map[string]any{
+					"metadata": map[string]any{},
 				},
 			},
 			want: false,
@@ -256,16 +256,16 @@ func TestIsAutopilotEnabled(t *testing.T) {
 func TestParseAutopilotScope(t *testing.T) {
 	hcoWith := func(val string) *unstructured.Unstructured {
 		return &unstructured.Unstructured{
-			Object: map[string]interface{}{
-				"metadata": map[string]interface{}{
-					"annotations": map[string]interface{}{
+			Object: map[string]any{
+				"metadata": map[string]any{
+					"annotations": map[string]any{
 						AnnotationAutopilotEnabled: val,
 					},
 				},
 			},
 		}
 	}
-	noAnnotations := &unstructured.Unstructured{Object: map[string]interface{}{}}
+	noAnnotations := &unstructured.Unstructured{Object: map[string]any{}}
 
 	tests := []struct {
 		name        string
@@ -327,10 +327,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "valid patch annotation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "add", "path": "/data/key", "value": "val"}]`,
 						},
 					},
@@ -341,10 +341,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "invalid patch annotation (malformed JSON)",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							PatchAnnotation: `invalid json`,
 						},
 					},
@@ -356,10 +356,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "patch on sensitive kind",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "MachineConfig",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							PatchAnnotation: `[{"op": "add", "path": "/spec/config", "value": {}}]`,
 						},
 					},
@@ -371,10 +371,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "valid ignore-fields annotation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationIgnoreFields: "/spec/replicas,/metadata/labels",
 						},
 					},
@@ -385,10 +385,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "invalid ignore-fields annotation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationIgnoreFields: "not-a-pointer",
 						},
 					},
@@ -400,10 +400,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "valid unmanaged mode",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationMode: ModeUnmanaged,
 						},
 					},
@@ -414,10 +414,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "invalid mode annotation",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							AnnotationMode: "invalid-mode",
 						},
 					},
@@ -429,7 +429,7 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "no annotations",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "ConfigMap",
 				},
 			},
@@ -438,10 +438,10 @@ func TestValidateAnnotations(t *testing.T) {
 		{
 			name: "all valid annotations together",
 			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"kind": "Deployment",
-					"metadata": map[string]interface{}{
-						"annotations": map[string]interface{}{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
 							PatchAnnotation:        `[{"op": "replace", "path": "/spec/replicas", "value": 3}]`,
 							AnnotationIgnoreFields: "/metadata/labels/app",
 							AnnotationMode:         ModeUnmanaged,

@@ -98,18 +98,18 @@ var _ = Describe("Controller E2E Tests", func() {
 
 			By("creating unlabeled HCO instance")
 			hco = &unstructured.Unstructured{
-				Object: map[string]interface{}{
+				Object: map[string]any{
 					"apiVersion": "hco.kubevirt.io/v1",
 					"kind":       "HyperConverged",
-					"metadata": map[string]interface{}{
+					"metadata": map[string]any{
 						"name":      hcoName,
 						"namespace": operatorNamespace,
 						// Deliberately NO managed-by label to test adoption
-						"annotations": map[string]interface{}{
+						"annotations": map[string]any{
 							autopilotAnnotation: autopilotEnabled,
 						},
 					},
-					"spec": map[string]interface{}{},
+					"spec": map[string]any{},
 				},
 			}
 			Expect(k8sClient.Create(ctx, hco)).To(Succeed())
