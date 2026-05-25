@@ -177,6 +177,9 @@ func (r *Registry) ShouldApply(ctx context.Context, asset *AssetMetadata, evalCo
 // IsManagedCRD reports whether crdName is the required CRD of at least one declared asset.
 // Used by the CRD event handler to decide whether a CRD install/removal is relevant.
 func (r *Registry) IsManagedCRD(crdName string) bool {
+	if crdName == "" {
+		return false
+	}
 	for i := range r.catalog.Assets {
 		if r.catalog.Assets[i].RequiredCRD == crdName {
 			return true
@@ -221,6 +224,20 @@ func crdNameFromGVK(apiVersion, kind string) string {
 	if len(parts) == 1 {
 		return "" // core API, no CRD
 	}
+
+	// Built-in Kubernetes API groups (not CRDs).
+	// All Kubernetes-owned groups use the .k8s.io or .apiserver.k8s.io suffix.
+	group := parts[0]
+	if strings.HasSuffix(group, ".k8s.io") || strings.HasSuffix(group, ".apiserver.k8s.io") {
+		return ""
+	}
+
+	// Legacy built-in groups that predate the .k8s.io convention.
+	switch group {
+	case "apps", "batch", "policy", "autoscaling":
+		return ""
+	}
+
 	return pluralizeKind(kind) + "." + parts[0]
 }
 

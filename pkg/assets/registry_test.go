@@ -514,3 +514,51 @@ func TestOptInAssetsHaveConditions(t *testing.T) {
 			len(violations), violations)
 	}
 }
+
+func TestCrdNameFromGVK(t *testing.T) {
+	tests := []struct {
+		name       string
+		apiVersion string
+		kind       string
+		want       string
+	}{
+		// Core API (no group)
+		{"core v1 pod", "v1", "Pod", ""},
+		{"core v1 service", "v1", "Service", ""},
+
+		// Built-in API groups with .k8s.io suffix
+		{"rbac clusterrole", "rbac.authorization.k8s.io/v1", "ClusterRole", ""},
+		{"networking ingress", "networking.k8s.io/v1", "Ingress", ""},
+		{"admissionregistration mutatingwebhook", "admissionregistration.k8s.io/v1", "MutatingWebhookConfiguration", ""},
+		{"storage storageclass", "storage.k8s.io/v1", "StorageClass", ""},
+		{"apiextensions crd", "apiextensions.k8s.io/v1", "CustomResourceDefinition", ""},
+		{"coordination lease", "coordination.k8s.io/v1", "Lease", ""},
+		{"events event", "events.k8s.io/v1", "Event", ""},
+
+		// Built-in API groups with .apiserver.k8s.io suffix
+		{"flowcontrol prioritylevelconfiguration", "flowcontrol.apiserver.k8s.io/v1", "PriorityLevelConfiguration", ""},
+
+		// Legacy built-in API groups (no suffix)
+		{"apps deployment", "apps/v1", "Deployment", ""},
+		{"batch job", "batch/v1", "Job", ""},
+		{"policy poddisruptionbudget", "policy/v1", "PodDisruptionBudget", ""},
+		{"autoscaling hpa", "autoscaling/v2", "HorizontalPodAutoscaler", ""},
+
+		// Custom Resource Definitions (should return CRD name)
+		{"kubevirt hyperconverged", "hco.kubevirt.io/v1beta1", "HyperConverged", "hyperconvergeds.hco.kubevirt.io"},
+		{"forklift controller", "forklift.konveyor.io/v1beta1", "ForkliftController", "forkliftcontrollers.forklift.konveyor.io"},
+		{"metallb", "metallb.io/v1beta1", "MetalLB", "metallbs.metallb.io"},
+		{"monitoring prometheusrule", "monitoring.coreos.com/v1", "PrometheusRule", "prometheusrules.monitoring.coreos.com"},
+		{"openshift machineconfig", "machineconfiguration.openshift.io/v1", "MachineConfig", "machineconfigs.machineconfiguration.openshift.io"},
+		{"medik8s nodehealthcheck", "remediation.medik8s.io/v1alpha1", "NodeHealthCheck", "nodehealthchecks.remediation.medik8s.io"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := crdNameFromGVK(tt.apiVersion, tt.kind)
+			if got != tt.want {
+				t.Errorf("crdNameFromGVK(%q, %q) = %q, want %q", tt.apiVersion, tt.kind, got, tt.want)
+			}
+		})
+	}
+}
