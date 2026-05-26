@@ -143,13 +143,14 @@ rules:
       - patch
       - update
       - watch
-  # Cluster Observability
+  # Cluster Observability (includes tombstone cleanup)
   - apiGroups:
       - observability.openshift.io
     resources:
       - uiplugins
     verbs:
       - create
+      - delete
       - get
       - list
       - patch
