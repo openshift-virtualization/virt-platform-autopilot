@@ -277,7 +277,7 @@ func preprocessAssetTemplate(content []byte) []byte {
 	backtickRe := regexp.MustCompile("\\{\\{`[^`]*`\\}\\}")
 	content = backtickRe.ReplaceAll(content, []byte(`dummy-value`))
 	exprRe := regexp.MustCompile(`\{\{[^}]+\}\}`)
-	return exprRe.ReplaceAll(content, []byte(`"dummy-value"`))
+	return exprRe.ReplaceAll(content, []byte(`dummy-value`))
 }
 
 // ConditionEvaluator defines the interface for evaluating asset conditions
