@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -117,14 +118,13 @@ func (r *TombstoneReconciler) reconcileTombstone(ctx context.Context, ts assets.
 
 	err := r.client.Get(ctx, objKey, live)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			// Resource already deleted - success (idempotent)
-			logger.V(1).Info("Tombstone resource already deleted",
+		if errors.IsNotFound(err) || apimeta.IsNoMatchError(err) {
+			// Resource already deleted, or its CRD is not installed — either way nothing to do.
+			logger.V(1).Info("Tombstone resource already deleted or CRD absent",
 				"kind", ts.GVK.Kind,
 				"name", ts.Name,
 				"namespace", ts.Namespace)
 
-			// Set metric to deleted
 			observability.SetTombstoneStatus(ts.Object, observability.TombstoneDeleted)
 
 			return false, nil

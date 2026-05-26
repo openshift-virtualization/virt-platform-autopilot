@@ -262,12 +262,16 @@ func TestHandleTombstones(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Should return empty list or valid tombstones
 	var tombstones []TombstoneInfo
 	err = yaml.Unmarshal(w.Body.Bytes(), &tombstones)
 	assert.NoError(t, err)
-	// Currently no tombstones in repo, so should be empty
-	assert.Empty(t, tombstones)
+	assert.NotEmpty(t, tombstones)
+
+	names := make([]string, 0, len(tombstones))
+	for _, ts := range tombstones {
+		names = append(names, ts.Name)
+	}
+	assert.Contains(t, names, "kubevirt-plugin")
 }
 
 func TestGetRenderContext(t *testing.T) {
