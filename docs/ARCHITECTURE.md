@@ -86,9 +86,9 @@ Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The
 | `kubelet-cpu-manager` | | KubeletConfig | Opt-in: CPUManager feature gate |
 | `node-health-check` | | NodeHealthCheck | Always-on baseline |
 | `descheduler-loadaware` | | KubeDescheduler | Soft dependency on KubeDescheduler CRD |
+| `monitoring-ui-plugin` | | UIPlugin | Soft dependency on COO CRD; enables Perses dashboards in the OpenShift console |
 | `mtv-operator` | | ForkliftController | Opt-in: annotation condition |
 | `metallb-operator` | | MetalLB | Opt-in: annotation condition |
-| `observability-operator` | | UIPlugin | Opt-in: annotation condition |
 
 The `group` field enables **allowlist grouping**: listing `descheduler-loadaware` in the annotation activates both the `KubeDescheduler` asset (by name) and the `psi-enable` MachineConfig (by group). For example:
 
@@ -127,9 +127,14 @@ Critical baseline configurations applied to all clusters:
   - PCI device passthrough enablement
 - **KubeletConfig**: Kubelet performance settings
 - **Operators**: Third-party operator CRs
+  - **Monitoring UI Plugin** (`monitoring-ui-plugin`): Enables the Perses dashboard UI in
+    the OpenShift console via the Cluster Observability Operator (COO). Automatically skipped
+    when the `uiplugins.observability.openshift.io` CRD is absent. When ACM is present it
+    manages the same `monitoring` UIPlugin and adds `spec.monitoring.acm.*` fields; SSA field
+    managers don't conflict because autopilot only owns `spec.monitoring.perses.enabled`.
   - MTV (Migration Toolkit for Virtualization)
   - MetalLB (Load balancing)
-  - Observability stack
+  - Monitoring UIPlugin (see `monitoring-ui-plugin` above)
 
 ### 2. Context-Aware (Phase 1 opt-in)
 
@@ -475,7 +480,8 @@ virt-platform-autopilot/
 │   │   ├── kubelet/               # Kubelet settings
 │   │   ├── descheduler/           # KubeDescheduler
 │   │   ├── node-health/           # NodeHealthCheck
-│   │   ├── operators/             # Third-party operator CRs
+│   │   ├── observability/         # PrometheusRules
+│   │   ├── operators/             # Third-party operator CRs (UIPlugin, MetalLB, MTV…)
 │   │   └── metadata.yaml          # Asset catalog
 │   └── tombstones/                # Obsolete resources for deletion
 ├── config/                        # Kubernetes manifests for deployment
