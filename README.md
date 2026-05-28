@@ -72,6 +72,7 @@ The autopilot continuously evaluates your infrastructure and applies production 
 - **Optimized platform defaults** for production stability
 - **Swap optimization** for memory management
 - **CPU management** for guaranteed workloads
+- **Perses monitoring dashboards** for CNV observability via the OpenShift console (when the Cluster Observability Operator is installed)
 
 The configuration adapts to your environment - if hardware capabilities are detected, appropriate optimizations are applied automatically.
 

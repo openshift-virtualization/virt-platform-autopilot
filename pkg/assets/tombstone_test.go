@@ -37,19 +37,20 @@ var _ = Describe("Tombstone Loader", func() {
 	})
 
 	Describe("LoadTombstones", func() {
-		It("should return empty list when tombstones directory is empty", func() {
+		It("should load tombstones from the embedded filesystem", func() {
 			tombstones, err := loader.LoadTombstones()
 			Expect(err).NotTo(HaveOccurred())
-			// Directory exists but only contains .gitkeep
-			Expect(tombstones).To(BeEmpty())
+			Expect(tombstones).NotTo(BeEmpty())
 		})
 
-		It("should handle non-existent tombstones directory gracefully", func() {
-			// This is handled by the .gitkeep file, but the function should handle missing dir
+		It("should include the kubevirt-plugin UIPlugin tombstone", func() {
 			tombstones, err := loader.LoadTombstones()
 			Expect(err).NotTo(HaveOccurred())
-			// Empty directory or missing directory both return empty list
-			Expect(tombstones).To(Or(BeNil(), BeEmpty()))
+			names := make([]string, 0, len(tombstones))
+			for _, ts := range tombstones {
+				names = append(names, ts.Name)
+			}
+			Expect(names).To(ContainElement("kubevirt-plugin"))
 		})
 	})
 
