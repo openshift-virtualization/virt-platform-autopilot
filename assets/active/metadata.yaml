@@ -22,7 +22,7 @@ assets:
 
   # Phase 1: MachineConfig (requires MachineConfig CRD)
   - name: swap-enable
-    path: active/machine-config/01-swap-enable.yaml
+    path: active/machine-config/01-swap-enable.yaml.tpl
     phase: 1
     install: always
     component: MachineConfig
