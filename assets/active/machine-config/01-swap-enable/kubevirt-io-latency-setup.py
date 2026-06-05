@@ -32,6 +32,11 @@ def resolve_to_physical(dev):
     /proc/swaps and /proc/mounts report higher-level devices that may be
     LVM/DM volumes or partitions, not the physical disk itself.
 
+    NOTE: callers must resolve symlinks with os.path.realpath() before calling
+    this function. /proc/swaps entries may be symlink paths such as
+    /dev/disk/by-partlabel/OCPSWAP whose basename does not appear in
+    /sys/class/block/, causing device discovery to silently return an empty set.
+
     Resolution walks sysfs:
       /dev/dm-3  -> /sys/class/block/dm-3/slaves/sda2  -> recurse
       /dev/sda2  -> /sys/class/block/sda2/partition exists -> parent is sda
@@ -82,7 +87,7 @@ def discover_devices():
                     continue
                 if os.path.basename(parts[0]).startswith("zram"):
                     continue
-                for phys in resolve_to_physical(parts[0]):
+                for phys in resolve_to_physical(os.path.realpath(parts[0])):
                     print(f"Swap backing device: {phys}")
                     devices.add(phys)
     except FileNotFoundError:
@@ -94,7 +99,7 @@ def discover_devices():
             for line in f:
                 parts = line.split()
                 if len(parts) >= 2 and parts[1] == "/":
-                    for phys in resolve_to_physical(parts[0]):
+                    for phys in resolve_to_physical(os.path.realpath(parts[0])):
                         print(f"Root backing device: {phys}")
                         devices.add(phys)
                     break
