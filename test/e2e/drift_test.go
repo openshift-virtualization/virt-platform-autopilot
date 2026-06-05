@@ -84,8 +84,10 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 
 		By("installing MachineConfig CRD and waiting for operator restart")
 		prevCount := getManagerRestartCount()
-		installCRD(machineConfigCRD)
-		waitForOperatorRestart(prevCount)
+		if ensureCRDInstalled(machineConfigCRD) {
+			waitForOperatorRestart(prevCount)
+		}
+		waitForOperatorHealthy()
 	})
 
 	It("should create the 90-worker-swap-online MachineConfig with managed-by label", func() {

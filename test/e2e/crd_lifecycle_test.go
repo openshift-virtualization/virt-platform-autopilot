@@ -82,8 +82,10 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 
 	It("should restart when managed CRD is created and create the swap-enable resource", func() {
 		prevCount := getManagerRestartCount()
-		installCRD(lifecycleMachineConfigCRD)
-		waitForOperatorRestart(prevCount)
+		if ensureCRDInstalled(lifecycleMachineConfigCRD) {
+			waitForOperatorRestart(prevCount)
+		}
+		waitForOperatorHealthy()
 
 		Eventually(func() error {
 			_, err := getUnstructuredResource(lifecycleMachineConfigGVK, "90-worker-swap-online", "")

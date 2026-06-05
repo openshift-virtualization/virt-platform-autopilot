@@ -14,6 +14,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -86,7 +87,7 @@ func getManagerRestartCount() int32 {
 }
 
 // waitForOperatorRestart polls until the autopilot container restart count
-// exceeds prevCount, then waits for the pod to become Ready.
+// exceeds prevCount, then waits for the pod to become healthy.
 func waitForOperatorRestart(prevCount int32) {
 	By(fmt.Sprintf("waiting for operator restart count to exceed %d", prevCount))
 	Eventually(func() int32 {
@@ -97,21 +98,30 @@ func waitForOperatorRestart(prevCount int32) {
 	waitForOperatorHealthy()
 }
 
-// waitForOperatorHealthy waits for the autopilot pod to be Running with container Ready.
+// isOperatorReady returns true if the autopilot pod is Running with its manager container Ready.
+func isOperatorReady() bool {
+	pod := getOperatorPod()
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == "manager" || len(pod.Status.ContainerStatuses) == 1 {
+			return cs.Ready
+		}
+	}
+	return false
+}
+
+// waitForOperatorHealthy waits for the autopilot pod to become Running and Ready,
+// then verifies it remains stable (no crash-loop) for a short observation window.
 func waitForOperatorHealthy() {
 	By("waiting for autopilot pod to become healthy")
-	Eventually(func() bool {
-		pod := getOperatorPod()
-		if pod.Status.Phase != corev1.PodRunning {
-			return false
-		}
-		for _, cs := range pod.Status.ContainerStatuses {
-			if cs.Name == "manager" || len(pod.Status.ContainerStatuses) == 1 {
-				return cs.Ready
-			}
-		}
-		return false
-	}, 3*time.Minute, 2*time.Second).Should(BeTrue(), "Operator pod should be Running and Ready")
+	Eventually(isOperatorReady, 3*time.Minute, 2*time.Second).Should(BeTrue(),
+		"Operator pod should be Running and Ready")
+
+	By("verifying autopilot pod remains healthy")
+	Consistently(isOperatorReady, 2*time.Second, 500*time.Millisecond).Should(BeTrue(),
+		"Operator pod should remain Running and Ready")
 }
 
 // installCRD creates a CRD and waits for it to reach the Established condition.
@@ -119,10 +129,28 @@ func installCRD(crd *apiextensionsv1.CustomResourceDefinition) {
 	By(fmt.Sprintf("installing CRD %s", crd.Name))
 	ExpectWithOffset(1, k8sClient.Create(ctx, crd)).To(Succeed())
 
-	By(fmt.Sprintf("waiting for CRD %s to become Established", crd.Name))
-	EventuallyWithOffset(1, func() bool {
+	waitForCRDEstablished(crd.Name)
+}
+
+// ensureCRDInstalled installs a CRD only if it does not already exist.
+// Returns true if the CRD was newly installed, false if it already existed.
+func ensureCRDInstalled(crd *apiextensionsv1.CustomResourceDefinition) bool {
+	existing := &apiextensionsv1.CustomResourceDefinition{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: crd.Name}, existing)
+	if err == nil {
+		return false
+	}
+	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
+		fmt.Sprintf("unexpected error checking CRD %s: %v", crd.Name, err))
+	installCRD(crd)
+	return true
+}
+
+func waitForCRDEstablished(name string) {
+	By(fmt.Sprintf("waiting for CRD %s to become Established", name))
+	EventuallyWithOffset(2, func() bool {
 		fetched := &apiextensionsv1.CustomResourceDefinition{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: crd.Name}, fetched); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: name}, fetched); err != nil {
 			return false
 		}
 		for _, c := range fetched.Status.Conditions {
@@ -132,7 +160,27 @@ func installCRD(crd *apiextensionsv1.CustomResourceDefinition) {
 		}
 		return false
 	}, 30*time.Second, 1*time.Second).Should(BeTrue(),
-		fmt.Sprintf("CRD %s should become Established", crd.Name))
+		fmt.Sprintf("CRD %s should become Established", name))
+}
+
+func newMachineConfigCRD() *apiextensionsv1.CustomResourceDefinition {
+	return buildMinimalCRD(
+		"machineconfiguration.openshift.io",
+		"MachineConfig",
+		"machineconfigs",
+		"v1",
+		apiextensionsv1.ClusterScoped,
+	)
+}
+
+func newPrometheusRuleCRD() *apiextensionsv1.CustomResourceDefinition {
+	return buildMinimalCRD(
+		"monitoring.coreos.com",
+		"PrometheusRule",
+		"prometheusrules",
+		"v1",
+		apiextensionsv1.NamespaceScoped,
+	)
 }
 
 // removeCRD deletes a CRD and waits for it to be fully removed.
@@ -196,76 +244,87 @@ func findEventsWithReason(reason string) []eventsv1.Event {
 
 // AutopilotEvents captures event counts by reason from the operator namespace.
 type AutopilotEvents struct {
-	ReconcileSucceeded     int
-	AssetApplied           int
-	DriftDetected          int
-	DriftCorrected         int
-	CRDMissing             int
-	CRDDiscovered          int
-	PatchApplied           int
-	InvalidPatch           int
-	InvalidIgnoreFields    int
-	Throttled              int
-	ThrashingDetected      int
-	AssetSkipped           int
-	UnmanagedMode          int
-	ApplyFailed            int
-	RenderFailed           int
-	NoDriftDetected        int
+	ReconcileSucceeded      int
+	AssetApplied            int
+	DriftDetected           int
+	DriftCorrected          int
+	CRDMissing              int
+	CRDDiscovered           int
+	PatchApplied            int
+	InvalidPatch            int
+	InvalidIgnoreFields     int
+	Throttled               int
+	ThrashingDetected       int
+	AssetSkipped            int
+	UnmanagedMode           int
+	ApplyFailed             int
+	RenderFailed            int
+	NoDriftDetected         int
 	HardwareDetectionFailed int
-	TombstoneDeleted       int
-	TombstoneFailed        int
-	TombstoneSkipped       int
+	TombstoneDeleted        int
+	TombstoneFailed         int
+	TombstoneSkipped        int
 }
 
-// captureAutopilotEvents counts all autopilot events in the operator namespace.
+// eventFirings returns the total number of times an event has fired.
+// Series.Count already includes the initial firing (starts at 2 on the
+// second occurrence), so we return it directly when present.
+func eventFirings(event eventsv1.Event) int {
+	if event.Series != nil {
+		return int(event.Series.Count)
+	}
+	return 1
+}
+
+// captureAutopilotEvents counts all autopilot event firings in the operator namespace.
 func captureAutopilotEvents() AutopilotEvents {
 	eventList := &eventsv1.EventList{}
 	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
 
 	var e AutopilotEvents
 	for _, event := range eventList.Items {
+		n := eventFirings(event)
 		switch event.Reason {
 		case "ReconcileSucceeded":
-			e.ReconcileSucceeded++
+			e.ReconcileSucceeded += n
 		case "AssetApplied":
-			e.AssetApplied++
+			e.AssetApplied += n
 		case "DriftDetected":
-			e.DriftDetected++
+			e.DriftDetected += n
 		case "DriftCorrected":
-			e.DriftCorrected++
+			e.DriftCorrected += n
 		case "CRDMissing":
-			e.CRDMissing++
+			e.CRDMissing += n
 		case "CRDDiscovered":
-			e.CRDDiscovered++
+			e.CRDDiscovered += n
 		case "PatchApplied":
-			e.PatchApplied++
+			e.PatchApplied += n
 		case "InvalidPatch":
-			e.InvalidPatch++
+			e.InvalidPatch += n
 		case "InvalidIgnoreFields":
-			e.InvalidIgnoreFields++
+			e.InvalidIgnoreFields += n
 		case "Throttled":
-			e.Throttled++
+			e.Throttled += n
 		case "ThrashingDetected":
-			e.ThrashingDetected++
+			e.ThrashingDetected += n
 		case "AssetSkipped":
-			e.AssetSkipped++
+			e.AssetSkipped += n
 		case "UnmanagedMode":
-			e.UnmanagedMode++
+			e.UnmanagedMode += n
 		case "ApplyFailed":
-			e.ApplyFailed++
+			e.ApplyFailed += n
 		case "RenderFailed":
-			e.RenderFailed++
+			e.RenderFailed += n
 		case "NoDriftDetected":
-			e.NoDriftDetected++
+			e.NoDriftDetected += n
 		case "HardwareDetectionFailed":
-			e.HardwareDetectionFailed++
+			e.HardwareDetectionFailed += n
 		case "TombstoneDeleted":
-			e.TombstoneDeleted++
+			e.TombstoneDeleted += n
 		case "TombstoneFailed":
-			e.TombstoneFailed++
+			e.TombstoneFailed += n
 		case "TombstoneSkipped":
-			e.TombstoneSkipped++
+			e.TombstoneSkipped += n
 		}
 	}
 	return e
@@ -362,25 +421,12 @@ func parseMetricValue(line string) float64 {
 	return -1
 }
 
-// getReconcileDurationCount returns the total reconcile_duration_seconds_count
-// across all resources.
-func getReconcileDurationCount() int {
-	body := fetchMetricsBody()
-	total := 0
-	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "kubevirt_autopilot_reconcile_duration_seconds_count") {
-			total += int(parseMetricValue(line))
-		}
-	}
-	return total
-}
-
 // findEventsWithReasonAfter returns events matching the given reason that occurred after the specified time.
 func findEventsWithReasonAfter(reason string, after time.Time) []eventsv1.Event {
 	events := findEventsWithReason(reason)
 	var filtered []eventsv1.Event
 	for _, event := range events {
-		if event.EventTime.Time.After(after) {
+		if event.EventTime.After(after) {
 			filtered = append(filtered, event)
 		}
 	}
@@ -396,16 +442,53 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 	_ = k8sClient.Delete(ctx, obj)
 }
 
+// ensureHCOExists creates a minimal HCO instance if one doesn't already exist.
+func ensureHCOExists() {
+	hco := &unstructured.Unstructured{}
+	hco.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
+	})
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)
+	if err == nil {
+		return
+	}
+	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
+		fmt.Sprintf("unexpected error checking HCO: %v", err))
+	hco = &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "hco.kubevirt.io/v1",
+			"kind":       "HyperConverged",
+			"metadata": map[string]any{
+				"name":      hcoName,
+				"namespace": operatorNamespace,
+			},
+			"spec": map[string]any{},
+		},
+	}
+	ExpectWithOffset(1, k8sClient.Create(ctx, hco)).To(Succeed())
+}
+
+// removeManagedByLabel patches the HCO to remove the managed-by label.
+// Used to set up the "unlabeled adoption" scenario.
+func removeManagedByLabel(labelKey string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":null}}}`, labelKey))
+	ref := hcoRef()
+	EventuallyWithOffset(1, func() error {
+		return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))
+	}, timeout, interval).Should(Succeed(), "managed-by label should be removed from HCO")
+}
+
 // hasLabel checks if an unstructured object has a specific label key-value pair.
-func hasLabel(obj *unstructured.Unstructured, key, value string) bool {
+func hasLabel(obj *unstructured.Unstructured, key, value string) bool { //nolint:unparam
 	labels := obj.GetLabels()
 	return labels != nil && labels[key] == value
 }
 
 // patchAutopilotAndWait patches the autopilot annotation on the HCO and waits for
-// the triggered reconciliation to complete before returning. This ensures a stable
-// state for subsequent assertions. If the annotation already has the desired value,
-// it returns immediately (no-op). For disable, it waits a short period since
+// the triggered reconciliation to complete before returning.
+// If the annotation already has the desired value,
+// it returns immediately (no-op).
+// For disable, it waits a short period since
 // no ReconcileSucceeded event is emitted when the operator goes idle.
 func patchAutopilotAndWait(value string) {
 	ref := hcoRef()
@@ -431,7 +514,27 @@ func patchAutopilotAndWait(value string) {
 		EventuallyWithOffset(1, func() error {
 			return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, autopilotPatch(value)))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-		time.Sleep(2 * time.Second)
+
+		EventuallyWithOffset(1, func() string {
+			obj := &unstructured.Unstructured{}
+			obj.SetGroupVersionKind(schema.GroupVersionKind{
+				Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
+			})
+			if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, obj); err != nil {
+				return "error"
+			}
+			return obj.GetAnnotations()[autopilotAnnotation]
+		}, timeout, interval).Should(BeEmpty(), "Autopilot annotation should be removed from HCO")
+
+		var prev AutopilotEvents
+		EventuallyWithOffset(1, func() bool {
+			current := captureAutopilotEvents()
+			stable := prev == current
+			prev = current
+			return stable
+		}, timeout, 2*time.Second).Should(BeTrue(),
+			"Autopilot events should stabilize after disabling")
+		waitForOperatorHealthy()
 		return
 	}
 
@@ -448,6 +551,7 @@ func patchAutopilotAndWait(value string) {
 		}
 		return false
 	}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "Reconciliation should complete after patching autopilot")
+	waitForOperatorHealthy()
 }
 
 // autopilotPatch returns a JSON merge patch that sets the autopilot annotation.
@@ -470,27 +574,4 @@ func hcoRef() *unstructured.Unstructured {
 	obj.SetName(hcoName)
 	obj.SetNamespace(operatorNamespace)
 	return obj
-}
-
-// `deleteHCOAndWait` deletes the HCO CR and waits until it is fully removed.
-// It is safe to call even if the HCO does not exist.
-func deleteHCOAndWait() {
-	By("deleting HCO and waiting for removal")
-	hco := &unstructured.Unstructured{}
-	hco.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "hco.kubevirt.io",
-		Version: "v1",
-		Kind:    "HyperConverged",
-	})
-	hco.SetName(hcoName)
-	hco.SetNamespace(operatorNamespace)
-	_ = k8sClient.Delete(ctx, hco)
-	EventuallyWithOffset(1, func() bool {
-		err := k8sClient.Get(ctx, client.ObjectKey{
-			Name:      hcoName,
-			Namespace: operatorNamespace,
-		}, hco)
-		return err != nil // true when NotFound
-	}, 30*time.Second, 500*time.Millisecond).Should(BeTrue(),
-		"HCO instance should be deleted")
 }
