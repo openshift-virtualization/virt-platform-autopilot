@@ -575,3 +575,11 @@ func hcoRef() *unstructured.Unstructured {
 	obj.SetNamespace(operatorNamespace)
 	return obj
 }
+
+// isOpenShiftCluster returns true when the ClusterVersion CRD exists,
+// which is always present on OCP but never on Kind.
+func isOpenShiftCluster() bool {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusterversions.config.openshift.io"}, crd)
+	return err == nil
+}

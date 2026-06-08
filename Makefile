@@ -43,6 +43,10 @@ test-integration: envtest ginkgo ## Run integration tests with envtest
 test-e2e: docker-build ## Run E2E tests on kind cluster
 	./hack/run-e2e.sh
 
+.PHONY: run-e2e
+run-e2e: ginkgo ## Run E2E tests against the current cluster (set KUBECONFIG)
+	$(GINKGO) -v --trace --timeout=10m --poll-progress-after=60s ./test/e2e/...
+
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary
 $(ENVTEST): $(LOCALBIN)
