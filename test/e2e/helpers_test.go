@@ -2,7 +2,11 @@ package e2e
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +15,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -440,6 +446,12 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
 	_ = k8sClient.Delete(ctx, obj)
+
+	EventuallyWithOffset(1, func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, obj)
+		return apierrors.IsNotFound(err)
+	}, 10*time.Minute, 10*time.Second).Should(BeTrue(),
+		fmt.Sprintf("%s/%s should be fully deleted", gvk.Kind, name))
 }
 
 // ensureHCOExists creates a minimal HCO instance if one doesn't already exist.
@@ -582,4 +594,308 @@ func isOpenShiftCluster() bool {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusterversions.config.openshift.io"}, crd)
 	return err == nil
+}
+
+func crdInstalled(name string) bool {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	return k8sClient.Get(ctx, types.NamespacedName{Name: name}, crd) == nil
+}
+
+// --- Alert test helpers (OCP-only) ---
+
+type assetUnderTest struct {
+	GVK       schema.GroupVersionKind
+	Name      string
+	Namespace string
+	GateCRD   string // if set, asset is only created when this CRD is installed
+}
+
+func (a assetUnderTest) webhookName() string {
+	return fmt.Sprintf("autopilot-e2e-block-%s", strings.ToLower(a.GVK.Kind)+"s")
+}
+
+func touchHCO() {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"e2e.test/touch":"%d"}}}`, time.Now().UnixNano()))
+	ref := hcoRef()
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
+}
+
+func createBlockingWebhook(asset assetUnderTest) {
+	plural := strings.ToLower(asset.GVK.Kind) + "s"
+	failurePolicy := admissionregistrationv1.Fail
+	sideEffects := admissionregistrationv1.SideEffectClassNone
+	port := int32(443)
+
+	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: asset.webhookName(),
+		},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{
+			{
+				Name: "block." + plural + ".e2e.test",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: operatorNamespace,
+						Name:      "e2e-nonexistent-webhook",
+						Port:      &port,
+					},
+				},
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Operations: []admissionregistrationv1.OperationType{
+							admissionregistrationv1.Create,
+						},
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{asset.GVK.Group},
+							APIVersions: []string{asset.GVK.Version},
+							Resources:   []string{plural},
+						},
+					},
+				},
+				FailurePolicy: &failurePolicy,
+				SideEffects:   &sideEffects,
+				ObjectSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						managedByLabel: managedByValue,
+					},
+				},
+				AdmissionReviewVersions: []string{"v1"},
+			},
+		},
+	}
+
+	By(fmt.Sprintf("creating blocking webhook %s", asset.webhookName()))
+	ExpectWithOffset(1, k8sClient.Create(ctx, webhook)).To(Succeed())
+}
+
+func deleteBlockingWebhook(asset assetUnderTest) {
+	By(fmt.Sprintf("deleting blocking webhook %s", asset.webhookName()))
+	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: asset.webhookName()},
+	}
+	err := k8sClient.Delete(ctx, webhook)
+	if err != nil && !apierrors.IsNotFound(err) {
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	}
+}
+
+func setPrometheusRuleUnmanaged() {
+	By("setting PrometheusRule to unmanaged mode")
+	patch := []byte(`{"metadata":{"annotations":{"platform.kubevirt.io/mode":"unmanaged"}}}`)
+	ref := &unstructured.Unstructured{}
+	ref.SetGroupVersionKind(prometheusRuleGVK)
+	ref.SetName(prometheusRuleName)
+	ref.SetNamespace(operatorNamespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
+}
+
+func removePrometheusRuleUnmanaged() {
+	By("removing unmanaged mode from PrometheusRule")
+	patch := []byte(`{"metadata":{"annotations":{"platform.kubevirt.io/mode":null}}}`)
+	ref := &unstructured.Unstructured{}
+	ref.SetGroupVersionKind(prometheusRuleGVK)
+	ref.SetName(prometheusRuleName)
+	ref.SetNamespace(operatorNamespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
+}
+
+func patchAlertForDurations(targetFor string) {
+	By(fmt.Sprintf("patching all alert 'for' durations to %s", targetFor))
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(prometheusRuleGVK)
+	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{
+		Name:      prometheusRuleName,
+		Namespace: operatorNamespace,
+	}, obj)).To(Succeed())
+
+	groups, found, err := unstructured.NestedSlice(obj.Object, "spec", "groups")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, found).To(BeTrue(), "PrometheusRule should have spec.groups")
+
+	for _, group := range groups {
+		groupMap, ok := group.(map[string]any)
+		ExpectWithOffset(1, ok).To(BeTrue())
+		rules, ok := groupMap["rules"].([]any)
+		ExpectWithOffset(1, ok).To(BeTrue())
+		for _, rule := range rules {
+			ruleMap, ok := rule.(map[string]any)
+			ExpectWithOffset(1, ok).To(BeTrue())
+			if _, hasFor := ruleMap["for"]; hasFor {
+				ruleMap["for"] = targetFor
+			}
+		}
+	}
+
+	ExpectWithOffset(1, unstructured.SetNestedSlice(obj.Object, groups, "spec", "groups")).To(Succeed())
+	ExpectWithOffset(1, k8sClient.Update(ctx, obj)).To(Succeed())
+}
+
+type prometheusQueryResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string `json:"resultType"`
+		Result     []any  `json:"result"`
+	} `json:"data"`
+}
+
+func queryPrometheus(promQL string) *prometheusQueryResponse {
+	route := &unstructured.Unstructured{}
+	route.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "route.openshift.io", Version: "v1", Kind: "Route",
+	})
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Name: "thanos-querier", Namespace: "openshift-monitoring",
+	}, route); err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot get thanos-querier route: %v\n", err)
+		return nil
+	}
+	host, _, _ := unstructured.NestedString(route.Object, "spec", "host")
+	if host == "" {
+		GinkgoWriter.Println("queryPrometheus: route has no host")
+		return nil
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot create clientset: %v\n", err)
+		return nil
+	}
+
+	expSeconds := int64(600)
+	tokenReq, err := clientset.CoreV1().ServiceAccounts("openshift-monitoring").
+		CreateToken(ctx, "prometheus-k8s", &authenticationv1.TokenRequest{
+			Spec: authenticationv1.TokenRequestSpec{
+				ExpirationSeconds: &expSeconds,
+			},
+		}, metav1.CreateOptions{})
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot create SA token: %v\n", err)
+		return nil
+	}
+
+	reqURL := fmt.Sprintf("https://%s/api/v1/query", host)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot build request: %v\n", err)
+		return nil
+	}
+	q := httpReq.URL.Query()
+	q.Set("query", promQL)
+	httpReq.URL.RawQuery = q.Encode()
+	httpReq.Header.Set("Authorization", "Bearer "+tokenReq.Status.Token)
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		},
+	}
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: HTTP error: %v\n", err)
+		return nil
+	}
+	defer httpResp.Body.Close()
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot read body: %v\n", err)
+		return nil
+	}
+
+	var resp prometheusQueryResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		GinkgoWriter.Printf("queryPrometheus: unmarshal error: %v, body: %s\n", err, string(body))
+		return nil
+	}
+
+	return &resp
+}
+
+func queryFiringAlert(alertName string, attempt, maxAttempts int, labelFilters ...string) map[string]string {
+	promQL := fmt.Sprintf(`ALERTS{alertname="%s",alertstate="firing"`, alertName)
+	for i := 0; i+1 < len(labelFilters); i += 2 {
+		promQL += fmt.Sprintf(`,%s="%s"`, labelFilters[i], labelFilters[i+1])
+	}
+	promQL += "}"
+	resp := queryPrometheus(promQL)
+	if resp == nil {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: no response\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+	if resp.Status != "success" || len(resp.Data.Result) == 0 {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: not firing yet\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+
+	resultMap, ok := resp.Data.Result[0].(map[string]any)
+	if !ok {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: unexpected result format\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+	metricRaw, ok := resultMap["metric"].(map[string]any)
+	if !ok {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: missing metric labels\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+
+	labels := make(map[string]string, len(metricRaw))
+	for k, v := range metricRaw {
+		labels[k] = fmt.Sprint(v)
+	}
+
+	GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: firing — kind=%s name=%s severity=%s\n",
+		alertName, attempt, maxAttempts, labels["kind"], labels["name"], labels["severity"])
+	return labels
+}
+
+func queryMetricExists(metricName string, attempt, maxAttempts int) bool {
+	resp := queryPrometheus(metricName)
+	if resp == nil {
+		GinkgoWriter.Printf("queryMetricExists(%s) [%d/%d]: no response\n", metricName, attempt, maxAttempts)
+		return false
+	}
+	if resp.Status != "success" || len(resp.Data.Result) == 0 {
+		GinkgoWriter.Printf("queryMetricExists(%s) [%d/%d]: not found yet\n", metricName, attempt, maxAttempts)
+		return false
+	}
+	GinkgoWriter.Printf("queryMetricExists(%s) [%d/%d]: found (%d series)\n", metricName, attempt, maxAttempts, len(resp.Data.Result))
+	return true
+}
+
+type missingDependency struct {
+	Kind    string
+	Group   string
+	Version string
+}
+
+func getMissingDependenciesFromMetrics() []missingDependency {
+	var deps []missingDependency
+	body := fetchMetricsBody()
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "kubevirt_autopilot_missing_dependency") && parseMetricValue(line) == 1 {
+			deps = append(deps, missingDependency{
+				Kind:    parseMetricLabel(line, "kind"),
+				Group:   parseMetricLabel(line, "group"),
+				Version: parseMetricLabel(line, "version"),
+			})
+		}
+	}
+	return deps
+}
+
+func parseMetricLabel(line, key string) string {
+	search := key + `="`
+	idx := strings.Index(line, search)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(search)
+	end := strings.Index(line[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+	return line[start : start+end]
 }
