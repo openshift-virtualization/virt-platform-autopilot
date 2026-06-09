@@ -157,17 +157,14 @@ kind: Namespace
 metadata:
   name: openshift-cnv
 ---
-apiVersion: hco.kubevirt.io/v1beta1
+apiVersion: hco.kubevirt.io/v1
 kind: HyperConverged
 metadata:
   name: kubevirt-hyperconverged
   namespace: openshift-cnv
   annotations:
     platform.kubevirt.io/autopilot: "true"
-spec:
-  liveMigrationConfig:
-    parallelMigrationsPerCluster: 5
-    parallelOutboundMigrationsPerNode: 2
+spec: {}
 EOF
 
     echo "Mock HCO created in openshift-cnv namespace"
