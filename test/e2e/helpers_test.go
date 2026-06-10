@@ -366,9 +366,9 @@ func fetchMetricsBody() string {
 // captureAssetMetrics fetches all metrics for a specific asset from the operator's /metrics endpoint.
 // Labels are matched by kind/name/namespace. For missing_dependency the labels are group/version/kind
 // so it uses the kind parameter only.
-func captureAssetMetrics(kind, name, namespace string) AssetMetrics { //nolint:unparam
+func captureAssetMetrics(kind, name string) AssetMetrics {
 	body := fetchMetricsBody()
-	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, namespace)
+	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, operatorNamespace)
 
 	m := AssetMetrics{
 		ComplianceStatus:       -1,
