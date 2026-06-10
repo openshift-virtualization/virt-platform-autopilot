@@ -24,7 +24,7 @@ import (
 
 // buildMinimalCRD constructs a minimal CRD with x-kubernetes-preserve-unknown-fields
 // suitable for testing without requiring a full schema.
-func buildMinimalCRD(group, kind, plural, version string, scope apiextensionsv1.ResourceScope) *apiextensionsv1.CustomResourceDefinition {
+func buildMinimalCRD(group, kind, plural, version string, scope apiextensionsv1.ResourceScope) *apiextensionsv1.CustomResourceDefinition { //nolint:unparam
 	return &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: fmt.Sprintf("%s.%s", plural, group),
@@ -360,7 +360,7 @@ func fetchMetricsBody() string {
 // captureAssetMetrics fetches all metrics for a specific asset from the operator's /metrics endpoint.
 // Labels are matched by kind/name/namespace. For missing_dependency the labels are group/version/kind
 // so it uses the kind parameter only.
-func captureAssetMetrics(kind, name, namespace string) AssetMetrics {
+func captureAssetMetrics(kind, name, namespace string) AssetMetrics { //nolint:unparam
 	body := fetchMetricsBody()
 	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, namespace)
 
