@@ -17,12 +17,89 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	pkgassets "github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
 )
+
+// failingDriftChecker always returns an error simulating a broken webhook or TLS failure.
+type failingDriftChecker struct{ err error }
+
+func (f *failingDriftChecker) DetectDrift(_ context.Context, _, _ *unstructured.Unstructured) (bool, error) {
+	return false, f.err
+}
+
+// TestDriftDetectionFailureSetsComplianceToZero verifies that when the SSA dry-run used
+// for drift detection fails persistently (e.g. webhook down), compliance_status is set to 0
+// so that VirtPlatformSyncFailed can fire. Before the fix, the error path returned without
+// updating the metric, leaving it stuck at 1 (synced) indefinitely.
+func TestDriftDetectionFailureSetsComplianceToZero(t *testing.T) {
+	observability.ComplianceStatus.Reset()
+
+	loader := pkgassets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	// 04-psi-enable.yaml is a static (non-template) MachineConfig — no HCO fields needed.
+	assetMeta := &pkgassets.AssetMetadata{
+		Name:      "psi-enable",
+		Path:      "active/machine-config/04-psi-enable.yaml",
+		Component: "MachineConfig",
+	}
+
+	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
+	renderCtx := pkgcontext.NewRenderContext(hco)
+
+	// Render once to get the exact object shape the patcher will use.
+	desired, err := renderer.RenderAsset(assetMeta, renderCtx)
+	if err != nil {
+		t.Fatalf("failed to render asset: %v", err)
+	}
+
+	// Create the live object pre-existing in the cluster so liveExists=true and
+	// the drift-detection branch is reached.
+	live := desired.DeepCopy()
+	fakeClient := fake.NewClientBuilder().WithObjects(live).Build()
+
+	p := &Patcher{
+		renderer:          renderer,
+		applier:           NewApplier(fakeClient, nil),
+		driftDetector:     &failingDriftChecker{err: fmt.Errorf("webhook TLS failure")},
+		throttle:          throttling.NewTokenBucket(),
+		thrashingDetector: throttling.NewThrashingDetector(),
+		client:            fakeClient,
+	}
+
+	_, reconcileErr := p.ReconcileAsset(context.Background(), assetMeta, renderCtx)
+	if reconcileErr == nil {
+		t.Fatal("expected ReconcileAsset to return an error when drift detection fails")
+	}
+	if !strings.Contains(reconcileErr.Error(), "drift detection failed") {
+		t.Errorf("unexpected error message: %v", reconcileErr)
+	}
+
+	// compliance_status must be 0: the operator cannot guarantee compliance while
+	// drift detection is broken and must signal that to the monitoring stack.
+	gauge := observability.ComplianceStatus.WithLabelValues(
+		desired.GetKind(),
+		desired.GetName(),
+		desired.GetNamespace(),
+	)
+	if val := testutil.ToFloat64(gauge); val != 0 {
+		t.Errorf("compliance_status = %v, want 0 after drift detection failure", val)
+	}
+}
 
 func TestIsNamespaceNotFound(t *testing.T) {
 	tests := []struct {
