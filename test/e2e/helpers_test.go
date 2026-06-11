@@ -366,9 +366,9 @@ func fetchMetricsBody() string {
 // captureAssetMetrics fetches all metrics for a specific asset from the operator's /metrics endpoint.
 // Labels are matched by kind/name/namespace. For missing_dependency the labels are group/version/kind
 // so it uses the kind parameter only.
-func captureAssetMetrics(kind, name string) AssetMetrics {
+func captureAssetMetrics(kind, name, namespace string) AssetMetrics {
 	body := fetchMetricsBody()
-	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, operatorNamespace)
+	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, namespace)
 
 	m := AssetMetrics{
 		ComplianceStatus:       -1,
@@ -886,4 +886,64 @@ func parseMetricLabel(line, key string) string {
 		return ""
 	}
 	return line[start : start+end]
+}
+
+// --- Anti-thrashing test helpers ---
+
+// triggerEditWar repeatedly modifies the managed-by label to trigger drift
+// detection until the operator exhausts its token-bucket budget and sets the
+// pause annotation. We modify managed-by (not add a new label) because SSA
+// drift detection only sees changes to fields owned by the operator's field
+// manager — an extra unmanaged label would be invisible to the dry-run diff.
+func triggerEditWar(gvk schema.GroupVersionKind, name, namespace string) {
+	driftPatch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"tampered"}}}`, managedByLabel))
+	ref := &unstructured.Unstructured{}
+	ref.SetGroupVersionKind(gvk)
+	ref.SetName(name)
+	ref.SetNamespace(namespace)
+
+	Eventually(func() bool {
+		obj, err := getUnstructuredResource(gvk, name, namespace)
+		if err != nil {
+			return false
+		}
+		if ann := obj.GetAnnotations(); ann != nil && ann[pauseAnnotation] == "true" {
+			return true
+		}
+		_ = k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, driftPatch))
+		touchHCO()
+		return false
+	}, 5*time.Minute, 2*time.Second).Should(BeTrue(),
+		fmt.Sprintf("Operator should set pause annotation on %s/%s after detecting edit war", gvk.Kind, name))
+}
+
+// removePauseAnnotation removes the reconcile-paused annotation from a managed resource.
+func removePauseAnnotation(gvk schema.GroupVersionKind, name, namespace string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`, pauseAnnotation))
+	ref := &unstructured.Unstructured{}
+	ref.SetGroupVersionKind(gvk)
+	ref.SetName(name)
+	ref.SetNamespace(namespace)
+
+	EventuallyWithOffset(1, func() error {
+		return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))
+	}, timeout, interval).Should(Succeed(),
+		fmt.Sprintf("Should remove pause annotation from %s/%s", gvk.Kind, name))
+}
+
+// filterEventsByAsset returns events whose Note mentions both kind and name.
+func filterEventsByAsset(events []eventsv1.Event, kind, name string) []eventsv1.Event {
+	var matched []eventsv1.Event
+	for _, event := range events {
+		if strings.Contains(event.Note, kind) && strings.Contains(event.Note, name) {
+			matched = append(matched, event)
+		}
+	}
+	return matched
+}
+
+// queryAlertNotFiring returns true when the given alert is NOT firing in Prometheus.
+func queryAlertNotFiring(alertName string, attempt, maxAttempts int, labelFilters ...string) bool {
+	labels := queryFiringAlert(alertName, attempt, maxAttempts, labelFilters...)
+	return labels == nil
 }

@@ -107,7 +107,7 @@ var _ = Describe("Controller E2E Tests", func() {
 			removeManagedByLabel(managedByLabel)
 
 			By("capturing metrics and events before re-enabling")
-			hcoMetricsBefore := captureAssetMetrics("HyperConverged", hcoName)
+			hcoMetricsBefore := captureAssetMetrics("HyperConverged", hcoName, operatorNamespace)
 			eventsBefore := captureAutopilotEvents()
 
 			By("re-enabling autopilot to trigger adoption")
@@ -137,7 +137,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				"ReconcileSucceeded count should increase after re-enabling")
 
 			By("verifying HCO metrics after adoption were updated")
-			hcoMetricsAfter := captureAssetMetrics("HyperConverged", hcoName)
+			hcoMetricsAfter := captureAssetMetrics("HyperConverged", hcoName, operatorNamespace)
 			Expect(hcoMetricsAfter.ReconcileDurationCount).To(BeNumerically(">", hcoMetricsBefore.ReconcileDurationCount),
 				"reconcile_duration_seconds_count should increase for HCO")
 			Expect(hcoMetricsAfter.ComplianceStatus).To(Equal(1.0),
@@ -243,7 +243,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				return err
 			}, timeout, interval).Should(Succeed())
 			By(fmt.Sprintf("verifying %s MachineConfig metrics are healthy", swapMcName))
-			mcMetrics := captureAssetMetrics("MachineConfig", swapMcName)
+			mcMetrics := captureAssetMetrics("MachineConfig", swapMcName, "")
 			if mcMetrics.ComplianceStatus >= 0 {
 				Expect(mcMetrics.ComplianceStatus).To(Equal(1.0),
 					fmt.Sprintf("compliance_status for MachineConfig %s should be 1 (synced)", swapMcName))
@@ -257,7 +257,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				return err
 			}, timeout, interval).Should(Succeed())
 			By(fmt.Sprintf("verifying %s prometheusRule metrics are healthy", prometheusRuleName))
-			prMetrics := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			prMetrics := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			if prMetrics.ComplianceStatus >= 0 {
 				Expect(prMetrics.ComplianceStatus).To(Equal(1.0),
 					fmt.Sprintf("compliance_status for PrometheusRule %s should be 1 (synced)", prometheusRuleName))
@@ -284,7 +284,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				"PrometheusRule should still have managed-by label")
 
 			By("capturing metrics and events before deletion")
-			prMetricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			prMetricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			eventsBefore := captureAutopilotEvents()
 
 			By("deleting the PrometheusRule")
@@ -299,7 +299,7 @@ var _ = Describe("Controller E2E Tests", func() {
 
 			By("verifying PrometheusRule metrics did not change")
 			// Bug CNV-89268: Metrics should align the status when the asset is not active
-			prMetricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			prMetricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			Expect(prMetricsAfter).To(Equal(prMetricsBefore),
 				"PrometheusRule metrics should not change when outside the allowlist")
 
@@ -316,7 +316,7 @@ var _ = Describe("Controller E2E Tests", func() {
 
 		It("should recreate a deleted asset when added to the allowlist", func() {
 			By("capturing metrics and events before test")
-			prMetricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			prMetricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			eventsBefore := captureAutopilotEvents()
 
 			By("deleting PrometheusRule if it exists")
@@ -338,7 +338,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				"Recreated PrometheusRule should have managed-by label")
 
 			By("verifying PrometheusRule metrics after recreation")
-			prMetricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			prMetricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			Expect(prMetricsAfter.ComplianceStatus).To(Equal(1.0),
 				"compliance_status should be 1 (synced)")
 			Expect(prMetricsAfter.ReconcileDurationCount).To(BeNumerically(">", prMetricsBefore.ReconcileDurationCount),
@@ -375,7 +375,7 @@ var _ = Describe("Controller E2E Tests", func() {
 			}, timeout, interval).Should(Succeed())
 
 			By("capturing metrics and events before drift")
-			metricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			metricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			eventsBefore := captureAutopilotEvents()
 
 			By("modifying PrometheusRule by changing a managed label")
@@ -402,7 +402,7 @@ var _ = Describe("Controller E2E Tests", func() {
 				"managed-by label should be preserved after drift correction")
 
 			By("verifying PrometheusRule metrics after drift correction")
-			metricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName)
+			metricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			Expect(metricsAfter.ComplianceStatus).To(Equal(1.0),
 				"compliance_status should be 1 (synced)")
 			Expect(metricsAfter.ReconcileDurationCount).To(BeNumerically(">", metricsBefore.ReconcileDurationCount),
