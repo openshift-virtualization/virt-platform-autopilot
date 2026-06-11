@@ -71,6 +71,17 @@ rules:
   # ========================================
   # Managed Resources (Dynamic - from assets/)
   # ========================================
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # Migration Toolkit for Virtualization (MTV)
   - apiGroups:
       - forklift.konveyor.io
@@ -131,11 +142,12 @@ rules:
       - patch
       - update
       - watch
-  # Prometheus Alert Rules
+  # Prometheus Monitoring
   - apiGroups:
       - monitoring.coreos.com
     resources:
       - prometheusrules
+      - servicemonitors
     verbs:
       - create
       - get

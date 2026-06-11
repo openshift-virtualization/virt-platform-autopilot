@@ -173,7 +173,7 @@ func commentForAPIGroup(group string) string {
 	case "metallb.io":
 		return "MetalLB"
 	case "monitoring.coreos.com":
-		return "Prometheus Alert Rules"
+		return "Prometheus Monitoring"
 	case "observability.openshift.io":
 		return "Cluster Observability"
 	default:
