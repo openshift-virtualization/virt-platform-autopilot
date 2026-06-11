@@ -6,7 +6,6 @@ namespace: openshift-cnv
 resources:
   - ../manager
   - ../rbac
-  - ../observability
 
 commonLabels:
   app.kubernetes.io/name: virt-platform-autopilot

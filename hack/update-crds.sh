@@ -111,6 +111,7 @@ declare -a CRD_METADATA=(
 
     # Prometheus
     "Prometheus|PrometheusRule|prometheus-operator/kube-prometheus|main|manifests/setup/0prometheusruleCustomResourceDefinition.yaml|prometheus/monitoring.coreos.com_prometheusrules.yaml"
+    "Prometheus|ServiceMonitor|prometheus-operator/kube-prometheus|main|manifests/setup/0servicemonitorCustomResourceDefinition.yaml|prometheus/monitoring.coreos.com_servicemonitors.yaml"
 
     # Medik8s Remediation
     "Medik8s Remediation|NodeHealthCheck|medik8s/node-healthcheck-operator|main|config/crd/bases/remediation.medik8s.io_nodehealthchecks.yaml|remediation/nodehealthchecks.remediation.medik8s.io.yaml"
