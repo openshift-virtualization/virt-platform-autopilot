@@ -102,6 +102,143 @@ func TestValidatePatchSecurity(t *testing.T) {
 	}
 }
 
+func TestValidatePatchPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		patch   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "empty patch",
+			patch:   "",
+			wantErr: false,
+		},
+		{
+			name:    "allowed path /spec",
+			patch:   `[{"op": "replace", "path": "/spec/replicas", "value": 3}]`,
+			wantErr: false,
+		},
+		{
+			name:    "allowed path /data",
+			patch:   `[{"op": "add", "path": "/data/key", "value": "val"}]`,
+			wantErr: false,
+		},
+		{
+			name:    "allowed path /metadata/labels",
+			patch:   `[{"op": "add", "path": "/metadata/labels/app", "value": "test"}]`,
+			wantErr: false,
+		},
+		{
+			name:    "allowed path /metadata/annotations",
+			patch:   `[{"op": "add", "path": "/metadata/annotations/note", "value": "x"}]`,
+			wantErr: false,
+		},
+		{
+			name:    "blocked path /metadata/name",
+			patch:   `[{"op": "replace", "path": "/metadata/name", "value": "evil"}]`,
+			wantErr: true,
+			errMsg:  "/metadata/name",
+		},
+		{
+			name:    "blocked path /metadata/namespace",
+			patch:   `[{"op": "replace", "path": "/metadata/namespace", "value": "kube-system"}]`,
+			wantErr: true,
+			errMsg:  "/metadata/namespace",
+		},
+		{
+			name:    "blocked path /metadata/managedFields",
+			patch:   `[{"op": "remove", "path": "/metadata/managedFields"}]`,
+			wantErr: true,
+			errMsg:  "/metadata/managedFields",
+		},
+		{
+			name:    "blocked path /apiVersion",
+			patch:   `[{"op": "replace", "path": "/apiVersion", "value": "v2"}]`,
+			wantErr: true,
+			errMsg:  "/apiVersion",
+		},
+		{
+			name:    "blocked path /kind",
+			patch:   `[{"op": "replace", "path": "/kind", "value": "Secret"}]`,
+			wantErr: true,
+			errMsg:  "/kind",
+		},
+		{
+			name:    "blocked path /status",
+			patch:   `[{"op": "add", "path": "/status/phase", "value": "Ready"}]`,
+			wantErr: true,
+			errMsg:  "/status",
+		},
+		{
+			name:    "blocked path /status exact",
+			patch:   `[{"op": "replace", "path": "/status", "value": {}}]`,
+			wantErr: true,
+			errMsg:  "/status",
+		},
+		{
+			name:    "segment-aware: /kindred is not blocked",
+			patch:   `[{"op": "add", "path": "/kindred", "value": "ok"}]`,
+			wantErr: false,
+		},
+		{
+			name:    "segment-aware: /statusUpdate is not blocked",
+			patch:   `[{"op": "add", "path": "/statusUpdate", "value": "ok"}]`,
+			wantErr: false,
+		},
+		{
+			name:    "segment-aware: /metadata/names-custom is not blocked",
+			patch:   `[{"op": "add", "path": "/metadata/names-custom", "value": "ok"}]`,
+			wantErr: false,
+		},
+		{
+			name:    "blocked from in move operation",
+			patch:   `[{"op": "move", "from": "/metadata/name", "path": "/spec/old-name"}]`,
+			wantErr: true,
+			errMsg:  "/metadata/name",
+		},
+		{
+			name:    "blocked from in copy operation",
+			patch:   `[{"op": "copy", "from": "/status/phase", "path": "/data/phase"}]`,
+			wantErr: true,
+			errMsg:  "/status",
+		},
+		{
+			name:    "allowed from in copy operation",
+			patch:   `[{"op": "copy", "from": "/spec/old", "path": "/spec/new"}]`,
+			wantErr: false,
+		},
+		{
+			name: "mixed: one allowed and one blocked",
+			patch: `[
+				{"op": "replace", "path": "/spec/replicas", "value": 3},
+				{"op": "replace", "path": "/metadata/name", "value": "evil"}
+			]`,
+			wantErr: true,
+			errMsg:  "/metadata/name",
+		},
+		{
+			name:    "blocked subpath /metadata/name/suffix",
+			patch:   `[{"op": "add", "path": "/metadata/name/suffix", "value": "x"}]`,
+			wantErr: true,
+			errMsg:  "/metadata/name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePatchPaths(tt.patch)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidatePatchPaths() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantErr && !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("ValidatePatchPaths() error = %v, want error containing %q", err, tt.errMsg)
+			}
+		})
+	}
+}
+
 func TestIsUnmanaged(t *testing.T) {
 	tests := []struct {
 		name string
@@ -434,6 +571,51 @@ func TestValidateAnnotations(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "patch targeting /metadata/name is blocked",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"kind": "ConfigMap",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							PatchAnnotation: `[{"op": "replace", "path": "/metadata/name", "value": "evil"}]`,
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "patch security violation",
+		},
+		{
+			name: "patch targeting /metadata/namespace is blocked",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"kind": "ConfigMap",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							PatchAnnotation: `[{"op": "replace", "path": "/metadata/namespace", "value": "kube-system"}]`,
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "patch security violation",
+		},
+		{
+			name: "patch targeting /kind is blocked",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"kind": "ConfigMap",
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							PatchAnnotation: `[{"op": "replace", "path": "/kind", "value": "Secret"}]`,
+						},
+					},
+				},
+			},
+			wantErr: true,
+			errMsg:  "patch security violation",
 		},
 		{
 			name: "all valid annotations together",
