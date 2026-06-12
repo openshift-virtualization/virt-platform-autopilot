@@ -17,6 +17,7 @@ limitations under the License.
 package overrides
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -64,6 +65,18 @@ var (
 		// Note: We intentionally allow patching NodeHealthCheck to let users customize
 		// remediation settings, but we could add it here if needed
 	}
+
+	// forbiddenPatchPaths lists path prefixes that JSON patches must not target.
+	// These protect resource identity and internal Kubernetes fields from
+	// manipulation via the patch annotation.
+	forbiddenPatchPaths = []string{
+		"/metadata/name",
+		"/metadata/namespace",
+		"/metadata/managedFields",
+		"/apiVersion",
+		"/kind",
+		"/status",
+	}
 )
 
 // ValidatePatchSecurity validates that a JSON patch is safe to apply
@@ -84,6 +97,49 @@ func ValidatePatchSecurity(obj *unstructured.Unstructured) error {
 	}
 
 	return nil
+}
+
+// patchOperation represents a single RFC 6902 JSON Patch operation.
+type patchOperation struct {
+	Op   string `json:"op"`
+	Path string `json:"path"`
+	From string `json:"from,omitempty"`
+}
+
+// ValidatePatchPaths checks that no patch operation targets a forbidden path.
+func ValidatePatchPaths(patchStr string) error {
+	if patchStr == "" {
+		return nil
+	}
+
+	var ops []patchOperation
+	if err := json.Unmarshal([]byte(patchStr), &ops); err != nil {
+		return fmt.Errorf("failed to parse patch operations: %w", err)
+	}
+
+	for _, op := range ops {
+		if forbidden, matched := isForbiddenPatchPath(op.Path); forbidden {
+			return fmt.Errorf("patch path %q is forbidden: targets protected prefix %q", op.Path, matched)
+		}
+		if op.From != "" {
+			if forbidden, matched := isForbiddenPatchPath(op.From); forbidden {
+				return fmt.Errorf("patch from %q is forbidden: targets protected prefix %q", op.From, matched)
+			}
+		}
+	}
+
+	return nil
+}
+
+// isForbiddenPatchPath checks whether path matches any forbidden prefix using
+// segment-aware comparison: "/metadata/name" is blocked but "/metadata/names-custom" is not.
+func isForbiddenPatchPath(path string) (bool, string) {
+	for _, prefix := range forbiddenPatchPaths {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true, prefix
+		}
+	}
+	return false, ""
 }
 
 // IsUnmanaged checks if a resource has the unmanaged annotation
@@ -191,6 +247,11 @@ func ValidateAnnotations(obj *unstructured.Unstructured) error {
 		// Check security restrictions
 		if err := ValidatePatchSecurity(obj); err != nil {
 			return err
+		}
+
+		// Check path-level restrictions
+		if err := ValidatePatchPaths(patchStr); err != nil {
+			return fmt.Errorf("patch security violation: %w", err)
 		}
 	}
 
