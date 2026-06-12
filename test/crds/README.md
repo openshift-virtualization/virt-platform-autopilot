@@ -150,7 +150,7 @@ test/crds/
 - Branch: `main`
 - Path: `bundle/manifests/*.yaml`
 - Local: `observability/`
-- Count: 6 files
+- Count: 7 files
 
 
 ### OADP (OpenShift API for Data Protection)

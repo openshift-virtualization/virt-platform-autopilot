@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -27,43 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// buildMinimalCRD constructs a minimal CRD with x-kubernetes-preserve-unknown-fields
-// suitable for testing without requiring a full schema.
-func buildMinimalCRD(group, kind, plural, version string, scope apiextensionsv1.ResourceScope) *apiextensionsv1.CustomResourceDefinition { //nolint:unparam
-	return &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s.%s", plural, group),
-		},
-		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: group,
-			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     kind,
-				Plural:   plural,
-				Singular: strings.ToLower(kind),
-			},
-			Scope: scope,
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name:    version,
-					Served:  true,
-					Storage: true,
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type:                   "object",
-							XPreserveUnknownFields: boolPtr(true),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// boolPtr returns a pointer to the given bool value.
-func boolPtr(b bool) *bool {
-	return &b
-}
 
 // getOperatorPod returns the autopilot pod by app label.
 func getOperatorPod() *corev1.Pod {
@@ -130,26 +96,12 @@ func waitForOperatorHealthy() {
 		"Operator pod should remain Running and Ready")
 }
 
-// installCRD creates a CRD and waits for it to reach the Established condition.
-func installCRD(crd *apiextensionsv1.CustomResourceDefinition) {
-	By(fmt.Sprintf("installing CRD %s", crd.Name))
-	ExpectWithOffset(1, k8sClient.Create(ctx, crd)).To(Succeed())
-
-	waitForCRDEstablished(crd.Name)
-}
-
-// ensureCRDInstalled installs a CRD only if it does not already exist.
-// Returns true if the CRD was newly installed, false if it already existed.
-func ensureCRDInstalled(crd *apiextensionsv1.CustomResourceDefinition) bool {
+// ensureCRDInstalled fails the test if the given CRD is not installed on the cluster.
+func ensureCRDInstalled(name string) {
+	By(fmt.Sprintf("ensuring CRD %s is installed", name))
 	existing := &apiextensionsv1.CustomResourceDefinition{}
-	err := k8sClient.Get(ctx, types.NamespacedName{Name: crd.Name}, existing)
-	if err == nil {
-		return false
-	}
-	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
-		fmt.Sprintf("unexpected error checking CRD %s: %v", crd.Name, err))
-	installCRD(crd)
-	return true
+	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{Name: name}, existing)).To(Succeed(),
+		fmt.Sprintf("CRD %s must be installed on the cluster", name)) // For kind, run kind-cluster.sh install-crds
 }
 
 func waitForCRDEstablished(name string) {
@@ -169,24 +121,17 @@ func waitForCRDEstablished(name string) {
 		fmt.Sprintf("CRD %s should become Established", name))
 }
 
-func newMachineConfigCRD() *apiextensionsv1.CustomResourceDefinition {
-	return buildMinimalCRD(
-		"machineconfiguration.openshift.io",
-		"MachineConfig",
-		"machineconfigs",
-		"v1",
-		apiextensionsv1.ClusterScoped,
-	)
-}
-
-func newPrometheusRuleCRD() *apiextensionsv1.CustomResourceDefinition {
-	return buildMinimalCRD(
-		"monitoring.coreos.com",
-		"PrometheusRule",
-		"prometheusrules",
-		"v1",
-		apiextensionsv1.NamespaceScoped,
-	)
+// installCRDFromFile applies a CRD YAML file (relative to the project root)
+// using server-side apply, matching what kind-cluster.sh install-crds does.
+func installCRDFromFile(relativePath string) {
+	// test/e2e/*.go → project root is ../../
+	_, thisFile, _, _ := runtime.Caller(0)
+	absPath := filepath.Join(filepath.Dir(thisFile), "..", "..", relativePath)
+	By(fmt.Sprintf("installing CRD from %s", absPath))
+	cmd := exec.CommandContext(ctx, "kubectl", "apply", "--server-side", "-f", absPath)
+	output, err := cmd.CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(),
+		fmt.Sprintf("kubectl apply failed for %s: %s", absPath, string(output)))
 }
 
 // removeCRD deletes a CRD and waits for it to be fully removed.
@@ -454,30 +399,15 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 		fmt.Sprintf("%s/%s should be fully deleted", gvk.Kind, name))
 }
 
-// ensureHCOExists creates a minimal HCO instance if one doesn't already exist.
+// ensureHCOExists fails the test if the HCO instance does not exist on the cluster.
 func ensureHCOExists() {
+	By("ensuring HCO instance exists")
 	hco := &unstructured.Unstructured{}
 	hco.SetGroupVersionKind(schema.GroupVersionKind{
 		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
 	})
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)
-	if err == nil {
-		return
-	}
-	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
-		fmt.Sprintf("unexpected error checking HCO: %v", err))
-	hco = &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": "hco.kubevirt.io/v1",
-			"kind":       "HyperConverged",
-			"metadata": map[string]any{
-				"name":      hcoName,
-				"namespace": operatorNamespace,
-			},
-			"spec": map[string]any{},
-		},
-	}
-	ExpectWithOffset(1, k8sClient.Create(ctx, hco)).To(Succeed())
+	ExpectWithOffset(1, k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)).To(Succeed(),
+		fmt.Sprintf("HCO %s/%s must exist on the cluster", operatorNamespace, hcoName))
 }
 
 // removeManagedByLabel patches the HCO to remove the managed-by label.

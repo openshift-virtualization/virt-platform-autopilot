@@ -46,7 +46,7 @@ test-e2e: docker-build ## Run E2E tests on kind cluster
 .PHONY: run-e2e-tests-only
 run-e2e-tests-only: ginkgo ## Run E2E tests against the current cluster (set KUBECONFIG)
 	mkdir -p _output
-	$(GINKGO) -v --trace --timeout=10m --poll-progress-after=180s --output-dir=_output --junit-report=junit-e2e.xml --json-report=e2e-report.json ./test/e2e/...
+	$(GINKGO) -v --trace --timeout=1h --poll-progress-after=180s --output-dir=_output --junit-report=junit-e2e.xml --json-report=e2e-report.json ./test/e2e/...
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary

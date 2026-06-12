@@ -218,18 +218,8 @@ var _ = Describe("Controller E2E Tests", func() {
 			By("ensuring HCO exists")
 			ensureHCOExists()
 
-			By("ensuring MachineConfig CRD is installed")
-			prevRestarts := getManagerRestartCount()
-			if ensureCRDInstalled(newMachineConfigCRD()) {
-				waitForOperatorRestart(prevRestarts)
-			}
-			waitForOperatorHealthy()
-
-			By("ensuring PrometheusRule CRD is installed")
-			prevRestarts = getManagerRestartCount()
-			if ensureCRDInstalled(newPrometheusRuleCRD()) {
-				waitForOperatorRestart(prevRestarts)
-			}
+			ensureCRDInstalled("machineconfigs.machineconfiguration.openshift.io")
+			ensureCRDInstalled("prometheusrules.monitoring.coreos.com")
 			waitForOperatorHealthy()
 
 			By("enabling both swap-enable and prometheus-alerts in the allowlist")

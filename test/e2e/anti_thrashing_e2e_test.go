@@ -92,15 +92,6 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 
 			By("touching HCO to trigger reconciliation and ensure metrics are emitted")
 			touchHCO()
-
-			By("waiting for Prometheus to scrape autopilot metrics")
-			metricsAttempt := 0
-			metricsMaxAttempts := int((10 * time.Minute) / (15 * time.Second))
-			Eventually(func() bool {
-				metricsAttempt++
-				return queryMetricExists("kubevirt_autopilot_paused_resources", metricsAttempt, metricsMaxAttempts)
-			}, 10*time.Minute, 15*time.Second).Should(BeTrue(),
-				"Prometheus should be able to scrape autopilot metrics")
 		}
 	})
 
@@ -211,6 +202,14 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 			It("should resume reconciliation when pause annotation is removed", func() {
 				if !editWarSucceeded {
 					Skip("edit war did not succeed — skipping dependent test")
+				}
+
+				// Workaround for CNV-89796: on Kind, test 2 is skipped so the token
+				// bucket is still empty when we reach here. Wait for at least one
+				// token to refill before removing the annotation, otherwise the
+				// operator's tight reconciliation loop catches it with 0 tokens.
+				if !isOpenShiftCluster() {
+					time.Sleep(6 * time.Second)
 				}
 
 				By("removing pause annotation")

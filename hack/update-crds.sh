@@ -135,7 +135,7 @@ declare -a COO_CRDS=(
     "perses.dev_persesdatasources.yaml"
     "perses.dev_persesdashboards.yaml"
     # "perses.dev_perses.yaml"
-    # "observability.openshift.io_uiplugins.yaml"
+    "observability.openshift.io_uiplugins.yaml"
     # "observability.openshift.io_observabilityinstallers.yaml"
     # "monitoring.rhobs_thanosrulers.yaml"
     # "monitoring.rhobs_thanosqueriers.yaml"

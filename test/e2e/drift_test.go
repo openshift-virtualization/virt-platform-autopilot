@@ -34,11 +34,7 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 		ensureHCOExists()
 		patchAutopilotAndWait(autopilotEnabled)
 
-		By("ensuring MachineConfig CRD is installed")
-		prevCount := getManagerRestartCount()
-		if ensureCRDInstalled(newMachineConfigCRD()) {
-			waitForOperatorRestart(prevCount)
-		}
+		ensureCRDInstalled("machineconfigs.machineconfiguration.openshift.io")
 		waitForOperatorHealthy()
 	})
 
@@ -84,9 +80,6 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		if !isOpenShiftCluster() {
-			removeCRD(newMachineConfigCRD().Name)
-		}
 		waitForOperatorHealthy()
 	})
 })
