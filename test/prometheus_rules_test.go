@@ -11,20 +11,21 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 )
 
-var _ = Describe("Prometheus Alert Rules", func() {
+var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 	var prometheusRuleObj *unstructured.Unstructured
 	var renderer *engine.Renderer
 
-	BeforeEach(func() {
-		// Install PrometheusRule CRD for validation
+	BeforeAll(func() {
+		// Install Prometheus CRDs once for the entire block (idempotent).
 		err := InstallCRDs(ctx, k8sClient, CRDSetPrometheus)
 		Expect(err).NotTo(HaveOccurred())
+	})
 
-		// Cleanup after test
-		DeferCleanup(func() {
-			_ = UninstallCRDs(ctx, k8sClient, CRDSetPrometheus)
-		})
+	AfterAll(func() {
+		_ = UninstallCRDs(ctx, k8sClient, CRDSetPrometheus)
+	})
 
+	BeforeEach(func() {
 		// Initialize renderer to actually process the template
 		loader := assets.NewLoader()
 		registry, err := assets.NewRegistry(loader)

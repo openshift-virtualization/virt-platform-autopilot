@@ -10,8 +10,25 @@ assets:
     reconcile_order: 0
     conditions: []
 
-  # Phase 1: Critical monitoring - PrometheusRule for alerts (reconciled first after HCO)
-  # Soft dependency: Will be skipped gracefully if Prometheus Operator CRD is not installed
+  # Phase 1: Observability - metrics Service, ServiceMonitor, and PrometheusRule for alerts
+  # Soft dependency: ServiceMonitor and PrometheusRule will be skipped gracefully
+  # if Prometheus Operator CRD is not installed
+  - name: metrics-service
+    path: active/observability/metrics-service.yaml.tpl
+    phase: 1
+    install: always
+    component: Service
+    reconcile_order: 1
+    conditions: []
+
+  - name: metrics-servicemonitor
+    path: active/observability/servicemonitor.yaml.tpl
+    phase: 1
+    install: always
+    component: ServiceMonitor
+    reconcile_order: 1
+    conditions: []
+
   - name: prometheus-alerts
     path: active/observability/prometheus-rules.yaml.tpl
     phase: 1
