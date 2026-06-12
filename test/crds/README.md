@@ -73,6 +73,12 @@ test/crds/
 - Path: `manifests/setup/0prometheusruleCustomResourceDefinition.yaml`
 - Local: `prometheus/monitoring.coreos.com_prometheusrules.yaml`
 
+**ServiceMonitor**
+- Repository: https://github.com/prometheus-operator/kube-prometheus
+- Branch: `main`
+- Path: `manifests/setup/0servicemonitorCustomResourceDefinition.yaml`
+- Local: `prometheus/monitoring.coreos.com_servicemonitors.yaml`
+
 
 ### Medik8s Remediation
 
