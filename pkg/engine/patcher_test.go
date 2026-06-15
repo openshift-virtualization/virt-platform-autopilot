@@ -26,6 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -33,6 +34,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 // failingDriftChecker always returns an error simulating a broken webhook or TLS failure.
@@ -40,6 +42,22 @@ type failingDriftChecker struct{ err error }
 
 func (f *failingDriftChecker) DetectDrift(_ context.Context, _, _ *unstructured.Unstructured) (bool, error) {
 	return false, f.err
+}
+
+// alwaysDriftChecker reports drift on every call so the token-consumption step is always reached.
+type alwaysDriftChecker struct{}
+
+func (a *alwaysDriftChecker) DetectDrift(_ context.Context, _, _ *unstructured.Unstructured) (bool, error) {
+	return true, nil
+}
+
+// countingRecorder implements events.EventRecorder and counts calls by reason.
+type countingRecorder struct {
+	counts map[string]int
+}
+
+func (r *countingRecorder) Eventf(_ runtime.Object, _ runtime.Object, _, reason, _, _ string, _ ...any) {
+	r.counts[reason]++
 }
 
 // TestDriftDetectionFailureSetsComplianceToZero verifies that when the SSA dry-run used
@@ -206,6 +224,61 @@ func TestNamespaceNotFoundDoesNotConsumeTokens(t *testing.T) {
 		if applied {
 			t.Fatalf("call %d: got applied=true; want false (namespace is missing)", i+1)
 		}
+	}
+}
+
+// TestThrashingEventEmittedOnlyOnce verifies that the ThrashingDetected event fires exactly
+// once per edit-war episode, no matter how many reconciliation cycles execute while
+// shouldPause is true. Before the fix, the event was emitted outside the ShouldEmitMetric
+// gate and fired on every throttled call after the threshold was crossed.
+func TestThrashingEventEmittedOnlyOnce(t *testing.T) {
+	loader := pkgassets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	// psi-enable is cluster-scoped: Pre-Step 6 (namespace guard) is skipped,
+	// so every call reaches the anti-thrashing gate.
+	assetMeta := &pkgassets.AssetMetadata{
+		Name:      "psi-enable",
+		Path:      "active/machine-config/04-psi-enable.yaml",
+		Component: "MachineConfig",
+	}
+
+	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
+	renderCtx := pkgcontext.NewRenderContext(hco)
+
+	desired, err := renderer.RenderAsset(assetMeta, renderCtx)
+	if err != nil {
+		t.Fatalf("failed to render asset: %v", err)
+	}
+
+	live := desired.DeepCopy()
+	fakeClient := fake.NewClientBuilder().WithObjects(live).Build()
+
+	rec := &countingRecorder{counts: make(map[string]int)}
+
+	// Token bucket of capacity 1, long window so no refill during the test.
+	// Call 1 consumes the only token; calls 2+ are all throttled.
+	// ThrashingThreshold consecutive throttles trigger shouldPause=true.
+	// The event must fire on exactly that one call and never again.
+	p := &Patcher{
+		renderer:          renderer,
+		applier:           NewApplier(fakeClient, nil),
+		driftDetector:     &alwaysDriftChecker{},
+		throttle:          throttling.NewTokenBucketWithSettings(1, time.Hour),
+		thrashingDetector: throttling.NewThrashingDetector(),
+		client:            fakeClient,
+	}
+	p.SetEventRecorder(util.NewEventRecorder(rec))
+
+	totalCalls := throttling.ThrashingThreshold + 5
+	for i := 0; i < totalCalls; i++ {
+		//nolint:errcheck // only the event count matters here
+		p.ReconcileAsset(context.Background(), assetMeta, renderCtx)
+	}
+
+	if got := rec.counts[util.EventReasonThrashingDetected]; got != 1 {
+		t.Errorf("ThrashingDetected event count = %d after %d calls, want 1 (must fire only once per episode)",
+			got, totalCalls)
 	}
 }
 
