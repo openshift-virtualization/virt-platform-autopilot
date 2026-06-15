@@ -103,6 +103,8 @@ func formatRulesWithComments(rules []rbac.Rule) string {
 	writeRule(&b, rules[4])
 	b.WriteString("  # OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)\n")
 	writeRule(&b, rules[5])
+	b.WriteString("  # Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)\n")
+	writeRule(&b, rules[6])
 
 	b.WriteString("  # ========================================\n")
 	b.WriteString("  # Managed Resources (Dynamic - from assets/)\n")

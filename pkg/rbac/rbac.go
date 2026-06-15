@@ -91,6 +91,14 @@ func StaticRules() []Rule {
 			Resources: []string{"infrastructures"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
+		// Rule 6: Namespaces (for pre-apply guard: verify the target namespace exists before
+		// consuming a rate-limit token; avoids spurious throttling when an operator component
+		// is not yet installed and its namespace is absent).
+		{
+			APIGroups: []string{""},
+			Resources: []string{"namespaces"},
+			Verbs:     []string{"get"},
+		},
 	}
 }
 
