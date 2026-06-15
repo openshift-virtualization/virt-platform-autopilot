@@ -351,9 +351,20 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 					"attempts", p.thrashingDetector.GetAttempts(resourceKey),
 				)
 
-				// Emit metric only once when threshold is reached
+				// Emit metric and event only once when the threshold is first reached.
+				// ShouldEmitMetric is a one-shot gate per episode; reuse it for the
+				// event so a single edit war never floods the event store.
 				if p.thrashingDetector.ShouldEmitMetric(resourceKey) {
 					observability.IncThrashing(desired)
+					if p.eventRecorder != nil && renderCtx.HCO != nil {
+						p.eventRecorder.ThrashingDetected(
+							renderCtx.HCO,
+							desired.GetKind(),
+							desired.GetNamespace(),
+							desired.GetName(),
+							p.thrashingDetector.GetAttempts(resourceKey),
+						)
+					}
 				}
 
 				// Set pause annotation on live object
@@ -365,17 +376,6 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 						// Record that this resource is now paused
 						observability.SetPaused(desired, true)
 					}
-				}
-
-				// Record event explaining the pause and recovery steps
-				if p.eventRecorder != nil && renderCtx.HCO != nil {
-					p.eventRecorder.ThrashingDetected(
-						renderCtx.HCO,
-						desired.GetKind(),
-						desired.GetNamespace(),
-						desired.GetName(),
-						p.thrashingDetector.GetAttempts(resourceKey),
-					)
 				}
 
 				return false, fmt.Errorf("reconciliation paused due to edit war (threshold: %d throttles)", throttling.ThrashingThreshold)
