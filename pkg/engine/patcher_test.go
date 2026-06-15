@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -145,6 +146,66 @@ func TestIsNamespaceNotFound(t *testing.T) {
 				t.Errorf("isNamespaceNotFound() = %v, want %v (err: %v)", got, tt.want, tt.err)
 			}
 		})
+	}
+}
+
+// TestNamespaceNotFoundDoesNotConsumeTokens verifies that when the target namespace
+// does not exist the patcher performs a cost-free soft skip: no rate-limit token is
+// consumed and no error is returned. The API server returns only resource-not-found
+// (never namespace-not-found) for GET operations, so the namespace must be checked
+// explicitly before the token-consumption step (Pre-Step 6).
+func TestNamespaceNotFoundDoesNotConsumeTokens(t *testing.T) {
+	observability.ComplianceStatus.Reset()
+
+	loader := pkgassets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	// node-health-check is a static asset in namespace openshift-operators.
+	assetMeta := &pkgassets.AssetMetadata{
+		Name:      "node-health-check",
+		Path:      "active/node-health/standard-remediation.yaml",
+		Component: "NodeHealthCheck",
+	}
+
+	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
+	renderCtx := pkgcontext.NewRenderContext(hco)
+
+	// Render once to confirm the asset is namespaced — the guard under test is only
+	// reachable for namespaced resources.
+	desired, err := renderer.RenderAsset(assetMeta, renderCtx)
+	if err != nil {
+		t.Fatalf("failed to render asset: %v", err)
+	}
+	if desired.GetNamespace() == "" {
+		t.Fatal("asset must be namespaced for this test to exercise the namespace guard")
+	}
+
+	// Empty fake cluster — the namespace does not exist.
+	fakeClient := fake.NewClientBuilder().Build()
+
+	// Tiny token bucket: capacity 3, 1-minute window.
+	// If any token is consumed, calls 4–10 below will be throttled.
+	smallBucket := throttling.NewTokenBucketWithSettings(3, time.Minute)
+
+	p := &Patcher{
+		renderer:          renderer,
+		applier:           NewApplier(fakeClient, nil),
+		driftDetector:     NewDriftDetector(fakeClient),
+		throttle:          smallBucket,
+		thrashingDetector: throttling.NewThrashingDetector(),
+		client:            fakeClient,
+	}
+
+	// 10 calls far exceeds the bucket capacity of 3.
+	// Pre-Step 6 must short-circuit every call before any token is touched.
+	for i := 0; i < 10; i++ {
+		applied, err := p.ReconcileAsset(context.Background(), assetMeta, renderCtx)
+		if err != nil {
+			t.Fatalf("call %d: got error %v; namespace-not-found must be a free soft skip, not an error", i+1, err)
+		}
+		if applied {
+			t.Fatalf("call %d: got applied=true; want false (namespace is missing)", i+1)
+		}
 	}
 }
 
