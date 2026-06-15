@@ -102,6 +102,7 @@ func formatRulesWithComments(static, transitive, dynamic []rbac.Rule) string {
 		"Leader Election",
 		"CRD Discovery (for soft dependency detection and template introspection)",
 		"OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)",
+		"Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)",
 	}
 	for i, rule := range static {
 		if i < len(staticComments) {

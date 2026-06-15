@@ -314,6 +314,23 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		p.eventRecorder.DriftDetected(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName())
 	}
 
+	// Pre-Step 6: verify the target namespace exists before consuming a rate-limit token.
+	if ns := desired.GetNamespace(); ns != "" {
+		nsObj := &unstructured.Unstructured{}
+		nsObj.SetAPIVersion("v1")
+		nsObj.SetKind("Namespace")
+		if nsErr := p.client.Get(ctx, client.ObjectKey{Name: ns}, nsObj); nsErr != nil {
+			if errors.IsNotFound(nsErr) {
+				logger.Info("Target namespace not found, skipping asset (operator likely not installed)",
+					"name", assetMeta.Name,
+					"namespace", ns,
+				)
+				return false, nil
+			}
+			return false, fmt.Errorf("failed to verify target namespace %s: %w", ns, nsErr)
+		}
+	}
+
 	// Step 6: Anti-thrashing gate (two-level protection)
 	resourceKey := throttling.MakeResourceKey(
 		desired.GetNamespace(),

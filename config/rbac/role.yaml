@@ -68,6 +68,13 @@ rules:
       - get
       - list
       - watch
+  # Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+    verbs:
+      - get
   # ========================================
   # Managed Resources (Dynamic - from assets/)
   # ========================================
