@@ -242,3 +242,15 @@ func SetPaused(obj *unstructured.Unstructured, paused bool) {
 		obj.GetNamespace(),
 	).Set(value)
 }
+
+// DeleteAssetMetrics removes all per-asset metric series for a resource.
+// Called when an asset is removed from the active set (allowlist change, CRD absent,
+// condition no longer met) so stale series no longer appear in /metrics.
+func DeleteAssetMetrics(kind, name, namespace string) {
+	ComplianceStatus.DeleteLabelValues(kind, name, namespace)
+	PausedResources.DeleteLabelValues(kind, name, namespace)
+	ReconcileDuration.DeleteLabelValues(kind, name, namespace)
+	for _, customizationType := range []string{"patch", "ignore", "unmanaged"} {
+		CustomizationInfo.DeleteLabelValues(kind, name, namespace, customizationType)
+	}
+}

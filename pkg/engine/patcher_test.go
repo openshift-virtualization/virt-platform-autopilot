@@ -379,6 +379,62 @@ func TestThrashingStateResetOnPauseAnnotationRemoval(t *testing.T) {
 	}
 }
 
+// TestCleanupExcludedAsset verifies that per-asset metric series are deleted when an
+// asset is excluded from the active set (allowlist narrowed, CRD removed, etc.).
+// Without the fix the compliance_status series lingers at its last value, misleading
+// dashboards and alerts.
+func TestCleanupExcludedAsset(t *testing.T) {
+	observability.ComplianceStatus.Reset()
+	observability.PausedResources.Reset()
+	observability.CustomizationInfo.Reset()
+
+	loader := pkgassets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	assetMeta := &pkgassets.AssetMetadata{
+		Name:      "psi-enable",
+		Path:      "active/machine-config/04-psi-enable.yaml",
+		Component: "MachineConfig",
+	}
+
+	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
+	renderCtx := pkgcontext.NewRenderContext(hco)
+
+	desired, err := renderer.RenderAsset(assetMeta, renderCtx)
+	if err != nil {
+		t.Fatalf("failed to render asset: %v", err)
+	}
+
+	live := desired.DeepCopy()
+	fakeClient := fake.NewClientBuilder().WithObjects(live).Build()
+
+	p := &Patcher{
+		renderer:          renderer,
+		applier:           NewApplier(fakeClient, nil),
+		driftDetector:     &alwaysDriftChecker{},
+		throttle:          throttling.NewTokenBucket(),
+		thrashingDetector: throttling.NewThrashingDetector(),
+		client:            fakeClient,
+	}
+
+	// First reconciliation: asset is active — compliance_status is set.
+	_, _ = p.ReconcileAsset(context.Background(), assetMeta, renderCtx)
+
+	if testutil.CollectAndCount(observability.ComplianceStatus) == 0 {
+		t.Fatal("expected compliance_status series to exist after first reconciliation")
+	}
+
+	// Asset is now excluded (e.g. removed from the allowlist).
+	p.CleanupExcludedAsset(assetMeta, renderCtx)
+
+	if count := testutil.CollectAndCount(observability.ComplianceStatus); count != 0 {
+		t.Errorf("compliance_status series count = %d after CleanupExcludedAsset, want 0", count)
+	}
+	if count := testutil.CollectAndCount(observability.PausedResources); count != 0 {
+		t.Errorf("paused_resources series count = %d after CleanupExcludedAsset, want 0", count)
+	}
+}
+
 func TestCountJSONPatchOperations(t *testing.T) {
 	tests := []struct {
 		name     string
