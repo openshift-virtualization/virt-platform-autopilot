@@ -74,7 +74,7 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 
 		By("checking for DriftCorrected event")
 		Eventually(func() int {
-			return len(findDriftCorrectedEvents("MachineConfig", driftMcName))
+			return len(findEvents(EventFilter{Reason: "DriftCorrected", Kind: "MachineConfig", Name: driftMcName}))
 		}, timeout, interval).Should(BeNumerically(">=", 1),
 			"At least one DriftCorrected event should exist for MachineConfig")
 	})

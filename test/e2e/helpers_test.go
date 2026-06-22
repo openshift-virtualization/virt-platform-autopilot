@@ -161,34 +161,42 @@ func getUnstructuredResource(gvk schema.GroupVersionKind, name, namespace string
 	return obj, err
 }
 
-// findDriftCorrectedEvents returns all events with reason "DriftCorrected" whose message
-// contains the given kind and resource name. Events are emitted on the HCO object.
-func findDriftCorrectedEvents(kind, name string) []eventsv1.Event {
-	// Use new events.k8s.io/v1 API
-	events := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, events, client.InNamespace(operatorNamespace))).To(Succeed())
-
-	var matched []eventsv1.Event
-	for _, event := range events.Items {
-		if event.Reason == "DriftCorrected" &&
-			strings.Contains(event.Note, kind) &&
-			strings.Contains(event.Note, name) {
-			matched = append(matched, event)
-		}
-	}
-	return matched
+// EventFilter specifies criteria for finding events in the operator namespace.
+// Zero-value fields are not applied (match everything).
+type EventFilter struct {
+	Reason string
+	Since  time.Time
+	Kind   string
+	Name   string
 }
 
-// findEventsWithReason returns all events in the operator namespace matching the given reason.
-func findEventsWithReason(reason string) []eventsv1.Event {
+// findEvents returns events in the operator namespace matching all non-zero filter fields.
+// Kind and Name are matched as substrings in event.Note.
+// When Since is set, an event matches if it was first observed at/after Since,
+// or if it has a Series whose last firing is at/after Since.
+func findEvents(filter EventFilter) []eventsv1.Event {
 	eventList := &eventsv1.EventList{}
 	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
 
 	var matched []eventsv1.Event
 	for _, event := range eventList.Items {
-		if event.Reason == reason {
-			matched = append(matched, event)
+		if filter.Reason != "" && event.Reason != filter.Reason {
+			continue
 		}
+		if !filter.Since.IsZero() {
+			firstOK := !event.EventTime.Time.Before(filter.Since)
+			seriesOK := event.Series != nil && !event.Series.LastObservedTime.Time.Before(filter.Since)
+			if !firstOK && !seriesOK {
+				continue
+			}
+		}
+		if filter.Kind != "" && !strings.Contains(event.Note, filter.Kind) {
+			continue
+		}
+		if filter.Name != "" && !strings.Contains(event.Note, filter.Name) {
+			continue
+		}
+		matched = append(matched, event)
 	}
 	return matched
 }
@@ -227,13 +235,17 @@ func eventFirings(event eventsv1.Event) int {
 	return 1
 }
 
-// captureAutopilotEvents counts all autopilot event firings in the operator namespace.
-func captureAutopilotEvents() AutopilotEvents {
-	eventList := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
+// captureAutopilotEvents counts autopilot event firings in the operator namespace.
+// When since is non-zero, only events fired at or after that time are counted.
+func captureAutopilotEvents(since ...time.Time) AutopilotEvents {
+	var filter EventFilter
+	if len(since) > 0 {
+		filter.Since = since[0]
+	}
+	events := findEvents(filter)
 
 	var e AutopilotEvents
-	for _, event := range eventList.Items {
+	for _, event := range events {
 		n := eventFirings(event)
 		switch event.Reason {
 		case "ReconcileSucceeded":
@@ -372,18 +384,6 @@ func parseMetricValue(line string) float64 {
 	return -1
 }
 
-// findEventsWithReasonAfter returns events matching the given reason that occurred after the specified time.
-func findEventsWithReasonAfter(reason string, after time.Time) []eventsv1.Event {
-	events := findEventsWithReason(reason)
-	var filtered []eventsv1.Event
-	for _, event := range events {
-		if event.EventTime.After(after) {
-			filtered = append(filtered, event)
-		}
-	}
-	return filtered
-}
-
 // deleteResource deletes a resource by GVK, name, and namespace. Safe to call if the resource doesn't exist.
 func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 	obj := &unstructured.Unstructured{}
@@ -486,7 +486,7 @@ func patchAutopilotAndWait(value string) {
 	}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 	EventuallyWithOffset(1, func() bool {
-		for _, event := range findEventsWithReasonAfter("ReconcileSucceeded", patchTime) {
+		for _, event := range findEvents(EventFilter{Reason: "ReconcileSucceeded", Since: patchTime}) {
 			if event.Regarding.Name == hcoName {
 				return true
 			}
@@ -859,17 +859,6 @@ func removePauseAnnotation(gvk schema.GroupVersionKind, name, namespace string) 
 		return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))
 	}, timeout, interval).Should(Succeed(),
 		fmt.Sprintf("Should remove pause annotation from %s/%s", gvk.Kind, name))
-}
-
-// filterEventsByAsset returns events whose Note mentions both kind and name.
-func filterEventsByAsset(events []eventsv1.Event, kind, name string) []eventsv1.Event {
-	var matched []eventsv1.Event
-	for _, event := range events {
-		if strings.Contains(event.Note, kind) && strings.Contains(event.Note, name) {
-			matched = append(matched, event)
-		}
-	}
-	return matched
 }
 
 // queryAlertNotFiring returns true when the given alert is NOT firing in Prometheus.

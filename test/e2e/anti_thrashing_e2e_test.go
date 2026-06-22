@@ -263,20 +263,20 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 				}
 
 				By("checking for Throttled events")
-				throttledEvents := filterEventsByAsset(
-					findEventsWithReasonAfter("Throttled", testStartTime),
-					asset.GVK.Kind, asset.Name,
-				)
+				throttledEvents := findEvents(EventFilter{
+					Reason: "Throttled", Since: testStartTime,
+					Kind: asset.GVK.Kind, Name: asset.Name,
+				})
 				GinkgoWriter.Printf("found %d Throttled events for %s/%s\n",
 					len(throttledEvents), asset.GVK.Kind, asset.Name)
 				Expect(throttledEvents).NotTo(BeEmpty(),
 					"At least one Throttled event should exist for this asset")
 
 				By("checking for ThrashingDetected event")
-				thrashingEvents := filterEventsByAsset(
-					findEventsWithReasonAfter("ThrashingDetected", testStartTime),
-					asset.GVK.Kind, asset.Name,
-				)
+				thrashingEvents := findEvents(EventFilter{
+					Reason: "ThrashingDetected", Since: testStartTime,
+					Kind: asset.GVK.Kind, Name: asset.Name,
+				})
 				GinkgoWriter.Printf("found %d ThrashingDetected events for %s/%s\n",
 					len(thrashingEvents), asset.GVK.Kind, asset.Name)
 				Expect(thrashingEvents).To(HaveLen(1),
