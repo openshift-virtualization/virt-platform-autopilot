@@ -644,6 +644,7 @@ func createBlockingWebhook(asset assetUnderTest) {
 					{
 						Operations: []admissionregistrationv1.OperationType{
 							admissionregistrationv1.Create,
+							admissionregistrationv1.Update,
 						},
 						Rule: admissionregistrationv1.Rule{
 							APIGroups:   []string{asset.GVK.Group},

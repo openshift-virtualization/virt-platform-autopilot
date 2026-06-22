@@ -127,13 +127,6 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 				createBlockingWebhook(asset)
 				webhookCreated = true
 
-				// CNV-89450: the webhook also blocks the SSA dry-run used for drift detection,
-				// so compliance_status never reaches 0. Deleting the resource forces the autopilot
-				// through the Apply() path (liveExists=false → hasDrift=true, no dry-run).
-				// Remove this step once CNV-89450 is fixed.
-				By("deleting the resource to bypass dry-run drift detection (CNV-89450)")
-				deleteResource(asset.GVK, asset.Name, asset.Namespace)
-
 				By("touching HCO to trigger immediate reconciliation")
 				touchHCO()
 
@@ -156,8 +149,6 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 			})
 		})
 	}
-
-	// --- Test 2: VirtPlatformDependencyMissing (passive) ---
 
 	Context("VirtPlatformDependencyMissing", func() {
 		It("should fire warning alert when an optional CRD is absent", func() {
