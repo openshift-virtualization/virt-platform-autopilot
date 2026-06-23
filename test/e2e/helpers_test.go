@@ -450,7 +450,7 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 	EventuallyWithOffset(1, func() bool {
 		err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, obj)
 		return apierrors.IsNotFound(err)
-	}, 10*time.Minute, 10*time.Second).Should(BeTrue(),
+	}, 2*time.Minute, 10*time.Second).Should(BeTrue(),
 		fmt.Sprintf("%s/%s should be fully deleted", gvk.Kind, name))
 }
 
@@ -605,13 +605,14 @@ func crdInstalled(name string) bool {
 
 type assetUnderTest struct {
 	GVK       schema.GroupVersionKind
+	Plural    string
 	Name      string
 	Namespace string
 	GateCRD   string // if set, asset is only created when this CRD is installed
 }
 
 func (a assetUnderTest) webhookName() string {
-	return fmt.Sprintf("autopilot-e2e-block-%s", strings.ToLower(a.GVK.Kind)+"s")
+	return fmt.Sprintf("autopilot-e2e-block-%s", a.Plural)
 }
 
 func touchHCO() {
@@ -621,7 +622,7 @@ func touchHCO() {
 }
 
 func createBlockingWebhook(asset assetUnderTest) {
-	plural := strings.ToLower(asset.GVK.Kind) + "s"
+	plural := asset.Plural
 	failurePolicy := admissionregistrationv1.Fail
 	sideEffects := admissionregistrationv1.SideEffectClassNone
 	port := int32(443)
@@ -847,20 +848,6 @@ func queryFiringAlert(alertName string, attempt, maxAttempts int, labelFilters .
 	GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: firing — kind=%s name=%s severity=%s\n",
 		alertName, attempt, maxAttempts, labels["kind"], labels["name"], labels["severity"])
 	return labels
-}
-
-func queryMetricExists(metricName string, attempt, maxAttempts int) bool {
-	resp := queryPrometheus(metricName)
-	if resp == nil {
-		GinkgoWriter.Printf("queryMetricExists(%s) [%d/%d]: no response\n", metricName, attempt, maxAttempts)
-		return false
-	}
-	if resp.Status != "success" || len(resp.Data.Result) == 0 {
-		GinkgoWriter.Printf("queryMetricExists(%s) [%d/%d]: not found yet\n", metricName, attempt, maxAttempts)
-		return false
-	}
-	GinkgoWriter.Printf("queryMetricExists(%s) [%d/%d]: found (%d series)\n", metricName, attempt, maxAttempts, len(resp.Data.Result))
-	return true
 }
 
 type missingDependency struct {

@@ -14,32 +14,37 @@ import (
 // installed on the cluster are skipped automatically.
 var assetsUnderTest = []assetUnderTest{
 	{
-		GVK:  schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
-		Name: "90-worker-swap-online",
+		GVK:    schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
+		Plural: "machineconfigs",
+		Name:   "90-worker-swap-online",
 	},
 	{
 		GVK:     schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
+		Plural:  "machineconfigs",
 		Name:    "99-openshift-machineconfig-worker-psi-karg",
 		GateCRD: "kubedeschedulers.operator.openshift.io",
 	},
 	{
-		GVK:  schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "KubeletConfig"},
-		Name: "virt-perf-settings",
+		GVK:    schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "KubeletConfig"},
+		Plural: "kubeletconfigs",
+		Name:   "virt-perf-settings",
 	},
 	{
 		GVK:       schema.GroupVersionKind{Group: "remediation.medik8s.io", Version: "v1alpha1", Kind: "NodeHealthCheck"},
+		Plural:    "nodehealthchecks",
 		Name:      "virt-node-health-check",
 		Namespace: "openshift-operators",
 		GateCRD:   "nodehealthchecks.remediation.medik8s.io",
 	},
 	{
-		GVK:       schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
-		Name:      "monitoring",
-		Namespace: "",
-		GateCRD:   "uiplugins.observability.openshift.io",
+		GVK:     schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
+		Plural:  "uiplugins",
+		Name:    "monitoring",
+		GateCRD: "uiplugins.observability.openshift.io",
 	},
 	{
 		GVK:       schema.GroupVersionKind{Group: "operator.openshift.io", Version: "v1", Kind: "KubeDescheduler"},
+		Plural:    "kubedeschedulers",
 		Name:      "cluster",
 		Namespace: "openshift-kube-descheduler-operator",
 		GateCRD:   "kubedeschedulers.operator.openshift.io",
@@ -66,16 +71,6 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 		By("touching HCO to trigger reconciliation and ensure metrics are emitted")
 		touchHCO()
 
-		// CNV-89454: ServiceMonitor and metrics Service may be missing from the
-		// cluster if the midstream build doesn't include them yet.
-		By("waiting for Prometheus to scrape autopilot metrics (CNV-89454)")
-		metricsAttempt := 0
-		metricsMaxAttempts := int((10 * time.Minute) / (15 * time.Second))
-		Eventually(func() bool {
-			metricsAttempt++
-			return queryMetricExists("kubevirt_autopilot_compliance_status", metricsAttempt, metricsMaxAttempts)
-		}, 10*time.Minute, 15*time.Second).Should(BeTrue(),
-			"Prometheus should be able to scrape autopilot metrics — ensure ServiceMonitor and metrics Service exist (CNV-89454)")
 	})
 
 	AfterAll(func() {

@@ -84,6 +84,9 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 	})
 
 	AfterAll(func() {
+		if !isOpenShiftCluster() {
+			removeCRD(newMachineConfigCRD().Name)
+		}
 		waitForOperatorHealthy()
 	})
 })
