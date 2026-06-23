@@ -184,6 +184,27 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		return false, nil
 	}
 
+	// Step 1.6: Clear stale thrashing state when the user removes the pause annotation.
+	// If in-memory state already reached the threshold (meaning the operator previously
+	// set the pause annotation) but the annotation is now absent, the user intentionally
+	// resumed reconciliation. Reset the counter so the next cycle starts from zero:
+	// the token bucket may still be empty and cause throttles, but those start from 0
+	// and will not immediately re-trigger a pause.
+	if liveExists {
+		earlyKey := throttling.MakeResourceKey(
+			desired.GetNamespace(),
+			desired.GetName(),
+			desired.GetKind(),
+		)
+		if p.thrashingDetector.GetAttempts(earlyKey) >= throttling.ThrashingThreshold {
+			logger.Info("Pause annotation removed by user, resetting thrashing state",
+				"name", assetMeta.Name,
+				"key", earlyKey,
+			)
+			p.thrashingDetector.Reset(earlyKey)
+		}
+	}
+
 	// Step 2: Check opt-out annotation (mode: unmanaged)
 	if liveExists && overrides.IsUnmanaged(live) {
 		logger.V(1).Info("Asset is unmanaged, skipping",
