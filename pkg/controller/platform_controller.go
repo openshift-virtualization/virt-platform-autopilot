@@ -306,10 +306,12 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 		}
 
 		if !isInAllowlist(asset, allowlist) {
+			r.patcher.CleanupExcludedAsset(asset, renderCtx)
 			continue
 		}
 
 		if !r.assetCRDsAvailable(ctx, asset, renderCtx) {
+			r.patcher.CleanupExcludedAsset(asset, renderCtx)
 			continue
 		}
 
@@ -326,10 +328,7 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 			logger.V(1).Info("Asset conditions not met, skipping",
 				"asset", asset.Name,
 			)
-			// Optionally record event (commented out to avoid spam for opt-in assets)
-			// if r.eventRecorder != nil {
-			// 	r.eventRecorder.AssetSkipped(renderCtx.HCO, asset.Name, "conditions not met")
-			// }
+			r.patcher.CleanupExcludedAsset(asset, renderCtx)
 			continue
 		}
 
