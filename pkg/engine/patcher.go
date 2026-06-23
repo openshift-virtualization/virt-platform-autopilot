@@ -73,6 +73,19 @@ func (p *Patcher) SetEventRecorder(recorder *util.EventRecorder) {
 	p.eventRecorder = recorder
 }
 
+// CleanupExcludedAsset deletes per-asset Prometheus metrics for an asset that is no
+// longer in the active set (allowlist narrowed, CRD removed, condition no longer met).
+// It renders the template to discover the resource's kind/name/namespace, then calls
+// DeleteAssetMetrics. Silently returns if rendering fails or yields nothing — the metric
+// series either never existed or the template cannot resolve, both are safe to ignore.
+func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) {
+	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
+	if err != nil || desired == nil {
+		return
+	}
+	observability.DeleteAssetMetrics(desired.GetKind(), desired.GetName(), desired.GetNamespace())
+}
+
 // ReconcileAsset performs the full Patched Baseline algorithm for an asset
 // Returns true if the asset was applied, false if skipped/unchanged
 //
