@@ -38,6 +38,10 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 	)
 
 	BeforeAll(func() {
+		if isOpenShiftCluster() {
+			Skip("CRD lifecycle tests only run on Kind — on OCP, CRDs are managed by operators")
+		}
+
 		By("ensuring clean HCO instance for lifecycle tests")
 		hco = &unstructured.Unstructured{
 			Object: map[string]any{
@@ -101,6 +105,10 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 	})
 
 	AfterAll(func() {
+		if isOpenShiftCluster() {
+			return
+		}
+
 		// Clean up HCO instance
 		By("cleaning up: removing HCO instance")
 		_ = k8sClient.Delete(ctx, hco)

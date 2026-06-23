@@ -1,19 +1,13 @@
 package e2e
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	driftMachineConfigCRDName = "machineconfigs.machineconfiguration.openshift.io"
-
 	// Expected resource name created by operator asset
 	driftMcName = "90-worker-swap-online"
 
@@ -35,56 +29,14 @@ var (
 
 var _ = Describe("Drift Detection Tests", Ordered, func() {
 
-	var (
-		machineConfigCRD *apiextensionsv1.CustomResourceDefinition
-		hco              *unstructured.Unstructured
-	)
-
 	BeforeAll(func() {
-		By("ensuring clean HCO instance for drift tests")
-		hco = &unstructured.Unstructured{
-			Object: map[string]any{
-				"apiVersion": "hco.kubevirt.io/v1",
-				"kind":       "HyperConverged",
-				"metadata": map[string]any{
-					"name":      hcoName,
-					"namespace": operatorNamespace,
-					"labels": map[string]any{
-						driftManagedByLabel: driftManagedByValue,
-					},
-					"annotations": map[string]any{
-						autopilotAnnotation: autopilotEnabled,
-					},
-				},
-				"spec": map[string]any{},
-			},
-		}
+		By("ensuring HCO instance exists")
+		ensureHCOExists()
+		patchAutopilotAndWait(autopilotEnabled)
 
-		// Delete any existing HCO from previous tests and wait for deletion
-		_ = k8sClient.Delete(ctx, hco)
-		Eventually(func() bool {
-			err := k8sClient.Get(ctx, client.ObjectKey{
-				Name:      hcoName,
-				Namespace: operatorNamespace,
-			}, hco)
-			return err != nil // true when NotFound
-		}, 30*time.Second, 500*time.Millisecond).Should(BeTrue(),
-			"Previous HCO instance should be deleted before creating new one")
-
-		// Create fresh HCO instance
-		Expect(k8sClient.Create(ctx, hco)).To(Succeed())
-
-		machineConfigCRD = buildMinimalCRD(
-			"machineconfiguration.openshift.io",
-			"MachineConfig",
-			"machineconfigs",
-			"v1",
-			apiextensionsv1.ClusterScoped,
-		)
-
-		By("installing MachineConfig CRD and waiting for operator restart")
+		By("ensuring MachineConfig CRD is installed")
 		prevCount := getManagerRestartCount()
-		if ensureCRDInstalled(machineConfigCRD) {
+		if ensureCRDInstalled(newMachineConfigCRD()) {
 			waitForOperatorRestart(prevCount)
 		}
 		waitForOperatorHealthy()
@@ -127,27 +79,15 @@ var _ = Describe("Drift Detection Tests", Ordered, func() {
 		By("checking for DriftCorrected event")
 		Eventually(func() int {
 			return len(findDriftCorrectedEvents("MachineConfig", driftMcName))
-		}, 30*time.Second, 2*time.Second).Should(BeNumerically(">=", 1),
+		}, timeout, interval).Should(BeNumerically(">=", 1),
 			"At least one DriftCorrected event should exist for MachineConfig")
 	})
 
 	AfterAll(func() {
-		By("cleaning up: removing HCO instance")
-		_ = k8sClient.Delete(ctx, hco)
-
-		By("cleaning up: removing MachineConfig CRD")
-		removeCRD(driftMachineConfigCRDName)
-
-		By("waiting for operator to stabilize after cleanup")
-		Eventually(func() bool {
-			pod := getOperatorPod()
-			for _, cs := range pod.Status.ContainerStatuses {
-				if cs.Name == "manager" || len(pod.Status.ContainerStatuses) == 1 {
-					return cs.Ready
-				}
-			}
-			return false
-		}, 3*time.Minute, 2*time.Second).Should(BeTrue())
+		if !isOpenShiftCluster() {
+			removeCRD(newMachineConfigCRD().Name)
+		}
+		waitForOperatorHealthy()
 	})
 })
 

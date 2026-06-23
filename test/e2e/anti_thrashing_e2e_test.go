@@ -24,7 +24,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,48 +34,14 @@ const (
 
 var _ = Describe("Anti-Thrashing E2E Tests", Ordered, func() {
 	var (
-		hco               *unstructured.Unstructured
 		testConfigMap     *corev1.ConfigMap
 		testConfigMapName = "anti-thrashing-test-cm"
 	)
 
 	BeforeAll(func() {
 		By("ensuring HCO instance exists with opt-in annotation")
-		hco = &unstructured.Unstructured{
-			Object: map[string]any{
-				"apiVersion": "hco.kubevirt.io/v1",
-				"kind":       "HyperConverged",
-				"metadata": map[string]any{
-					"name":      hcoName,
-					"namespace": operatorNamespace,
-					"annotations": map[string]any{
-						autopilotAnnotation: autopilotEnabled,
-					},
-				},
-				"spec": map[string]any{},
-			},
-		}
-
-		// Try to get existing HCO or create new one
-		err := k8sClient.Get(ctx, client.ObjectKey{
-			Name:      hcoName,
-			Namespace: operatorNamespace,
-		}, hco)
-		if err != nil {
-			Expect(k8sClient.Create(ctx, hco)).To(Succeed())
-		} else {
-			// Ensure the opt-in annotation is present on the existing instance
-			annotations := hco.GetAnnotations()
-			if annotations == nil {
-				annotations = map[string]string{}
-			}
-			annotations[autopilotAnnotation] = autopilotEnabled
-			hco.SetAnnotations(annotations)
-			Expect(k8sClient.Update(ctx, hco)).To(Succeed())
-		}
-
-		// Wait for HCO to be ready
-		time.Sleep(5 * time.Second)
+		ensureHCOExists()
+		patchAutopilotAndWait(autopilotEnabled)
 	})
 
 	AfterEach(func() {
