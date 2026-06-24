@@ -22,7 +22,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -31,50 +34,6 @@ const (
 	pauseAnnotation = "platform.kubevirt.io/reconcile-paused"
 	managedByLabel  = "platform.kubevirt.io/managed-by"
 )
-
-type thrashingTestAsset struct {
-	GVK       schema.GroupVersionKind
-	Name      string
-	Namespace string
-	GateCRD   string
-}
-
-// thrashingAssets lists all phase-1 "install: always" assets from metadata.yaml.
-// Each generates 6 sub-tests automatically. Assets whose GateCRD is not
-// installed on the cluster are skipped in BeforeAll.
-var thrashingAssets = []thrashingTestAsset{
-	{
-		GVK:  schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
-		Name: "90-worker-swap-online",
-	},
-	{
-		GVK:     schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
-		Name:    "99-openshift-machineconfig-worker-psi-karg",
-		GateCRD: "kubedeschedulers.operator.openshift.io",
-	},
-	{
-		GVK:     schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "KubeletConfig"},
-		Name:    "virt-perf-settings",
-		GateCRD: "kubeletconfigs.machineconfiguration.openshift.io",
-	},
-	{
-		GVK:       schema.GroupVersionKind{Group: "remediation.medik8s.io", Version: "v1alpha1", Kind: "NodeHealthCheck"},
-		Name:      "virt-node-health-check",
-		Namespace: "openshift-operators",
-		GateCRD:   "nodehealthchecks.remediation.medik8s.io",
-	},
-	{
-		GVK:     schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
-		Name:    "monitoring",
-		GateCRD: "uiplugins.observability.openshift.io",
-	},
-	{
-		GVK:       schema.GroupVersionKind{Group: "operator.openshift.io", Version: "v1", Kind: "KubeDescheduler"},
-		Name:      "cluster",
-		Namespace: "openshift-kube-descheduler-operator",
-		GateCRD:   "kubedeschedulers.operator.openshift.io",
-	},
-}
 
 var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() {
 
@@ -104,7 +63,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 		waitForOperatorHealthy()
 	})
 
-	for _, asset := range thrashingAssets {
+	for _, asset := range assetsUnderTest {
 		asset := asset
 		Context(fmt.Sprintf("Asset %s/%s", asset.GVK.Kind, asset.Name), Ordered, func() {
 			var (
@@ -302,6 +261,143 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 					baselineMetrics.ThrashingTotal, currentMetrics.ThrashingTotal, increment)
 				Expect(increment).To(Equal(1),
 					"thrashing_total should increment by exactly 1 per edit war episode")
+			})
+		})
+	}
+})
+
+var _ = Describe("Namespace Guard E2E Tests (CNV-89799, CNV-89801)", Ordered, ContinueOnFailure, func() {
+
+	BeforeAll(func() {
+		if isOpenShiftCluster() {
+			Skip("Namespace guard tests only run on Kind — on OCP, namespaces are managed by operators")
+		}
+
+		ensureHCOExists()
+		patchAutopilotAndWait(autopilotEnabled)
+	})
+
+	AfterAll(func() {
+		if isOpenShiftCluster() {
+			return
+		}
+		waitForOperatorHealthy()
+	})
+
+	for _, asset := range assetsUnderTest {
+		asset := asset
+		if asset.Namespace == "" {
+			continue
+		}
+
+		Context(fmt.Sprintf("Asset %s/%s (namespace %s)", asset.GVK.Kind, asset.Name, asset.Namespace), Ordered, func() {
+			var (
+				testStartTime     time.Time
+				baselineThrashing int
+			)
+
+			BeforeAll(func() {
+				if asset.GateCRD != "" && !crdInstalled(asset.GateCRD) {
+					Skip(fmt.Sprintf("gate CRD %s not installed", asset.GateCRD))
+				}
+
+				By("ensuring gate CRD is installed")
+				if asset.GateCRD != "" {
+					ensureCRDInstalled(asset.GateCRD)
+				}
+
+				By(fmt.Sprintf("deleting namespace %s if it exists", asset.Namespace))
+				ns := &corev1.Namespace{}
+				if err := k8sClient.Get(ctx, client.ObjectKey{Name: asset.Namespace}, ns); err == nil {
+					Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+					Eventually(func() bool {
+						return apierrors.IsNotFound(
+							k8sClient.Get(ctx, client.ObjectKey{Name: asset.Namespace}, &corev1.Namespace{}))
+					}, 2*time.Minute, 2*time.Second).Should(BeTrue(),
+						fmt.Sprintf("Namespace %s should be fully deleted", asset.Namespace))
+				}
+
+				if asset.ClusterScoped {
+					By(fmt.Sprintf("deleting cluster-scoped %s/%s if it survived namespace deletion", asset.GVK.Kind, asset.Name))
+					obj := &unstructured.Unstructured{}
+					obj.SetGroupVersionKind(asset.GVK)
+					if err := k8sClient.Get(ctx, client.ObjectKey{Name: asset.Name}, obj); err == nil {
+						Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
+						Eventually(func() bool {
+							return apierrors.IsNotFound(
+								k8sClient.Get(ctx, client.ObjectKey{Name: asset.Name}, obj))
+						}, 30*time.Second, 2*time.Second).Should(BeTrue(),
+							fmt.Sprintf("%s/%s should be deleted", asset.GVK.Kind, asset.Name))
+					}
+				}
+
+				testStartTime = time.Now()
+				baselineThrashing = captureAssetMetrics(asset.GVK.Kind, asset.Name, asset.Namespace).ThrashingTotal
+			})
+
+			It("should not generate ThrashingDetected or Throttled events across multiple reconciliations", func() {
+				By("triggering 12 reconciliation cycles (above token-bucket capacity of 10)")
+				for i := 0; i < 12; i++ {
+					touchHCO()
+					time.Sleep(1 * time.Second)
+				}
+				waitForOperatorHealthy()
+
+				By("verifying reconciliations did occur during the test window")
+				Expect(findEvents(EventFilter{
+					Reason: "ReconcileSucceeded", Since: testStartTime,
+				})).NotTo(BeEmpty(),
+					"At least one ReconcileSucceeded event should exist, proving the operator was active")
+
+				By(fmt.Sprintf("verifying no ThrashingDetected events for %s/%s", asset.GVK.Kind, asset.Name))
+				Expect(findEvents(EventFilter{
+					Reason: "ThrashingDetected", Since: testStartTime,
+					Kind: asset.GVK.Kind, Name: asset.Name,
+				})).To(BeEmpty(),
+					"No ThrashingDetected events should be generated when target namespace is missing")
+
+				By(fmt.Sprintf("verifying no Throttled events for %s/%s", asset.GVK.Kind, asset.Name))
+				Expect(findEvents(EventFilter{
+					Reason: "Throttled", Since: testStartTime,
+					Kind: asset.GVK.Kind, Name: asset.Name,
+				})).To(BeEmpty(),
+					"No Throttled events should be generated when target namespace is missing")
+			})
+
+			It("should not increment the thrashing metric", func() {
+				metrics := captureAssetMetrics(asset.GVK.Kind, asset.Name, asset.Namespace)
+
+				Expect(metrics.ThrashingTotal).To(Equal(baselineThrashing),
+					"thrashing_total should not increase when target namespace is missing")
+
+				Expect(metrics.PausedResources).NotTo(Equal(1.0),
+					"resource should not be marked as paused when target namespace is missing")
+			})
+
+			It("should log the namespace-not-found skip message in the operator pod", func() {
+				Eventually(func() string {
+					return getOperatorLogs(testStartTime)
+				}, 30*time.Second, 5*time.Second).Should(
+					And(
+						ContainSubstring("Target namespace not found, skipping asset"),
+						ContainSubstring(asset.Namespace),
+					),
+					fmt.Sprintf("Operator logs should contain the namespace guard message for %s", asset.Namespace))
+			})
+
+			AfterAll(func() {
+				By(fmt.Sprintf("ensuring namespace %s exists", asset.Namespace))
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: asset.Namespace},
+				}
+				if err := k8sClient.Create(ctx, ns); err != nil && !apierrors.IsAlreadyExists(err) {
+					Expect(err).NotTo(HaveOccurred())
+				}
+
+				By("touching HCO to trigger reconciliation after restoring namespace")
+				touchHCO()
+
+				waitForOperatorHealthy()
 			})
 		})
 	}

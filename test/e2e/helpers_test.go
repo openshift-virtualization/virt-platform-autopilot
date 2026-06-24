@@ -533,25 +533,13 @@ func crdInstalled(name string) bool {
 
 // --- Alert test helpers (OCP-only) ---
 
-type assetUnderTest struct {
-	GVK       schema.GroupVersionKind
-	Plural    string
-	Name      string
-	Namespace string
-	GateCRD   string // if set, asset is only created when this CRD is installed
-}
-
-func (a assetUnderTest) webhookName() string {
-	return fmt.Sprintf("autopilot-e2e-block-%s", a.Plural)
-}
-
 func touchHCO() {
 	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"e2e.test/touch":"%d"}}}`, time.Now().UnixNano()))
 	ref := hcoRef()
 	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
 }
 
-func createBlockingWebhook(asset assetUnderTest) {
+func createBlockingWebhook(asset testAsset) {
 	plural := asset.Plural
 	failurePolicy := admissionregistrationv1.Fail
 	sideEffects := admissionregistrationv1.SideEffectClassNone
@@ -600,7 +588,7 @@ func createBlockingWebhook(asset assetUnderTest) {
 	ExpectWithOffset(1, k8sClient.Create(ctx, webhook)).To(Succeed())
 }
 
-func deleteBlockingWebhook(asset assetUnderTest) {
+func deleteBlockingWebhook(asset testAsset) {
 	By(fmt.Sprintf("deleting blocking webhook %s", asset.webhookName()))
 	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: asset.webhookName()},
@@ -865,4 +853,28 @@ func removePauseAnnotation(gvk schema.GroupVersionKind, name, namespace string) 
 func queryAlertNotFiring(alertName string, attempt, maxAttempts int, labelFilters ...string) bool {
 	labels := queryFiringAlert(alertName, attempt, maxAttempts, labelFilters...)
 	return labels == nil
+}
+
+// getOperatorLogs returns the operator pod logs since the given time.
+// Uses SinceSeconds (relative, kubelet-evaluated) instead of SinceTime
+// to avoid clock-skew issues between the test runner and the Kind node.
+func getOperatorLogs(since time.Time) string {
+	pod := getOperatorPod()
+	clientset, err := kubernetes.NewForConfig(cfg)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	container := "manager"
+	if len(pod.Spec.Containers) == 1 {
+		container = pod.Spec.Containers[0].Name
+	}
+
+	sinceSeconds := int64(time.Since(since).Seconds()) + 120
+	logs, err := clientset.CoreV1().Pods(operatorNamespace).
+		GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container:    container,
+			SinceSeconds: &sinceSeconds,
+		}).DoRaw(context.Background())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	return string(logs)
 }
