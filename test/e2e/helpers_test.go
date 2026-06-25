@@ -151,6 +151,15 @@ func removeCRD(name string) {
 		fmt.Sprintf("CRD %s should be deleted", name))
 }
 
+// unstructuredRef builds an Unstructured object reference for use with Patch/Delete calls.
+func unstructuredRef(gvk schema.GroupVersionKind, name, namespace string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(gvk)
+	obj.SetName(name)
+	obj.SetNamespace(namespace)
+	return obj
+}
+
 // getUnstructuredResource fetches a resource as an Unstructured object.
 // Pass empty namespace for cluster-scoped resources.
 func getUnstructuredResource(gvk schema.GroupVersionKind, name, namespace string) (*unstructured.Unstructured, error) {
@@ -325,49 +334,24 @@ func fetchMetricsBody() string {
 // so it uses the kind parameter only.
 func captureAssetMetrics(kind, name, namespace string) AssetMetrics {
 	body := fetchMetricsBody()
-	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, namespace)
+	labels := map[string]string{"kind": kind, "name": name, "namespace": namespace}
 
 	m := AssetMetrics{
-		ComplianceStatus:       -1,
-		ReconcileDurationCount: 0,
-		ReconcileDurationSum:   -1,
-		ThrashingTotal:         0,
-		PausedResources:        -1,
-		CustomizationInfo:      -1,
-		MissingDependency:      -1,
-		TombstoneStatus:        -1,
+		ComplianceStatus:       findMetricValueInBody(body, "kubevirt_autopilot_compliance_status", labels),
+		ReconcileDurationCount: int(findMetricValueInBody(body, "kubevirt_autopilot_reconcile_duration_seconds_count", labels)),
+		ReconcileDurationSum:   findMetricValueInBody(body, "kubevirt_autopilot_reconcile_duration_seconds_sum", labels),
+		ThrashingTotal:         int(findMetricValueInBody(body, "kubevirt_autopilot_thrashing_total", labels)),
+		PausedResources:        findMetricValueInBody(body, "kubevirt_autopilot_paused_resources", labels),
+		CustomizationInfo:      findMetricValueInBody(body, "kubevirt_autopilot_customization_info", labels),
+		MissingDependency:      findMetricValueInBody(body, "kubevirt_autopilot_missing_dependency", map[string]string{"kind": kind}),
+		TombstoneStatus:        findMetricValueInBody(body, "kubevirt_autopilot_tombstone_status", labels),
 	}
 
-	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "#") || line == "" {
-			continue
-		}
-
-		if strings.Contains(line, labelFilter) {
-			val := parseMetricValue(line)
-			switch {
-			case strings.HasPrefix(line, "kubevirt_autopilot_compliance_status"):
-				m.ComplianceStatus = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_reconcile_duration_seconds_count"):
-				m.ReconcileDurationCount = int(val)
-			case strings.HasPrefix(line, "kubevirt_autopilot_reconcile_duration_seconds_sum"):
-				m.ReconcileDurationSum = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_thrashing_total"):
-				m.ThrashingTotal = int(val)
-			case strings.HasPrefix(line, "kubevirt_autopilot_paused_resources"):
-				m.PausedResources = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_customization_info"):
-				m.CustomizationInfo = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_tombstone_status"):
-				m.TombstoneStatus = val
-			}
-		}
-
-		// missing_dependency uses group/version/kind labels instead of kind/name/namespace
-		if strings.HasPrefix(line, "kubevirt_autopilot_missing_dependency") &&
-			strings.Contains(line, fmt.Sprintf(`kind="%s"`, kind)) {
-			m.MissingDependency = parseMetricValue(line)
-		}
+	if m.ReconcileDurationCount < 0 {
+		m.ReconcileDurationCount = 0
+	}
+	if m.ThrashingTotal < 0 {
+		m.ThrashingTotal = 0
 	}
 
 	return m
@@ -382,6 +366,34 @@ func parseMetricValue(line string) float64 {
 		}
 	}
 	return -1
+}
+
+func matchesLabels(line string, labels map[string]string) bool {
+	for k, v := range labels {
+		if !strings.Contains(line, fmt.Sprintf(`%s="%s"`, k, v)) {
+			return false
+		}
+	}
+	return true
+}
+
+func findMetricValueInBody(body, metricName string, labels map[string]string) float64 {
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, metricName) {
+			continue
+		}
+		if matchesLabels(line, labels) {
+			return parseMetricValue(line)
+		}
+	}
+	return -1
+}
+
+func findMetricValue(metricName string, labels map[string]string) float64 {
+	return findMetricValueInBody(fetchMetricsBody(), metricName, labels)
 }
 
 // deleteResource deletes a resource by GVK, name, and namespace. Safe to call if the resource doesn't exist.
@@ -402,10 +414,7 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 // ensureHCOExists fails the test if the HCO instance does not exist on the cluster.
 func ensureHCOExists() {
 	By("ensuring HCO instance exists")
-	hco := &unstructured.Unstructured{}
-	hco.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
-	})
+	hco := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 	ExpectWithOffset(1, k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)).To(Succeed(),
 		fmt.Sprintf("HCO %s/%s must exist on the cluster", operatorNamespace, hcoName))
 }
@@ -436,10 +445,7 @@ func patchAutopilotAndWait(value string) {
 	ref := hcoRef()
 
 	// Check current value — skip if already set
-	current := &unstructured.Unstructured{}
-	current.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
-	})
+	current := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, current); err == nil {
 		annotations := current.GetAnnotations()
 		currentVal := annotations[autopilotAnnotation]
@@ -458,10 +464,7 @@ func patchAutopilotAndWait(value string) {
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		EventuallyWithOffset(1, func() string {
-			obj := &unstructured.Unstructured{}
-			obj.SetGroupVersionKind(schema.GroupVersionKind{
-				Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
-			})
+			obj := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 			if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, obj); err != nil {
 				return "error"
 			}
@@ -505,17 +508,10 @@ func autopilotPatch(value string) []byte {
 	return []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, autopilotAnnotation, value))
 }
 
-// hcoRef returns an unstructured reference to the HCO CR for use with Patch calls.
+var hcoGVK = schema.GroupVersionKind{Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged"}
+
 func hcoRef() *unstructured.Unstructured {
-	obj := &unstructured.Unstructured{}
-	obj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "hco.kubevirt.io",
-		Version: "v1",
-		Kind:    "HyperConverged",
-	})
-	obj.SetName(hcoName)
-	obj.SetNamespace(operatorNamespace)
-	return obj
+	return unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 }
 
 // isOpenShiftCluster returns true when the ClusterVersion CRD exists,
@@ -541,12 +537,15 @@ func skipIfUnmanagedOnOCP(asset testAsset) {
 	}
 }
 
+const (
+	modeAnnotation = "platform.kubevirt.io/mode"
+	modeUnmanaged  = "unmanaged"
+)
+
 // --- Alert test helpers (OCP-only) ---
 
 func touchHCO() {
-	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"e2e.test/touch":"%d"}}}`, time.Now().UnixNano()))
-	ref := hcoRef()
-	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
+	setAnnotation(hcoGVK, hcoName, operatorNamespace, "e2e.test/touch", fmt.Sprintf("%d", time.Now().UnixNano()))
 }
 
 func createBlockingWebhook(asset testAsset) {
@@ -607,26 +606,6 @@ func deleteBlockingWebhook(asset testAsset) {
 	if err != nil && !apierrors.IsNotFound(err) {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	}
-}
-
-func setPrometheusRuleUnmanaged() {
-	By("setting PrometheusRule to unmanaged mode")
-	patch := []byte(`{"metadata":{"annotations":{"platform.kubevirt.io/mode":"unmanaged"}}}`)
-	ref := &unstructured.Unstructured{}
-	ref.SetGroupVersionKind(prometheusRuleGVK)
-	ref.SetName(prometheusRuleName)
-	ref.SetNamespace(operatorNamespace)
-	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
-}
-
-func removePrometheusRuleUnmanaged() {
-	By("removing unmanaged mode from PrometheusRule")
-	patch := []byte(`{"metadata":{"annotations":{"platform.kubevirt.io/mode":null}}}`)
-	ref := &unstructured.Unstructured{}
-	ref.SetGroupVersionKind(prometheusRuleGVK)
-	ref.SetName(prometheusRuleName)
-	ref.SetNamespace(operatorNamespace)
-	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
 }
 
 func patchAlertForDurations(targetFor string) {
@@ -825,10 +804,7 @@ func parseMetricLabel(line, key string) string {
 // manager — an extra unmanaged label would be invisible to the dry-run diff.
 func triggerEditWar(gvk schema.GroupVersionKind, name, namespace string) {
 	driftPatch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"tampered"}}}`, managedByLabel))
-	ref := &unstructured.Unstructured{}
-	ref.SetGroupVersionKind(gvk)
-	ref.SetName(name)
-	ref.SetNamespace(namespace)
+	ref := unstructuredRef(gvk, name, namespace)
 
 	Eventually(func() bool {
 		obj, err := getUnstructuredResource(gvk, name, namespace)
@@ -848,10 +824,7 @@ func triggerEditWar(gvk schema.GroupVersionKind, name, namespace string) {
 // removePauseAnnotation removes the reconcile-paused annotation from a managed resource.
 func removePauseAnnotation(gvk schema.GroupVersionKind, name, namespace string) {
 	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`, pauseAnnotation))
-	ref := &unstructured.Unstructured{}
-	ref.SetGroupVersionKind(gvk)
-	ref.SetName(name)
-	ref.SetNamespace(namespace)
+	ref := unstructuredRef(gvk, name, namespace)
 
 	EventuallyWithOffset(1, func() error {
 		return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))
@@ -887,4 +860,57 @@ func getOperatorLogs(since time.Time) string {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 	return string(logs)
+}
+
+// --- User override helpers ---
+
+func setAnnotation(gvk schema.GroupVersionKind, name, namespace, key, value string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}}}`, key, value))
+	ref := unstructuredRef(gvk, name, namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed(),
+		fmt.Sprintf("should set annotation %s on %s/%s", key, gvk.Kind, name))
+}
+
+func removeAnnotation(gvk schema.GroupVersionKind, name, namespace, key string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:null}}}`, key))
+	ref := unstructuredRef(gvk, name, namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed(),
+		fmt.Sprintf("should remove annotation %s from %s/%s", key, gvk.Kind, name))
+}
+
+func setLabel(gvk schema.GroupVersionKind, name, namespace, key, value string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{%q:%q}}}`, key, value))
+	ref := unstructuredRef(gvk, name, namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed(),
+		fmt.Sprintf("should set label %s on %s/%s", key, gvk.Kind, name))
+}
+
+func tamperField(asset testAsset, patchJSON string) {
+	ref := unstructuredRef(asset.GVK, asset.Name, asset.Namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, []byte(patchJSON)))).To(Succeed(),
+		fmt.Sprintf("should tamper field on %s/%s", asset.GVK.Kind, asset.Name))
+}
+
+func readOverrideFieldValue(obj *unstructured.Unstructured, asset testAsset) string {
+	val, found, _ := unstructured.NestedFieldNoCopy(obj.Object, asset.Override.FieldPath()...)
+	if !found {
+		return ""
+	}
+	return fmt.Sprintf("%v", val)
+}
+
+func pollResourceField(asset testAsset, readFn func(*unstructured.Unstructured) string) func() (string, error) {
+	return func() (string, error) {
+		obj, err := getUnstructuredResource(asset.GVK, asset.Name, asset.Namespace)
+		if err != nil {
+			return "", err
+		}
+		return readFn(obj), nil
+	}
+}
+
+func findCustomizationMetric(kind, name, namespace, custType string) float64 {
+	return findMetricValue("kubevirt_autopilot_customization_info", map[string]string{
+		"kind": kind, "name": name, "namespace": namespace, "type": custType,
+	})
 }

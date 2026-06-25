@@ -97,6 +97,10 @@ var _ = Describe("Controller E2E Tests", func() {
 		BeforeAll(func() {
 			By("ensuring HCO exists")
 			ensureHCOExists()
+			if isOpenShiftCluster() {
+				By("restoring PrometheusRule to managed mode")
+				removeAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation)
+			}
 			patchAutopilotAndWait(autopilotEnabled)
 
 		})

@@ -43,7 +43,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 
 		if isOpenShiftCluster() {
 			By("setting PrometheusRule to unmanaged so operator won't revert our changes")
-			setPrometheusRuleUnmanaged()
+			setAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation, modeUnmanaged)
 
 			By("reducing alert 'for' durations to 15s for faster test feedback")
 			patchAlertForDurations("15s")
@@ -56,9 +56,10 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 	AfterAll(func() {
 		if isOpenShiftCluster() {
 			By("restoring PrometheusRule to managed mode")
-			removePrometheusRuleUnmanaged()
+			removeAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation)
 		}
-
+		By("touching HCO to trigger reconciliation after Anti-Thrashing tests")
+		touchHCO()
 		waitForOperatorHealthy()
 	})
 
