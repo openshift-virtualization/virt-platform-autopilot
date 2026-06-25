@@ -67,9 +67,9 @@ $(LOCALBIN):
 #        CONTAINER_TOOL=podman make docker-build
 CONTAINER_TOOL ?= $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
 
-ifeq ($(CONTAINER_TOOL),)
-$(error Neither docker nor podman found in PATH. Please install one of them.)
-endif
+.PHONY: require-container-tool
+require-container-tool:
+	@if [ -z "$(CONTAINER_TOOL)" ]; then echo "Error: Neither docker nor podman found in PATH. Please install one of them." >&2; exit 1; fi
 
 ##@ Build
 
@@ -96,11 +96,11 @@ IMAGE_TAG ?= latest
 OPERATOR_IMAGE ?= $(IMAGE_REGISTRY)/virt-platform-autopilot:$(IMAGE_TAG)
 
 .PHONY: docker-build
-docker-build: ## Build container image (local arch only)
+docker-build: require-container-tool ## Build container image (local arch only)
 	$(CONTAINER_TOOL) build -t $(IMAGE_NAME) .
 
 .PHONY: docker-push
-docker-push: ## Push container image
+docker-push: require-container-tool ## Push container image
 	$(CONTAINER_TOOL) push $(IMAGE_NAME)
 
 .PHONY: build-push-multi-arch
