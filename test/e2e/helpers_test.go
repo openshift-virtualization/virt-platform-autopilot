@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -27,43 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// buildMinimalCRD constructs a minimal CRD with x-kubernetes-preserve-unknown-fields
-// suitable for testing without requiring a full schema.
-func buildMinimalCRD(group, kind, plural, version string, scope apiextensionsv1.ResourceScope) *apiextensionsv1.CustomResourceDefinition { //nolint:unparam
-	return &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s.%s", plural, group),
-		},
-		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: group,
-			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     kind,
-				Plural:   plural,
-				Singular: strings.ToLower(kind),
-			},
-			Scope: scope,
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name:    version,
-					Served:  true,
-					Storage: true,
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type:                   "object",
-							XPreserveUnknownFields: boolPtr(true),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// boolPtr returns a pointer to the given bool value.
-func boolPtr(b bool) *bool {
-	return &b
-}
 
 // getOperatorPod returns the autopilot pod by app label.
 func getOperatorPod() *corev1.Pod {
@@ -130,26 +96,12 @@ func waitForOperatorHealthy() {
 		"Operator pod should remain Running and Ready")
 }
 
-// installCRD creates a CRD and waits for it to reach the Established condition.
-func installCRD(crd *apiextensionsv1.CustomResourceDefinition) {
-	By(fmt.Sprintf("installing CRD %s", crd.Name))
-	ExpectWithOffset(1, k8sClient.Create(ctx, crd)).To(Succeed())
-
-	waitForCRDEstablished(crd.Name)
-}
-
-// ensureCRDInstalled installs a CRD only if it does not already exist.
-// Returns true if the CRD was newly installed, false if it already existed.
-func ensureCRDInstalled(crd *apiextensionsv1.CustomResourceDefinition) bool {
+// ensureCRDInstalled fails the test if the given CRD is not installed on the cluster.
+func ensureCRDInstalled(name string) {
+	By(fmt.Sprintf("ensuring CRD %s is installed", name))
 	existing := &apiextensionsv1.CustomResourceDefinition{}
-	err := k8sClient.Get(ctx, types.NamespacedName{Name: crd.Name}, existing)
-	if err == nil {
-		return false
-	}
-	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
-		fmt.Sprintf("unexpected error checking CRD %s: %v", crd.Name, err))
-	installCRD(crd)
-	return true
+	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{Name: name}, existing)).To(Succeed(),
+		fmt.Sprintf("CRD %s must be installed on the cluster", name)) // For kind, run kind-cluster.sh install-crds
 }
 
 func waitForCRDEstablished(name string) {
@@ -169,24 +121,17 @@ func waitForCRDEstablished(name string) {
 		fmt.Sprintf("CRD %s should become Established", name))
 }
 
-func newMachineConfigCRD() *apiextensionsv1.CustomResourceDefinition {
-	return buildMinimalCRD(
-		"machineconfiguration.openshift.io",
-		"MachineConfig",
-		"machineconfigs",
-		"v1",
-		apiextensionsv1.ClusterScoped,
-	)
-}
-
-func newPrometheusRuleCRD() *apiextensionsv1.CustomResourceDefinition {
-	return buildMinimalCRD(
-		"monitoring.coreos.com",
-		"PrometheusRule",
-		"prometheusrules",
-		"v1",
-		apiextensionsv1.NamespaceScoped,
-	)
+// installCRDFromFile applies a CRD YAML file (relative to the project root)
+// using server-side apply, matching what kind-cluster.sh install-crds does.
+func installCRDFromFile(relativePath string) {
+	// test/e2e/*.go → project root is ../../
+	_, thisFile, _, _ := runtime.Caller(0)
+	absPath := filepath.Join(filepath.Dir(thisFile), "..", "..", relativePath)
+	By(fmt.Sprintf("installing CRD from %s", absPath))
+	cmd := exec.CommandContext(ctx, "kubectl", "apply", "--server-side", "-f", absPath)
+	output, err := cmd.CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(),
+		fmt.Sprintf("kubectl apply failed for %s: %s", absPath, string(output)))
 }
 
 // removeCRD deletes a CRD and waits for it to be fully removed.
@@ -216,34 +161,42 @@ func getUnstructuredResource(gvk schema.GroupVersionKind, name, namespace string
 	return obj, err
 }
 
-// findDriftCorrectedEvents returns all events with reason "DriftCorrected" whose message
-// contains the given kind and resource name. Events are emitted on the HCO object.
-func findDriftCorrectedEvents(kind, name string) []eventsv1.Event {
-	// Use new events.k8s.io/v1 API
-	events := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, events, client.InNamespace(operatorNamespace))).To(Succeed())
-
-	var matched []eventsv1.Event
-	for _, event := range events.Items {
-		if event.Reason == "DriftCorrected" &&
-			strings.Contains(event.Note, kind) &&
-			strings.Contains(event.Note, name) {
-			matched = append(matched, event)
-		}
-	}
-	return matched
+// EventFilter specifies criteria for finding events in the operator namespace.
+// Zero-value fields are not applied (match everything).
+type EventFilter struct {
+	Reason string
+	Since  time.Time
+	Kind   string
+	Name   string
 }
 
-// findEventsWithReason returns all events in the operator namespace matching the given reason.
-func findEventsWithReason(reason string) []eventsv1.Event {
+// findEvents returns events in the operator namespace matching all non-zero filter fields.
+// Kind and Name are matched as substrings in event.Note.
+// When Since is set, an event matches if it was first observed at/after Since,
+// or if it has a Series whose last firing is at/after Since.
+func findEvents(filter EventFilter) []eventsv1.Event {
 	eventList := &eventsv1.EventList{}
 	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
 
 	var matched []eventsv1.Event
 	for _, event := range eventList.Items {
-		if event.Reason == reason {
-			matched = append(matched, event)
+		if filter.Reason != "" && event.Reason != filter.Reason {
+			continue
 		}
+		if !filter.Since.IsZero() {
+			firstOK := !event.EventTime.Time.Before(filter.Since)
+			seriesOK := event.Series != nil && !event.Series.LastObservedTime.Time.Before(filter.Since)
+			if !firstOK && !seriesOK {
+				continue
+			}
+		}
+		if filter.Kind != "" && !strings.Contains(event.Note, filter.Kind) {
+			continue
+		}
+		if filter.Name != "" && !strings.Contains(event.Note, filter.Name) {
+			continue
+		}
+		matched = append(matched, event)
 	}
 	return matched
 }
@@ -282,13 +235,17 @@ func eventFirings(event eventsv1.Event) int {
 	return 1
 }
 
-// captureAutopilotEvents counts all autopilot event firings in the operator namespace.
-func captureAutopilotEvents() AutopilotEvents {
-	eventList := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
+// captureAutopilotEvents counts autopilot event firings in the operator namespace.
+// When since is non-zero, only events fired at or after that time are counted.
+func captureAutopilotEvents(since ...time.Time) AutopilotEvents {
+	var filter EventFilter
+	if len(since) > 0 {
+		filter.Since = since[0]
+	}
+	events := findEvents(filter)
 
 	var e AutopilotEvents
-	for _, event := range eventList.Items {
+	for _, event := range events {
 		n := eventFirings(event)
 		switch event.Reason {
 		case "ReconcileSucceeded":
@@ -366,9 +323,9 @@ func fetchMetricsBody() string {
 // captureAssetMetrics fetches all metrics for a specific asset from the operator's /metrics endpoint.
 // Labels are matched by kind/name/namespace. For missing_dependency the labels are group/version/kind
 // so it uses the kind parameter only.
-func captureAssetMetrics(kind, name string) AssetMetrics {
+func captureAssetMetrics(kind, name, namespace string) AssetMetrics {
 	body := fetchMetricsBody()
-	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, operatorNamespace)
+	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, namespace)
 
 	m := AssetMetrics{
 		ComplianceStatus:       -1,
@@ -427,18 +384,6 @@ func parseMetricValue(line string) float64 {
 	return -1
 }
 
-// findEventsWithReasonAfter returns events matching the given reason that occurred after the specified time.
-func findEventsWithReasonAfter(reason string, after time.Time) []eventsv1.Event {
-	events := findEventsWithReason(reason)
-	var filtered []eventsv1.Event
-	for _, event := range events {
-		if event.EventTime.After(after) {
-			filtered = append(filtered, event)
-		}
-	}
-	return filtered
-}
-
 // deleteResource deletes a resource by GVK, name, and namespace. Safe to call if the resource doesn't exist.
 func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 	obj := &unstructured.Unstructured{}
@@ -454,30 +399,15 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 		fmt.Sprintf("%s/%s should be fully deleted", gvk.Kind, name))
 }
 
-// ensureHCOExists creates a minimal HCO instance if one doesn't already exist.
+// ensureHCOExists fails the test if the HCO instance does not exist on the cluster.
 func ensureHCOExists() {
+	By("ensuring HCO instance exists")
 	hco := &unstructured.Unstructured{}
 	hco.SetGroupVersionKind(schema.GroupVersionKind{
 		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
 	})
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)
-	if err == nil {
-		return
-	}
-	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
-		fmt.Sprintf("unexpected error checking HCO: %v", err))
-	hco = &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": "hco.kubevirt.io/v1",
-			"kind":       "HyperConverged",
-			"metadata": map[string]any{
-				"name":      hcoName,
-				"namespace": operatorNamespace,
-			},
-			"spec": map[string]any{},
-		},
-	}
-	ExpectWithOffset(1, k8sClient.Create(ctx, hco)).To(Succeed())
+	ExpectWithOffset(1, k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)).To(Succeed(),
+		fmt.Sprintf("HCO %s/%s must exist on the cluster", operatorNamespace, hcoName))
 }
 
 // removeManagedByLabel patches the HCO to remove the managed-by label.
@@ -556,7 +486,7 @@ func patchAutopilotAndWait(value string) {
 	}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 	EventuallyWithOffset(1, func() bool {
-		for _, event := range findEventsWithReasonAfter("ReconcileSucceeded", patchTime) {
+		for _, event := range findEvents(EventFilter{Reason: "ReconcileSucceeded", Since: patchTime}) {
 			if event.Regarding.Name == hcoName {
 				return true
 			}
@@ -603,25 +533,13 @@ func crdInstalled(name string) bool {
 
 // --- Alert test helpers (OCP-only) ---
 
-type assetUnderTest struct {
-	GVK       schema.GroupVersionKind
-	Plural    string
-	Name      string
-	Namespace string
-	GateCRD   string // if set, asset is only created when this CRD is installed
-}
-
-func (a assetUnderTest) webhookName() string {
-	return fmt.Sprintf("autopilot-e2e-block-%s", a.Plural)
-}
-
 func touchHCO() {
 	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"e2e.test/touch":"%d"}}}`, time.Now().UnixNano()))
 	ref := hcoRef()
 	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed())
 }
 
-func createBlockingWebhook(asset assetUnderTest) {
+func createBlockingWebhook(asset testAsset) {
 	plural := asset.Plural
 	failurePolicy := admissionregistrationv1.Fail
 	sideEffects := admissionregistrationv1.SideEffectClassNone
@@ -670,7 +588,7 @@ func createBlockingWebhook(asset assetUnderTest) {
 	ExpectWithOffset(1, k8sClient.Create(ctx, webhook)).To(Succeed())
 }
 
-func deleteBlockingWebhook(asset assetUnderTest) {
+func deleteBlockingWebhook(asset testAsset) {
 	By(fmt.Sprintf("deleting blocking webhook %s", asset.webhookName()))
 	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
 		ObjectMeta: metav1.ObjectMeta{Name: asset.webhookName()},
@@ -886,4 +804,77 @@ func parseMetricLabel(line, key string) string {
 		return ""
 	}
 	return line[start : start+end]
+}
+
+// --- Anti-thrashing test helpers ---
+
+// triggerEditWar repeatedly modifies the managed-by label to trigger drift
+// detection until the operator exhausts its token-bucket budget and sets the
+// pause annotation. We modify managed-by (not add a new label) because SSA
+// drift detection only sees changes to fields owned by the operator's field
+// manager — an extra unmanaged label would be invisible to the dry-run diff.
+func triggerEditWar(gvk schema.GroupVersionKind, name, namespace string) {
+	driftPatch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"tampered"}}}`, managedByLabel))
+	ref := &unstructured.Unstructured{}
+	ref.SetGroupVersionKind(gvk)
+	ref.SetName(name)
+	ref.SetNamespace(namespace)
+
+	Eventually(func() bool {
+		obj, err := getUnstructuredResource(gvk, name, namespace)
+		if err != nil {
+			return false
+		}
+		if ann := obj.GetAnnotations(); ann != nil && ann[pauseAnnotation] == "true" {
+			return true
+		}
+		_ = k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, driftPatch))
+		touchHCO()
+		return false
+	}, 5*time.Minute, 2*time.Second).Should(BeTrue(),
+		fmt.Sprintf("Operator should set pause annotation on %s/%s after detecting edit war", gvk.Kind, name))
+}
+
+// removePauseAnnotation removes the reconcile-paused annotation from a managed resource.
+func removePauseAnnotation(gvk schema.GroupVersionKind, name, namespace string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`, pauseAnnotation))
+	ref := &unstructured.Unstructured{}
+	ref.SetGroupVersionKind(gvk)
+	ref.SetName(name)
+	ref.SetNamespace(namespace)
+
+	EventuallyWithOffset(1, func() error {
+		return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))
+	}, timeout, interval).Should(Succeed(),
+		fmt.Sprintf("Should remove pause annotation from %s/%s", gvk.Kind, name))
+}
+
+// queryAlertNotFiring returns true when the given alert is NOT firing in Prometheus.
+func queryAlertNotFiring(alertName string, attempt, maxAttempts int, labelFilters ...string) bool {
+	labels := queryFiringAlert(alertName, attempt, maxAttempts, labelFilters...)
+	return labels == nil
+}
+
+// getOperatorLogs returns the operator pod logs since the given time.
+// Uses SinceSeconds (relative, kubelet-evaluated) instead of SinceTime
+// to avoid clock-skew issues between the test runner and the Kind node.
+func getOperatorLogs(since time.Time) string {
+	pod := getOperatorPod()
+	clientset, err := kubernetes.NewForConfig(cfg)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	container := "manager"
+	if len(pod.Spec.Containers) == 1 {
+		container = pod.Spec.Containers[0].Name
+	}
+
+	sinceSeconds := int64(time.Since(since).Seconds()) + 120
+	logs, err := clientset.CoreV1().Pods(operatorNamespace).
+		GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container:    container,
+			SinceSeconds: &sinceSeconds,
+		}).DoRaw(context.Background())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	return string(logs)
 }

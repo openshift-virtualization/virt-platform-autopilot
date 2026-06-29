@@ -6,50 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
-
-// assetsUnderTest lists all phase-1 "install: always" assets from metadata.yaml.
-// Each generates a VirtPlatformSyncFailed sub-test. Assets whose CRD or gateCRD are not
-// installed on the cluster are skipped automatically.
-var assetsUnderTest = []assetUnderTest{
-	{
-		GVK:    schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
-		Plural: "machineconfigs",
-		Name:   "90-worker-swap-online",
-	},
-	{
-		GVK:     schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
-		Plural:  "machineconfigs",
-		Name:    "99-openshift-machineconfig-worker-psi-karg",
-		GateCRD: "kubedeschedulers.operator.openshift.io",
-	},
-	{
-		GVK:    schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "KubeletConfig"},
-		Plural: "kubeletconfigs",
-		Name:   "virt-perf-settings",
-	},
-	{
-		GVK:       schema.GroupVersionKind{Group: "remediation.medik8s.io", Version: "v1alpha1", Kind: "NodeHealthCheck"},
-		Plural:    "nodehealthchecks",
-		Name:      "virt-node-health-check",
-		Namespace: "openshift-operators",
-		GateCRD:   "nodehealthchecks.remediation.medik8s.io",
-	},
-	{
-		GVK:     schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
-		Plural:  "uiplugins",
-		Name:    "monitoring",
-		GateCRD: "uiplugins.observability.openshift.io",
-	},
-	{
-		GVK:       schema.GroupVersionKind{Group: "operator.openshift.io", Version: "v1", Kind: "KubeDescheduler"},
-		Plural:    "kubedeschedulers",
-		Name:      "cluster",
-		Namespace: "openshift-kube-descheduler-operator",
-		GateCRD:   "kubedeschedulers.operator.openshift.io",
-	},
-}
 
 var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 

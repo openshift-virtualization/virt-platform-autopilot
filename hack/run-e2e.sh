@@ -50,6 +50,14 @@ main() {
     log_info "Creating kind cluster..."
     CLUSTER_NAME="$CLUSTER_NAME" "${SCRIPT_DIR}/kind-cluster.sh" create
 
+    # Install CRDs needed by managed assets (NodeHealthCheck, KubeDescheduler, etc.)
+    log_info "Installing CRDs..."
+    CLUSTER_NAME="$CLUSTER_NAME" "${SCRIPT_DIR}/kind-cluster.sh" install-crds
+
+    # Create mock HCO instance for tests
+    log_info "Creating mock HCO instance..."
+    CLUSTER_NAME="$CLUSTER_NAME" "${SCRIPT_DIR}/kind-cluster.sh" create-mock-hco
+
     # Deploy operator (image already built by make test-e2e)
     log_info "Deploying operator to kind cluster (using pre-built image)..."
     cd "$PROJECT_ROOT"
