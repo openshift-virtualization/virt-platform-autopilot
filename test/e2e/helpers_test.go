@@ -531,6 +531,16 @@ func crdInstalled(name string) bool {
 	return k8sClient.Get(ctx, types.NamespacedName{Name: name}, crd) == nil
 }
 
+// skipIfUnmanagedOnOCP skips the current spec when the asset is a
+// PrometheusRule running on OpenShift. The anti-thrashing and alert
+// suites set PrometheusRule to unmanaged mode to protect alert "for"
+// durations, which makes drift-detection tests for that asset a no-op.
+func skipIfUnmanagedOnOCP(asset testAsset) {
+	if asset.GVK.Kind == "PrometheusRule" && isOpenShiftCluster() {
+		Skip("PrometheusRule is set to unmanaged on OCP to protect alert durations")
+	}
+}
+
 // --- Alert test helpers (OCP-only) ---
 
 func touchHCO() {
