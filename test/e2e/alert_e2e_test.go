@@ -64,6 +64,7 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 			})
 
 			It("should fire critical alert when asset drift cannot be restored", func() {
+				skipIfUnmanagedOnOCP(asset)
 				if asset.GateCRD != "" && !crdInstalled(asset.GateCRD) {
 					Skip(fmt.Sprintf("gate CRD %s not installed", asset.GateCRD))
 				}

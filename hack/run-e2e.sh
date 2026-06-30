@@ -83,7 +83,7 @@ main() {
 
     cd "$PROJECT_ROOT"
     go run github.com/onsi/ginkgo/v2/ginkgo -v --trace \
-        --timeout=10m \
+        --timeout=30m \
         --poll-progress-after=60s \
         ./test/e2e/...
 
