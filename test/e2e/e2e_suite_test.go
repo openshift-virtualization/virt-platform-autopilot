@@ -54,6 +54,8 @@ var _ = BeforeSuite(func() {
 	Eventually(func() error {
 		return k8sClient.List(ctx, &corev1.NamespaceList{})
 	}, 30*time.Second, 1*time.Second).Should(Succeed())
+
+	waitForMCPStable()
 })
 
 var _ = AfterSuite(func() {
