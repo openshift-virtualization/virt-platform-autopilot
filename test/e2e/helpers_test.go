@@ -497,6 +497,7 @@ func patchAutopilotAndWait(value string) {
 		return false
 	}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "Reconciliation should complete after patching autopilot")
 	waitForOperatorHealthy()
+	waitForMCPStable()
 }
 
 // autopilotPatch returns a JSON merge patch that sets the autopilot annotation.
@@ -913,4 +914,61 @@ func findCustomizationMetric(kind, name, namespace, custType string) float64 {
 	return findMetricValue("kubevirt_autopilot_customization_info", map[string]string{
 		"kind": kind, "name": name, "namespace": namespace, "type": custType,
 	})
+}
+
+// waitForMCPStable waits until every MachineConfigPool on the cluster has
+// Updated=True, Updating=False, and Degraded=False. On non-OCP clusters
+// (e.g. Kind) the function returns immediately.
+// The elapsed wait time is logged so CI runs show how long MCP rollouts blocked the suite.
+func waitForMCPStable() {
+	if !isOpenShiftCluster() || !crdInstalled("machineconfigpools.machineconfiguration.openshift.io") {
+		GinkgoWriter.Println("waitForMCPStable: skipping — MachineConfigPool not available on this cluster")
+		return
+	}
+
+	mcpGVK := schema.GroupVersionKind{
+		Group:   "machineconfiguration.openshift.io",
+		Version: "v1",
+		Kind:    "MachineConfigPoolList",
+	}
+
+	start := time.Now()
+	By("waiting for all MachineConfigPools to be stable (Updated, not Updating, not Degraded)")
+
+	Eventually(func() (string, error) {
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(mcpGVK)
+		if err := k8sClient.List(ctx, list); err != nil {
+			return "", fmt.Errorf("listing MachineConfigPools: %w", err)
+		}
+
+		for _, mcp := range list.Items {
+			name := mcp.GetName()
+			conditions, found, err := unstructured.NestedSlice(mcp.Object, "status", "conditions")
+			if err != nil || !found {
+				return fmt.Sprintf("MCP %s has no conditions yet", name), nil
+			}
+
+			condMap := make(map[string]string)
+			for _, c := range conditions {
+				cm, ok := c.(map[string]any)
+				if !ok {
+					continue
+				}
+				cType, _ := cm["type"].(string)
+				cStatus, _ := cm["status"].(string)
+				condMap[cType] = cStatus
+			}
+
+			if condMap["Updated"] != "True" || condMap["Updating"] != "False" || condMap["Degraded"] != "False" {
+				return fmt.Sprintf("MCP %s not stable: Updated=%s Updating=%s Degraded=%s",
+					name, condMap["Updated"], condMap["Updating"], condMap["Degraded"]), nil
+			}
+		}
+		return "", nil
+	}, 30*time.Minute, 30*time.Second).Should(BeEmpty(),
+		"All MachineConfigPools should become stable")
+
+	elapsed := time.Since(start)
+	GinkgoWriter.Printf("MachineConfigPools stable after %s\n", elapsed.Truncate(time.Second))
 }
