@@ -509,7 +509,7 @@ func autopilotPatch(value string) []byte {
 	return []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, autopilotAnnotation, value))
 }
 
-var hcoGVK = schema.GroupVersionKind{Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged"}
+var hcoGVK = schema.GroupVersionKind{Group: "hco.kubevirt.io", Version: "v1beta1", Kind: "HyperConverged"}
 
 func hcoRef() *unstructured.Unstructured {
 	return unstructuredRef(hcoGVK, hcoName, operatorNamespace)

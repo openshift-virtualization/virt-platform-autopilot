@@ -157,6 +157,16 @@ kind: Namespace
 metadata:
   name: openshift-cnv
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-operators
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-kube-descheduler-operator
+---
 apiVersion: hco.kubevirt.io/v1beta1
 kind: HyperConverged
 metadata:
