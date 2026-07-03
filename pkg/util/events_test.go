@@ -90,6 +90,9 @@ func TestEventRecorder_AssetApplied(t *testing.T) {
 	if event.Message == "" {
 		t.Error("Expected non-empty message")
 	}
+	if expected := "AssetApplied ConfigMap/default/my-config"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_DriftDetected(t *testing.T) {
@@ -109,6 +112,9 @@ func TestEventRecorder_DriftDetected(t *testing.T) {
 	}
 	if event.Reason != EventReasonDriftDetected {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonDriftDetected, event.Reason)
+	}
+	if expected := "DriftDetected Deployment/default/nginx"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
 	}
 }
 
@@ -130,6 +136,9 @@ func TestEventRecorder_DriftCorrected(t *testing.T) {
 	if event.Reason != EventReasonDriftCorrected {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonDriftCorrected, event.Reason)
 	}
+	if expected := "DriftCorrected ConfigMap/default/config"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_PatchApplied(t *testing.T) {
@@ -149,6 +158,9 @@ func TestEventRecorder_PatchApplied(t *testing.T) {
 	}
 	if event.Reason != EventReasonPatchApplied {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonPatchApplied, event.Reason)
+	}
+	if expected := "PatchApplied Deployment/default/app"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
 	}
 }
 
@@ -170,6 +182,9 @@ func TestEventRecorder_InvalidPatch(t *testing.T) {
 	if event.Reason != EventReasonInvalidPatch {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonInvalidPatch, event.Reason)
 	}
+	if expected := "InvalidPatch ConfigMap/default/config"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_Throttled(t *testing.T) {
@@ -189,6 +204,9 @@ func TestEventRecorder_Throttled(t *testing.T) {
 	}
 	if event.Reason != EventReasonThrottled {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonThrottled, event.Reason)
+	}
+	if expected := "Throttled Deployment/default/app"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
 	}
 }
 
@@ -210,6 +228,9 @@ func TestEventRecorder_UnmanagedMode(t *testing.T) {
 	if event.Reason != EventReasonUnmanagedMode {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonUnmanagedMode, event.Reason)
 	}
+	if expected := "UnmanagedMode ConfigMap/default/config"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_CRDMissing(t *testing.T) {
@@ -229,6 +250,9 @@ func TestEventRecorder_CRDMissing(t *testing.T) {
 	}
 	if event.Reason != EventReasonCRDMissing {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonCRDMissing, event.Reason)
+	}
+	if expected := "CRDMissing metallbs.metallb.io"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
 	}
 }
 
@@ -250,6 +274,9 @@ func TestEventRecorder_CRDDiscovered(t *testing.T) {
 	if event.Reason != EventReasonCRDDiscovered {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonCRDDiscovered, event.Reason)
 	}
+	if expected := "CRDDiscovered metallbs.metallb.io"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_ApplyFailed(t *testing.T) {
@@ -270,6 +297,9 @@ func TestEventRecorder_ApplyFailed(t *testing.T) {
 	if event.Reason != EventReasonApplyFailed {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonApplyFailed, event.Reason)
 	}
+	if expected := "ApplyFailed test-asset"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_RenderFailed(t *testing.T) {
@@ -289,6 +319,9 @@ func TestEventRecorder_RenderFailed(t *testing.T) {
 	}
 	if event.Reason != EventReasonRenderFailed {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonRenderFailed, event.Reason)
+	}
+	if expected := "RenderFailed test-asset"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
 	}
 }
 
@@ -329,6 +362,9 @@ func TestEventRecorder_AssetSkipped(t *testing.T) {
 	}
 	if event.Reason != EventReasonAssetSkipped {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonAssetSkipped, event.Reason)
+	}
+	if expected := "AssetSkipped test-asset"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
 	}
 }
 
@@ -379,6 +415,9 @@ func TestEventRecorder_InvalidIgnoreFields(t *testing.T) {
 	if event.Reason != EventReasonInvalidIgnoreFields {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonInvalidIgnoreFields, event.Reason)
 	}
+	if expected := "InvalidIgnoreFields ConfigMap/default/my-config"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
 }
 
 func TestEventRecorder_NoDriftDetected(t *testing.T) {
@@ -400,5 +439,45 @@ func TestEventRecorder_NoDriftDetected(t *testing.T) {
 	}
 	if event.Reason != EventReasonNoDriftDetected {
 		t.Errorf("Expected Reason=%s, got %s", EventReasonNoDriftDetected, event.Reason)
+	}
+	if expected := "NoDriftDetected ConfigMap/default/my-config"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
+}
+
+func TestAssetAction(t *testing.T) {
+	result := assetAction("DriftDetected", "ConfigMap", "default", "my-config")
+	expected := "DriftDetected ConfigMap/default/my-config"
+	if result != expected {
+		t.Errorf("Expected %q, got %q", expected, result)
+	}
+}
+
+func TestAssetNameAction(t *testing.T) {
+	result := assetNameAction("ApplyFailed", "my-asset")
+	expected := "ApplyFailed my-asset"
+	if result != expected {
+		t.Errorf("Expected %q, got %q", expected, result)
+	}
+}
+
+func TestEventRecorder_DeduplicationKeys(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+	obj := &unstructured.Unstructured{}
+
+	recorder.DriftDetected(obj, "ConfigMap", "default", "config-a")
+	recorder.DriftDetected(obj, "ConfigMap", "default", "config-b")
+
+	if len(fake.Events) != 2 {
+		t.Fatalf("Expected 2 events, got %d", len(fake.Events))
+	}
+
+	if fake.Events[0].Action == fake.Events[1].Action {
+		t.Errorf("Actions should differ for different assets: both are %q", fake.Events[0].Action)
+	}
+
+	if fake.Events[0].Reason != fake.Events[1].Reason {
+		t.Errorf("Reasons should be the same: got %q and %q", fake.Events[0].Reason, fake.Events[1].Reason)
 	}
 }
