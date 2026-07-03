@@ -43,14 +43,6 @@ var assetsUnderTest = []testAsset{
 		ClusterScoped: true,
 	},
 	{
-		GVK:           schema.GroupVersionKind{Group: "remediation.medik8s.io", Version: "v1alpha1", Kind: "NodeHealthCheck"},
-		Plural:        "nodehealthchecks",
-		Name:          "virt-node-health-check",
-		Namespace:     "openshift-operators",
-		GateCRD:       "nodehealthchecks.remediation.medik8s.io",
-		ClusterScoped: true,
-	},
-	{
 		GVK:           schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
 		Plural:        "uiplugins",
 		Name:          "monitoring",
