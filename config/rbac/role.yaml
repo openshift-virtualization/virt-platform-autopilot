@@ -187,12 +187,13 @@ rules:
       - patch
       - update
       - watch
-  # NodeHealthCheck
+  # NodeHealthCheck (includes tombstone cleanup)
   - apiGroups:
       - remediation.medik8s.io
     resources:
       - nodehealthchecks
     verbs:
+      - delete
       - create
       - get
       - list

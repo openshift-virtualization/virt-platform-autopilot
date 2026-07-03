@@ -1,0 +1,7 @@
+apiVersion: remediation.medik8s.io/v1alpha1
+kind: NodeHealthCheck
+metadata:
+  name: virt-node-health-check
+  namespace: openshift-operators
+  labels:
+    platform.kubevirt.io/managed-by: virt-platform-autopilot

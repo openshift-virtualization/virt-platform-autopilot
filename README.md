@@ -129,7 +129,7 @@ The autopilot uses a **"Patched Baseline"** approach:
 - **Convention over Configuration**: Opinionated defaults, customizable when needed
 
 **Three-Tier Management:**
-1. **Always-On**: Critical baseline configurations (MachineConfig, NodeHealthCheck, Kubelet settings)
+1. **Always-On**: Critical baseline configurations (MachineConfig, Kubelet settings)
 2. **Context-Aware**: Activated based on conditions (KubeDescheduler, CPU Manager)
 3. **Advanced**: Specialized features (VFIO, USB passthrough, AAQ operator)
 

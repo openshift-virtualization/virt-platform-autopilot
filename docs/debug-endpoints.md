@@ -327,14 +327,13 @@ swap-enable                    INCLUDED        MachineConfig        -
 pci-passthrough                EXCLUDED        MachineConfig        Conditions not met
 numa-topology                  EXCLUDED        MachineConfig        Conditions not met
 kubelet-perf-settings          INCLUDED        KubeletConfig        -
-node-health-check              INCLUDED        NodeHealthCheck      -
 mtv-operator                   EXCLUDED        ForkliftController   Conditions not met
 metallb-operator               EXCLUDED        MetalLB              Conditions not met
 observability-operator         EXCLUDED        UIPlugin             Conditions not met
 descheduler-loadaware          FILTERED        KubeDescheduler      Root exclusion
 kubelet-cpu-manager            EXCLUDED        KubeletConfig        Conditions not met
 ----------------------------------------------------------------------------------------------------
-Summary: 3 included, 7 excluded, 1 filtered, 0 errors
+Summary: 2 included, 7 excluded, 1 filtered, 0 errors
 ```
 
 ## Use Cases

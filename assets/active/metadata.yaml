@@ -76,15 +76,6 @@ assets:
     component: KubeletConfig
     reconcile_order: 1
 
-  # Phase 1: Always installed - NodeHealthCheck
-  - name: node-health-check
-    path: active/node-health/standard-remediation.yaml
-    phase: 1
-    install: always
-    component: NodeHealthCheck
-    reconcile_order: 1
-    conditions: []
-
   # Phase 1: Optional Operators (opt-in for clusters with CRDs)
   - name: mtv-operator
     path: active/operators/mtv.yaml.tpl

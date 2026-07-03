@@ -25,7 +25,6 @@ assets/active/
 ├── hco/              # HyperConverged resource (only one, order: 0)
 ├── machine-config/   # MachineConfig resources
 ├── kubelet/          # KubeletConfig resources
-├── node-health/      # NodeHealthCheck resources
 ├── descheduler/      # Descheduler resources
 └── operators/        # Third-party operator CRs
 
@@ -98,32 +97,18 @@ This scans all assets and generates the necessary ClusterRole permissions.
 
 For resources that don't need dynamic values:
 
-**File:** `assets/active/node-health/standard-remediation.yaml`
+**File:** `assets/active/operators/monitoring-uiplugin.yaml`
 
 ```yaml
-apiVersion: remediation.medik8s.io/v1alpha1
-kind: NodeHealthCheck
+apiVersion: observability.openshift.io/v1alpha1
+kind: UIPlugin
 metadata:
-  name: virt-node-health-check
-  namespace: openshift-operators
+  name: monitoring
 spec:
-  minHealthy: 51%
-  remediationTemplate:
-    apiVersion: self-node-remediation.medik8s.io/v1alpha1
-    kind: SelfNodeRemediationTemplate
-    name: self-node-remediation-automatic-strategy-template
-    namespace: openshift-operators
-  selector:
-    matchExpressions:
-      - key: node-role.kubernetes.io/worker
-        operator: Exists
-  unhealthyConditions:
-    - duration: 5m
-      status: "False"
-      type: Ready
-    - duration: 5m
-      status: Unknown
-      type: Ready
+  type: Monitoring
+  monitoring:
+    perses:
+      enabled: true
 ```
 
 No templating needed - this is applied as-is.
@@ -321,14 +306,13 @@ The `assets/active/metadata.yaml` catalog defines all managed assets.
 - `HyperConverged`
 - `MachineConfig`
 - `KubeletConfig`
-- `NodeHealthCheck`
 - `KubeDescheduler`
 - `ForkliftController`
 - `MetalLB`
 
 **reconcile_order**: Processing order (lower numbers first).
 - `0`: HCO only (must be first - serves as RenderContext source)
-- `1-9`: Critical baseline (MachineConfig, Kubelet, NodeHealthCheck)
+- `1-9`: Critical baseline (MachineConfig, Kubelet)
 - `10-19`: Scheduling and placement (Descheduler)
 - `20+`: Optional operators and advanced features
 
@@ -610,7 +594,7 @@ rules:
 ### 2. Set Appropriate Reconcile Order
 
 - `0`: HCO only
-- `1-9`: Infrastructure (MachineConfig, Kubelet, NodeHealthCheck)
+- `1-9`: Infrastructure (MachineConfig, Kubelet)
 - `10-19`: Scheduling and placement
 - `20+`: Optional features
 
@@ -809,12 +793,6 @@ createdAt: {{ $timestamp }}
 **File:** `assets/active/hco/golden-config.yaml.tpl`
 
 Production-ready HCO configuration with opinionated defaults. Must have `reconcile_order: 0`.
-
-### NodeHealthCheck
-
-**File:** `assets/active/node-health/standard-remediation.yaml`
-
-Simple static YAML - no templating needed.
 
 ### Descheduler (Conditional)
 
