@@ -89,8 +89,12 @@ func copyFieldByPointer(source, dest *unstructured.Unstructured, pointer string)
 		return fmt.Errorf("JSON pointer must start with /: %s", pointer)
 	}
 
-	// Split pointer into path segments
+	// Split pointer into path segments and unescape per RFC 6901 section 4
 	path := strings.Split(strings.TrimPrefix(pointer, "/"), "/")
+	for i, seg := range path {
+		seg = strings.ReplaceAll(seg, "~1", "/")
+		path[i] = strings.ReplaceAll(seg, "~0", "~")
+	}
 
 	// Get value from source
 	value, found, err := unstructured.NestedFieldCopy(source.Object, path...)
