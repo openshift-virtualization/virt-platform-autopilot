@@ -236,6 +236,84 @@ func TestMaskIgnoredFields(t *testing.T) {
 	}
 }
 
+func TestMaskIgnoredFieldsRFC6901Escaping(t *testing.T) {
+	tests := []struct {
+		name     string
+		desired  *unstructured.Unstructured
+		live     *unstructured.Unstructured
+		validate func(t *testing.T, result *unstructured.Unstructured)
+	}{
+		{
+			name: "escaped slash ~1",
+			desired: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"labels": map[string]any{
+							"platform.kubevirt.io/managed-by": "operator",
+						},
+					},
+				},
+			},
+			live: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							AnnotationIgnoreFields: "/metadata/labels/platform.kubevirt.io~1managed-by",
+						},
+						"labels": map[string]any{
+							"platform.kubevirt.io/managed-by": "custom-value",
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, result *unstructured.Unstructured) {
+				val, _, _ := unstructured.NestedString(result.Object, "metadata", "labels", "platform.kubevirt.io/managed-by")
+				if val != "custom-value" {
+					t.Errorf("Expected label=custom-value (from live, masked), got %s", val)
+				}
+			},
+		},
+		{
+			name: "escaped tilde ~0",
+			desired: &unstructured.Unstructured{
+				Object: map[string]any{
+					"spec": map[string]any{
+						"config~key": "desired",
+					},
+				},
+			},
+			live: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							AnnotationIgnoreFields: "/spec/config~0key",
+						},
+					},
+					"spec": map[string]any{
+						"config~key": "live",
+					},
+				},
+			},
+			validate: func(t *testing.T, result *unstructured.Unstructured) {
+				val, _, _ := unstructured.NestedString(result.Object, "spec", "config~key")
+				if val != "live" {
+					t.Errorf("Expected config~key=live (from live, masked), got %s", val)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := MaskIgnoredFields(tt.desired, tt.live)
+			if err != nil {
+				t.Fatalf("MaskIgnoredFields() unexpected error: %v", err)
+			}
+			tt.validate(t, result)
+		})
+	}
+}
+
 func TestValidatePointers(t *testing.T) {
 	tests := []struct {
 		name        string
