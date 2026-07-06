@@ -127,7 +127,7 @@ Templates use Go's `text/template` syntax. The generator replaces all `{{ ... }}
 ### Resource Pluralization
 The generator pluralizes resource kinds using simple heuristics:
 - Standard: `Example` → `examples`
-- Special cases: `MachineConfig` → `machineconfigs`, `NodeHealthCheck` → `nodehealthchecks`
+- Special cases: `MachineConfig` → `machineconfigs`
 
 ### Deduplication
 Resources are deduplicated by `apiVersion/kind` to avoid duplicate RBAC rules even if the same resource type appears in multiple assets.

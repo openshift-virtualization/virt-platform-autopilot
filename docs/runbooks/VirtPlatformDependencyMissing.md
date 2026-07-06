@@ -74,49 +74,7 @@ spec:
 EOF
 ```
 
-### 2. NodeHealthCheck (Node Auto-Remediation)
-
-**CRD:** `nodehealthchecks.remediation.medik8s.io`
-**Provided by:** `node-healthcheck-operator` (via MediK8s)
-
-**Features affected:**
-- Automatic node health monitoring
-- Self-node remediation integration
-- Fence-agents remediation integration
-- Unhealthy node detection
-
-**Check if installed:**
-```bash
-# Check CRD exists
-kubectl get crd nodehealthchecks.remediation.medik8s.io
-
-# Check operator is installed
-oc get csv -n openshift-operators | grep node-healthcheck
-
-# Check NHC instance
-kubectl get nodehealthcheck -A
-```
-
-**Install if missing:**
-```bash
-# Install via OperatorHub (OpenShift Console)
-# Search for "Node Health Check Operator"
-# Or via CLI:
-cat <<EOF | oc apply -f -
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: node-healthcheck-operator
-  namespace: openshift-operators
-spec:
-  channel: stable
-  name: node-healthcheck-operator
-  source: redhat-operators
-  sourceNamespace: openshift-marketplace
-EOF
-```
-
-### 3. MetalLB (LoadBalancer Services)
+### 2. MetalLB (LoadBalancer Services)
 
 **CRD:** `metallbs.metallb.io`
 **Provided by:** `metallb-operator`
@@ -156,7 +114,7 @@ spec:
 EOF
 ```
 
-### 5. Forklift (VM Migration)
+### 3. Forklift (VM Migration)
 
 **CRD:** `forkliftcontrollers.forklift.konveyor.io`
 **Provided by:** `forklift-operator` (Migration Toolkit for Virtualization)
@@ -238,7 +196,7 @@ kubectl logs -n openshift-cnv -l app=virt-platform-autopilot | \
   grep -i "crd.*missing\|dependency\|not found"
 
 # Example log:
-# "Skipping asset NodeHealthCheck/virt-workers: CRD nodehealthchecks.remediation.medik8s.io not found"
+# "Skipping asset KubeDescheduler/cluster: CRD kubedeschedulers.operator.openshift.io not found"
 ```
 
 ## Resolution Procedures
@@ -308,8 +266,8 @@ EOF
 If you want to manage the affected resources manually:
 
 ```bash
-# Example: Unmanage NodeHealthCheck resources
-kubectl annotate nodehealthcheck virt-workers -n openshift-operators \
+# Example: Unmanage KubeDescheduler resources
+kubectl annotate kubedescheduler cluster -n openshift-kube-descheduler-operator \
   platform.kubevirt.io/mode=unmanaged \
   --overwrite
 
@@ -354,7 +312,6 @@ For production clusters, install the full stack:
 ```bash
 # Install all recommended operators during cluster setup
 # - cluster-kube-descheduler-operator
-# - node-healthcheck-operator
 # - metallb-operator (if bare-metal)
 # - forklift-operator (if migration needed)
 ```
@@ -363,7 +320,7 @@ For production clusters, install the full stack:
 
 ```bash
 # List all CRDs required by virt-platform-autopilot
-kubectl get crd | grep -E "kubedescheduler|nodehealthcheck|metallb|machineconfig|forklift"
+kubectl get crd | grep -E "kubedescheduler|metallb|machineconfig|forklift"
 ```
 
 ## Related Alerts
