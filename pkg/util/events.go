@@ -17,6 +17,8 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/events"
@@ -74,51 +76,63 @@ func NewEventRecorder(recorder events.EventRecorder) *EventRecorder {
 	}
 }
 
+// assetAction builds a unique action string keyed by the target resource so
+// the Kubernetes event broadcaster does not deduplicate events for different
+// assets that share the same reason.
+func assetAction(reason, kind, namespace, name string) string {
+	return fmt.Sprintf("%s %s/%s/%s", reason, kind, namespace, name)
+}
+
+// assetNameAction is the same as assetAction but keyed by asset or CRD name.
+func assetNameAction(reason, assetName string) string {
+	return fmt.Sprintf("%s %s", reason, assetName)
+}
+
 // AssetApplied records that an asset was successfully applied
 func (e *EventRecorder) AssetApplied(object runtime.Object, assetName, kind, namespace, name string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonAssetApplied, "AssetApplied",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonAssetApplied, assetAction(EventReasonAssetApplied, kind, namespace, name),
 		"Applied asset %s: %s/%s/%s", assetName, kind, namespace, name)
 }
 
 // DriftCorrected records that drift was detected and corrected
 func (e *EventRecorder) DriftCorrected(object runtime.Object, kind, namespace, name string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonDriftCorrected, "DriftCorrected",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonDriftCorrected, assetAction(EventReasonDriftCorrected, kind, namespace, name),
 		"Corrected drift for %s/%s/%s", kind, namespace, name)
 }
 
 // DriftDetected records that drift was detected (warning)
 func (e *EventRecorder) DriftDetected(object runtime.Object, kind, namespace, name string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonDriftDetected, "DriftDetected",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonDriftDetected, assetAction(EventReasonDriftDetected, kind, namespace, name),
 		"Drift detected for %s/%s/%s", kind, namespace, name)
 }
 
 // PatchApplied records that a user JSON patch was applied
 func (e *EventRecorder) PatchApplied(object runtime.Object, kind, namespace, name string, operations int) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonPatchApplied, "PatchApplied",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonPatchApplied, assetAction(EventReasonPatchApplied, kind, namespace, name),
 		"Applied %d JSON patch operation(s) to %s/%s/%s", operations, kind, namespace, name)
 }
 
 // InvalidPatch records that a user's JSON patch was invalid
 func (e *EventRecorder) InvalidPatch(object runtime.Object, kind, namespace, name, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonInvalidPatch, "InvalidPatch",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonInvalidPatch, assetAction(EventReasonInvalidPatch, kind, namespace, name),
 		"Invalid JSON patch for %s/%s/%s: %s", kind, namespace, name, reason)
 }
 
 // InvalidIgnoreFields records that ignore-fields annotation was invalid
 func (e *EventRecorder) InvalidIgnoreFields(object runtime.Object, kind, namespace, name, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonInvalidIgnoreFields, "InvalidIgnoreFields",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonInvalidIgnoreFields, assetAction(EventReasonInvalidIgnoreFields, kind, namespace, name),
 		"Invalid ignore-fields annotation for %s/%s/%s: %s", kind, namespace, name, reason)
 }
 
 // Throttled records that an update was throttled (anti-thrashing)
 func (e *EventRecorder) Throttled(object runtime.Object, kind, namespace, name string, capacity int, window string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonThrottled, "Throttled",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonThrottled, assetAction(EventReasonThrottled, kind, namespace, name),
 		"Update throttled for %s/%s/%s (limit: %d updates per %s)", kind, namespace, name, capacity, window)
 }
 
 // ThrashingDetected records that an edit war was detected and reconciliation was paused
 func (e *EventRecorder) ThrashingDetected(object runtime.Object, kind, namespace, name string, attempts int) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonThrashingDetected, "ThrashingDetected",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonThrashingDetected, assetAction(EventReasonThrashingDetected, kind, namespace, name),
 		"Edit war detected for %s/%s/%s after %d consecutive throttles. "+
 			"Reconciliation paused. Another actor is modifying this resource, "+
 			"conflicting with operator management. Remove annotation '%s=true' "+
@@ -130,37 +144,37 @@ func (e *EventRecorder) ThrashingDetected(object runtime.Object, kind, namespace
 
 // AssetSkipped records that an asset was skipped (conditions not met)
 func (e *EventRecorder) AssetSkipped(object runtime.Object, assetName, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonAssetSkipped, "AssetSkipped",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonAssetSkipped, assetNameAction(EventReasonAssetSkipped, assetName),
 		"Skipped asset %s: %s", assetName, reason)
 }
 
 // UnmanagedMode records that a resource is in unmanaged mode
 func (e *EventRecorder) UnmanagedMode(object runtime.Object, kind, namespace, name string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonUnmanagedMode, "UnmanagedMode",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonUnmanagedMode, assetAction(EventReasonUnmanagedMode, kind, namespace, name),
 		"Resource %s/%s/%s is in unmanaged mode, skipping reconciliation", kind, namespace, name)
 }
 
 // CRDMissing records that a required CRD is missing (soft dependency)
 func (e *EventRecorder) CRDMissing(object runtime.Object, component, crdName string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonCRDMissing, "CRDMissing",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonCRDMissing, assetNameAction(EventReasonCRDMissing, crdName),
 		"CRD %s not installed, skipping %s assets (soft dependency)", crdName, component)
 }
 
 // CRDDiscovered records that a previously missing CRD was discovered
 func (e *EventRecorder) CRDDiscovered(object runtime.Object, component, crdName string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonCRDDiscovered, "CRDDiscovered",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonCRDDiscovered, assetNameAction(EventReasonCRDDiscovered, crdName),
 		"CRD %s discovered, %s assets can now be reconciled", crdName, component)
 }
 
 // ApplyFailed records that applying an asset failed
 func (e *EventRecorder) ApplyFailed(object runtime.Object, assetName, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonApplyFailed, "ApplyFailed",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonApplyFailed, assetNameAction(EventReasonApplyFailed, assetName),
 		"Failed to apply asset %s: %s", assetName, reason)
 }
 
 // RenderFailed records that rendering an asset template failed
 func (e *EventRecorder) RenderFailed(object runtime.Object, assetName, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonRenderFailed, "RenderFailed",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonRenderFailed, assetNameAction(EventReasonRenderFailed, assetName),
 		"Failed to render asset %s: %s", assetName, reason)
 }
 
@@ -172,7 +186,7 @@ func (e *EventRecorder) ReconcileSucceeded(object runtime.Object, appliedCount, 
 
 // NoDriftDetected records that no drift was detected (informational)
 func (e *EventRecorder) NoDriftDetected(object runtime.Object, kind, namespace, name string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonNoDriftDetected, "NoDriftDetected",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonNoDriftDetected, assetAction(EventReasonNoDriftDetected, kind, namespace, name),
 		"No drift detected for %s/%s/%s", kind, namespace, name)
 }
 
@@ -184,18 +198,18 @@ func (e *EventRecorder) HardwareDetectionFailed(object runtime.Object, reason st
 
 // TombstoneDeleted records that a tombstoned resource was successfully deleted
 func (e *EventRecorder) TombstoneDeleted(object runtime.Object, kind, namespace, name, path string) {
-	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonTombstoneDeleted, "TombstoneDeleted",
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonTombstoneDeleted, assetAction(EventReasonTombstoneDeleted, kind, namespace, name),
 		"Deleted tombstoned resource %s/%s/%s (from %s)", kind, namespace, name, path)
 }
 
 // TombstoneFailed records that tombstone deletion failed
 func (e *EventRecorder) TombstoneFailed(object runtime.Object, kind, namespace, name, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonTombstoneFailed, "TombstoneFailed",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonTombstoneFailed, assetAction(EventReasonTombstoneFailed, kind, namespace, name),
 		"Failed to delete tombstoned resource %s/%s/%s: %s", kind, namespace, name, reason)
 }
 
 // TombstoneSkipped records that tombstone deletion was skipped (label mismatch)
 func (e *EventRecorder) TombstoneSkipped(object runtime.Object, kind, namespace, name, reason string) {
-	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonTombstoneSkipped, "TombstoneSkipped",
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonTombstoneSkipped, assetAction(EventReasonTombstoneSkipped, kind, namespace, name),
 		"Skipped tombstone deletion for %s/%s/%s: %s", kind, namespace, name, reason)
 }
