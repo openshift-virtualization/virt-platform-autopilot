@@ -130,6 +130,117 @@ assets:
         key: platform.kubevirt.io/enable-korrel8r
         value: "true"
 
+  # Phase 1: Logging stack - configures LokiStack, ClusterLogForwarder,
+  # and Logging UI Plugin.
+  # Opt-in: requires annotation. Prerequisites:
+  #   1. Install Loki Operator and Red Hat OpenShift Logging Operator (via OLM)
+  #   2. Create storage secret (logging-loki-storage) in openshift-logging
+  # LokiStack size is dynamic based on cluster topology (pico/extra-small/medium).
+  # Grouped under "logging" for selective allowlist activation.
+  #
+  # Audit log collection is separately opt-in via:
+  #   platform.kubevirt.io/enable-audit-logging=true
+  # When enabled, the ClusterLogForwarder adds an audit pipeline with production
+  # filters that reduce volume by ~95% (drop non-complete stages, system users,
+  # and noisy verbs like watch/proxy).
+  - name: logging-lokistack
+    group: logging
+    gate_crd: lokistacks.loki.grafana.com
+    path: active/logging/lokistack.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: LokiStack
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
+  - name: logging-collector-sa
+    group: logging
+    path: active/logging/collector-sa.yaml
+    phase: 1
+    install: opt-in
+    component: ServiceAccount
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
+  - name: logging-collector-crb-application
+    group: logging
+    path: active/logging/collector-crb-application.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRoleBinding
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
+  - name: logging-collector-crb-infrastructure
+    group: logging
+    path: active/logging/collector-crb-infrastructure.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRoleBinding
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
+  - name: logging-collector-crb-writer
+    group: logging
+    path: active/logging/collector-crb-writer.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRoleBinding
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
+  - name: logging-collector-crb-audit
+    group: audit-logging
+    path: active/logging/collector-crb-audit.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRoleBinding
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-audit-logging
+        value: "true"
+
+  - name: logging-collector
+    group: logging
+    gate_crd: clusterlogforwarders.observability.openshift.io
+    path: active/logging/clusterlogforwarder.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: ClusterLogForwarder
+    reconcile_order: 3
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
+  - name: logging-ui-plugin
+    group: logging
+    path: active/operators/logging-uiplugin.yaml
+    phase: 1
+    install: opt-in
+    component: UIPlugin
+    reconcile_order: 3
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-logging
+        value: "true"
+
   # Phase 1: Auto-enabled when Descheduler CRD is present (soft dependency)
   - name: descheduler-loadaware
     path: active/descheduler/recommended.yaml.tpl

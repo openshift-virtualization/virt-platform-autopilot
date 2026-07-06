@@ -161,6 +161,17 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - loki.grafana.com
+    resources:
+      - lokistacks
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # MachineConfig & KubeletConfig
   - apiGroups:
       - machineconfiguration.openshift.io
@@ -204,6 +215,7 @@ rules:
   - apiGroups:
       - observability.openshift.io
     resources:
+      - clusterlogforwarders
       - uiplugins
     verbs:
       - create
