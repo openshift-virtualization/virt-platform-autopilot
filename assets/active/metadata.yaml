@@ -131,6 +131,64 @@ assets:
       - type: feature-gate
         value: CPUManager
 
+  # Phase 1: Virt Storage Node Exporter (always)
+  # Unified per-node DaemonSet for storage observability. Currently ships the
+  # CSI volume-to-block-device mapper; designed to host additional storage
+  # metric containers (e.g. I/O latency exporter) in the same pod.
+  - name: virt-node-exporter-sa
+    group: virt-node-exporter
+    path: active/virt-node-exporter/service-account.yaml
+    phase: 1
+    install: always
+    component: ServiceAccount
+    reconcile_order: 1
+    conditions: []
+
+  - name: virt-node-exporter-clusterrole
+    group: virt-node-exporter
+    path: active/virt-node-exporter/clusterrole.yaml
+    phase: 1
+    install: always
+    component: ClusterRole
+    reconcile_order: 1
+    conditions: []
+
+  - name: virt-node-exporter-clusterrolebinding
+    group: virt-node-exporter
+    path: active/virt-node-exporter/clusterrolebinding.yaml.tpl
+    phase: 1
+    install: always
+    component: ClusterRoleBinding
+    reconcile_order: 1
+    conditions: []
+
+  - name: virt-node-exporter-scc
+    group: virt-node-exporter
+    path: active/virt-node-exporter/scc.yaml.tpl
+    phase: 1
+    install: always
+    component: SecurityContextConstraints
+    reconcile_order: 1
+    conditions: []
+
+  - name: virt-node-exporter-ds
+    group: virt-node-exporter
+    path: active/virt-node-exporter/daemonset.yaml
+    phase: 1
+    install: always
+    component: DaemonSet
+    reconcile_order: 1
+    conditions: []
+
+  - name: virt-node-exporter-podmonitor
+    group: virt-node-exporter
+    path: active/virt-node-exporter/podmonitor.yaml
+    phase: 1
+    install: always
+    component: PodMonitor
+    reconcile_order: 1
+    conditions: []
+
   # Phase 2: InflightOperations OperationRuleSet assets (opt-in, gated on IFO CRD)
   - name: ifo-datavolume-rules
     group: inflightoperations

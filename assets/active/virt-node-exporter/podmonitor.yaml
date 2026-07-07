@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: virt-node-exporter
+  namespace: openshift-cnv
+  labels:
+    app.kubernetes.io/name: virt-node-exporter
+    app.kubernetes.io/component: virt-node-exporter
+    app.kubernetes.io/managed-by: virt-platform-autopilot
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virt-node-exporter
+  podMetricsEndpoints:
+    - port: vol-metrics
+      path: /metrics
+      interval: 30s

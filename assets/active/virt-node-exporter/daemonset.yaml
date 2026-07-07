@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: virt-node-exporter
+  namespace: openshift-cnv
+  labels:
+    app.kubernetes.io/name: virt-node-exporter
+    app.kubernetes.io/component: virt-node-exporter
+    app.kubernetes.io/managed-by: virt-platform-autopilot
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: virt-node-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: virt-node-exporter
+        app.kubernetes.io/component: virt-node-exporter
+    spec:
+      serviceAccountName: virt-node-exporter
+      hostPID: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: volume-device-exporter
+          image: quay.io/csiaddons/k8s-volume-device-exporter:latest
+          args:
+            - --listen-address=:9091
+            - --poll-interval=30s
+            - --log-level=info
+          ports:
+            - name: vol-metrics
+              containerPort: 9091
+              protocol: TCP
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            seLinuxOptions:
+              level: "s0"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: vol-metrics
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: vol-metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: kubelet
+              mountPath: /host/kubelet
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: trident-tracking
+              mountPath: /host/trident/tracking
+              readOnly: true
+            - name: host-sys
+              mountPath: /host/sys
+              readOnly: true
+      volumes:
+        - name: kubelet
+          hostPath:
+            path: /var/lib/kubelet
+        - name: trident-tracking
+          hostPath:
+            path: /var/lib/trident/tracking
+            type: DirectoryOrCreate
+        - name: host-sys
+          hostPath:
+            path: /sys
