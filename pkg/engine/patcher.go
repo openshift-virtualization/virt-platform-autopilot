@@ -200,9 +200,8 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Step 1.6: Clear stale thrashing state when the user removes the pause annotation.
 	// If in-memory state already reached the threshold (meaning the operator previously
 	// set the pause annotation) but the annotation is now absent, the user intentionally
-	// resumed reconciliation. Reset the counter so the next cycle starts from zero:
-	// the token bucket may still be empty and cause throttles, but those start from 0
-	// and will not immediately re-trigger a pause.
+	// resumed reconciliation. Reset both the thrashing counter and the token bucket
+	// so the next cycle starts clean and does not immediately re-trigger a pause.
 	if liveExists {
 		earlyKey := throttling.MakeResourceKey(
 			desired.GetNamespace(),
@@ -215,6 +214,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 				"key", earlyKey,
 			)
 			p.thrashingDetector.Reset(earlyKey)
+			p.throttle.Reset(earlyKey)
 		}
 	}
 
