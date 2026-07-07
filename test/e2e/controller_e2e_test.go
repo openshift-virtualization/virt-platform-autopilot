@@ -97,6 +97,10 @@ var _ = Describe("Controller E2E Tests", func() {
 		BeforeAll(func() {
 			By("ensuring HCO exists")
 			ensureHCOExists()
+			if isOpenShiftCluster() {
+				By("restoring PrometheusRule to managed mode")
+				removeAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation)
+			}
 			patchAutopilotAndWait(autopilotEnabled)
 
 		})
@@ -235,13 +239,14 @@ var _ = Describe("Controller E2E Tests", func() {
 				return err
 			}, timeout, interval).Should(Succeed())
 			By(fmt.Sprintf("verifying %s MachineConfig metrics are healthy", swapMcName))
-			mcMetrics := captureAssetMetrics("MachineConfig", swapMcName, "")
-			if mcMetrics.ComplianceStatus >= 0 {
-				Expect(mcMetrics.ComplianceStatus).To(Equal(1.0),
-					fmt.Sprintf("compliance_status for MachineConfig %s should be 1 (synced)", swapMcName))
-				Expect(mcMetrics.PausedResources).To(Equal(0.0),
-					fmt.Sprintf("MachineConfig %s should not be paused", swapMcName))
-			}
+			Eventually(func() float64 {
+				return captureAssetMetrics("MachineConfig", swapMcName, "").ComplianceStatus
+			}, timeout, interval).Should(Equal(1.0),
+				fmt.Sprintf("compliance_status for MachineConfig %s should be 1 (synced)", swapMcName))
+			Eventually(func() float64 {
+				return captureAssetMetrics("MachineConfig", swapMcName, "").PausedResources
+			}, timeout, interval).Should(Equal(0.0),
+				fmt.Sprintf("MachineConfig %s should not be paused", swapMcName))
 
 			By("verifying PrometheusRule exists")
 			Eventually(func() error {
@@ -249,13 +254,14 @@ var _ = Describe("Controller E2E Tests", func() {
 				return err
 			}, timeout, interval).Should(Succeed())
 			By(fmt.Sprintf("verifying %s prometheusRule metrics are healthy", prometheusRuleName))
-			prMetrics := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
-			if prMetrics.ComplianceStatus >= 0 {
-				Expect(prMetrics.ComplianceStatus).To(Equal(1.0),
-					fmt.Sprintf("compliance_status for PrometheusRule %s should be 1 (synced)", prometheusRuleName))
-				Expect(prMetrics.PausedResources).To(Equal(0.0),
-					fmt.Sprintf(" PrometheusRule %s should not be paused", prometheusRuleName))
-			}
+			Eventually(func() float64 {
+				return captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace).ComplianceStatus
+			}, timeout, interval).Should(Equal(1.0),
+				fmt.Sprintf("compliance_status for PrometheusRule %s should be 1 (synced)", prometheusRuleName))
+			Eventually(func() float64 {
+				return captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace).PausedResources
+			}, timeout, interval).Should(Equal(0.0),
+				fmt.Sprintf("PrometheusRule %s should not be paused", prometheusRuleName))
 
 		})
 
@@ -275,8 +281,22 @@ var _ = Describe("Controller E2E Tests", func() {
 			Expect(hasLabel(pr, managedByLabel, managedByValue)).To(BeTrue(),
 				"PrometheusRule should still have managed-by label")
 
-			By("capturing metrics before deletion")
+			// Stale per-asset metrics must be deleted when asset leaves the allowlist.
+			By("verifying PrometheusRule metrics were cleaned up after leaving the allowlist")
+			Eventually(func() float64 {
+				return captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace).ComplianceStatus
+			}, timeout, interval).Should(Equal(-1.0),
+				"compliance_status should be -1 (series deleted) for an excluded asset")
 			prMetricsBefore := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
+			Expect(prMetricsBefore.PausedResources).To(Equal(-1.0),
+				"paused_resources should be -1 (series deleted) for an excluded asset")
+			Expect(prMetricsBefore.ReconcileDurationCount).To(Equal(0),
+				"reconcile_duration_count should be 0 (series deleted) for an excluded asset")
+			Expect(prMetricsBefore.ReconcileDurationSum).To(Equal(-1.0),
+				"reconcile_duration_sum should be -1 (series deleted) for an excluded asset")
+			Expect(prMetricsBefore.CustomizationInfo).To(Equal(-1.0),
+				"customization_info should be -1 (series deleted) for an excluded asset")
+
 			deleteTime := time.Now()
 
 			By("deleting the PrometheusRule")
@@ -289,8 +309,7 @@ var _ = Describe("Controller E2E Tests", func() {
 			}, consistentlyDuration, consistentlyInterval).ShouldNot(Succeed(),
 				"PrometheusRule should not be recreated when outside the allowlist")
 
-			By("verifying PrometheusRule metrics did not change")
-			// Bug CNV-89268: Metrics should align the status when the asset is not active
+			By("verifying PrometheusRule metrics remain cleaned up after resource deletion")
 			prMetricsAfter := captureAssetMetrics("PrometheusRule", prometheusRuleName, operatorNamespace)
 			Expect(prMetricsAfter).To(Equal(prMetricsBefore),
 				"PrometheusRule metrics should not change when outside the allowlist")

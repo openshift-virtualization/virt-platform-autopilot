@@ -20,7 +20,7 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 		patchAutopilotAndWait(autopilotEnabled)
 
 		By("setting PrometheusRule to unmanaged so operator won't revert our changes")
-		setPrometheusRuleUnmanaged()
+		setAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation, modeUnmanaged)
 
 		By("reducing alert 'for' durations to 15s for faster test feedback")
 		patchAlertForDurations("15s")
@@ -36,7 +36,7 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 		}
 
 		By("restoring PrometheusRule to managed mode")
-		removePrometheusRuleUnmanaged()
+		removeAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation)
 
 		waitForOperatorHealthy()
 	})
@@ -64,6 +64,7 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 			})
 
 			It("should fire critical alert when asset drift cannot be restored", func() {
+				skipIfUnmanagedOnOCP(asset)
 				if asset.GateCRD != "" && !crdInstalled(asset.GateCRD) {
 					Skip(fmt.Sprintf("gate CRD %s not installed", asset.GateCRD))
 				}
