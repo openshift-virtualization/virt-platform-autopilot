@@ -66,12 +66,12 @@ Only the named assets are considered for reconciliation. All other assets — in
 
 ```yaml
 annotations:
-  platform.kubevirt.io/autopilot: "swap-enable,descheduler-loadaware,node-health-check"
+  platform.kubevirt.io/autopilot: "swap-enable,descheduler-loadaware"
 ```
 
 ```bash
 kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
-  "platform.kubevirt.io/autopilot=swap-enable,descheduler-loadaware,node-health-check"
+  "platform.kubevirt.io/autopilot=swap-enable,descheduler-loadaware"
 ```
 
 Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The current set includes:
@@ -84,7 +84,6 @@ Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The
 | `pci-passthrough` | | MachineConfig | Opt-in: hardware + annotation condition |
 | `kubelet-perf-settings` | | KubeletConfig | Always-on baseline |
 | `kubelet-cpu-manager` | | KubeletConfig | Opt-in: CPUManager feature gate |
-| `node-health-check` | | NodeHealthCheck | Always-on baseline |
 | `descheduler-loadaware` | | KubeDescheduler | Soft dependency on KubeDescheduler CRD |
 | `monitoring-ui-plugin` | | UIPlugin | Soft dependency on COO CRD; enables Perses dashboards in the OpenShift console |
 | `mtv-operator` | | ForkliftController | Opt-in: annotation condition |
@@ -120,7 +119,6 @@ The autopilot manages resources across three tiers based on criticality and acti
 
 Critical baseline configurations applied to all clusters:
 
-- **NodeHealthCheck**: Automatic node remediation for failed hosts
 - **MachineConfig**: OS-level optimizations
   - Swap optimization for memory management
   - NUMA topology awareness
@@ -479,7 +477,6 @@ virt-platform-autopilot/
 │   │   ├── machine-config/        # OS-level configs
 │   │   ├── kubelet/               # Kubelet settings
 │   │   ├── descheduler/           # KubeDescheduler
-│   │   ├── node-health/           # NodeHealthCheck
 │   │   ├── observability/         # PrometheusRules
 │   │   ├── operators/             # Third-party operator CRs (UIPlugin, MetalLB, MTV…)
 │   │   └── metadata.yaml          # Asset catalog

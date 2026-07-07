@@ -179,11 +179,11 @@ func TestNamespaceNotFoundDoesNotConsumeTokens(t *testing.T) {
 	loader := pkgassets.NewLoader()
 	renderer := NewRenderer(loader)
 
-	// node-health-check is a static asset in namespace openshift-operators.
+	// metrics-service is a namespaced asset (namespace comes from HCO).
 	assetMeta := &pkgassets.AssetMetadata{
-		Name:      "node-health-check",
-		Path:      "active/node-health/standard-remediation.yaml",
-		Component: "NodeHealthCheck",
+		Name:      "metrics-service",
+		Path:      "active/observability/metrics-service.yaml.tpl",
+		Component: "Service",
 	}
 
 	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")

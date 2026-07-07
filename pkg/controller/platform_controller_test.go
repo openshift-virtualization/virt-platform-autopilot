@@ -366,9 +366,9 @@ func TestIsManagedCRD(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "NodeHealthCheck is managed",
+			name:     "NodeHealthCheck is not managed (removed)",
 			crdName:  "nodehealthchecks.remediation.medik8s.io",
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "ForkliftController is managed",
@@ -580,7 +580,7 @@ func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
 			wantInAllowlist: []string{"swap-enable"},
 			wantNotInAllowlist: []string{
 				"hco-golden-config", "prometheus-alerts", "psi-enable",
-				"kubelet-perf-settings", "node-health-check", "descheduler-loadaware",
+				"kubelet-perf-settings", "descheduler-loadaware",
 				"pci-passthrough", "kubelet-cpu-manager",
 				"mtv-operator", "metallb-operator", "observability-operator",
 			},
@@ -591,7 +591,7 @@ func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
 			wantInAllowlist: []string{"descheduler-loadaware", "psi-enable"},
 			wantNotInAllowlist: []string{
 				"hco-golden-config", "prometheus-alerts",
-				"kubelet-perf-settings", "node-health-check", "swap-enable",
+				"kubelet-perf-settings", "swap-enable",
 			},
 		},
 		{
