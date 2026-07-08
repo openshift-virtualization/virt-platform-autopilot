@@ -2,7 +2,14 @@ package e2e
 
 import (
 	"context"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +18,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -21,43 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// buildMinimalCRD constructs a minimal CRD with x-kubernetes-preserve-unknown-fields
-// suitable for testing without requiring a full schema.
-func buildMinimalCRD(group, kind, plural, version string, scope apiextensionsv1.ResourceScope) *apiextensionsv1.CustomResourceDefinition { //nolint:unparam
-	return &apiextensionsv1.CustomResourceDefinition{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("%s.%s", plural, group),
-		},
-		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: group,
-			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     kind,
-				Plural:   plural,
-				Singular: strings.ToLower(kind),
-			},
-			Scope: scope,
-			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
-				{
-					Name:    version,
-					Served:  true,
-					Storage: true,
-					Schema: &apiextensionsv1.CustomResourceValidation{
-						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
-							Type:                   "object",
-							XPreserveUnknownFields: boolPtr(true),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// boolPtr returns a pointer to the given bool value.
-func boolPtr(b bool) *bool {
-	return &b
-}
 
 // getOperatorPod returns the autopilot pod by app label.
 func getOperatorPod() *corev1.Pod {
@@ -124,26 +96,12 @@ func waitForOperatorHealthy() {
 		"Operator pod should remain Running and Ready")
 }
 
-// installCRD creates a CRD and waits for it to reach the Established condition.
-func installCRD(crd *apiextensionsv1.CustomResourceDefinition) {
-	By(fmt.Sprintf("installing CRD %s", crd.Name))
-	ExpectWithOffset(1, k8sClient.Create(ctx, crd)).To(Succeed())
-
-	waitForCRDEstablished(crd.Name)
-}
-
-// ensureCRDInstalled installs a CRD only if it does not already exist.
-// Returns true if the CRD was newly installed, false if it already existed.
-func ensureCRDInstalled(crd *apiextensionsv1.CustomResourceDefinition) bool {
+// ensureCRDInstalled fails the test if the given CRD is not installed on the cluster.
+func ensureCRDInstalled(name string) {
+	By(fmt.Sprintf("ensuring CRD %s is installed", name))
 	existing := &apiextensionsv1.CustomResourceDefinition{}
-	err := k8sClient.Get(ctx, types.NamespacedName{Name: crd.Name}, existing)
-	if err == nil {
-		return false
-	}
-	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
-		fmt.Sprintf("unexpected error checking CRD %s: %v", crd.Name, err))
-	installCRD(crd)
-	return true
+	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{Name: name}, existing)).To(Succeed(),
+		fmt.Sprintf("CRD %s must be installed on the cluster", name)) // For kind, run kind-cluster.sh install-crds
 }
 
 func waitForCRDEstablished(name string) {
@@ -163,24 +121,17 @@ func waitForCRDEstablished(name string) {
 		fmt.Sprintf("CRD %s should become Established", name))
 }
 
-func newMachineConfigCRD() *apiextensionsv1.CustomResourceDefinition {
-	return buildMinimalCRD(
-		"machineconfiguration.openshift.io",
-		"MachineConfig",
-		"machineconfigs",
-		"v1",
-		apiextensionsv1.ClusterScoped,
-	)
-}
-
-func newPrometheusRuleCRD() *apiextensionsv1.CustomResourceDefinition {
-	return buildMinimalCRD(
-		"monitoring.coreos.com",
-		"PrometheusRule",
-		"prometheusrules",
-		"v1",
-		apiextensionsv1.NamespaceScoped,
-	)
+// installCRDFromFile applies a CRD YAML file (relative to the project root)
+// using server-side apply, matching what kind-cluster.sh install-crds does.
+func installCRDFromFile(relativePath string) {
+	// test/e2e/*.go → project root is ../../
+	_, thisFile, _, _ := runtime.Caller(0)
+	absPath := filepath.Join(filepath.Dir(thisFile), "..", "..", relativePath)
+	By(fmt.Sprintf("installing CRD from %s", absPath))
+	cmd := exec.CommandContext(ctx, "kubectl", "apply", "--server-side", "-f", absPath)
+	output, err := cmd.CombinedOutput()
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(),
+		fmt.Sprintf("kubectl apply failed for %s: %s", absPath, string(output)))
 }
 
 // removeCRD deletes a CRD and waits for it to be fully removed.
@@ -200,6 +151,15 @@ func removeCRD(name string) {
 		fmt.Sprintf("CRD %s should be deleted", name))
 }
 
+// unstructuredRef builds an Unstructured object reference for use with Patch/Delete calls.
+func unstructuredRef(gvk schema.GroupVersionKind, name, namespace string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(gvk)
+	obj.SetName(name)
+	obj.SetNamespace(namespace)
+	return obj
+}
+
 // getUnstructuredResource fetches a resource as an Unstructured object.
 // Pass empty namespace for cluster-scoped resources.
 func getUnstructuredResource(gvk schema.GroupVersionKind, name, namespace string) (*unstructured.Unstructured, error) {
@@ -210,34 +170,42 @@ func getUnstructuredResource(gvk schema.GroupVersionKind, name, namespace string
 	return obj, err
 }
 
-// findDriftCorrectedEvents returns all events with reason "DriftCorrected" whose message
-// contains the given kind and resource name. Events are emitted on the HCO object.
-func findDriftCorrectedEvents(kind, name string) []eventsv1.Event {
-	// Use new events.k8s.io/v1 API
-	events := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, events, client.InNamespace(operatorNamespace))).To(Succeed())
-
-	var matched []eventsv1.Event
-	for _, event := range events.Items {
-		if event.Reason == "DriftCorrected" &&
-			strings.Contains(event.Note, kind) &&
-			strings.Contains(event.Note, name) {
-			matched = append(matched, event)
-		}
-	}
-	return matched
+// EventFilter specifies criteria for finding events in the operator namespace.
+// Zero-value fields are not applied (match everything).
+type EventFilter struct {
+	Reason string
+	Since  time.Time
+	Kind   string
+	Name   string
 }
 
-// findEventsWithReason returns all events in the operator namespace matching the given reason.
-func findEventsWithReason(reason string) []eventsv1.Event {
+// findEvents returns events in the operator namespace matching all non-zero filter fields.
+// Kind and Name are matched as substrings in event.Note.
+// When Since is set, an event matches if it was first observed at/after Since,
+// or if it has a Series whose last firing is at/after Since.
+func findEvents(filter EventFilter) []eventsv1.Event {
 	eventList := &eventsv1.EventList{}
 	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
 
 	var matched []eventsv1.Event
 	for _, event := range eventList.Items {
-		if event.Reason == reason {
-			matched = append(matched, event)
+		if filter.Reason != "" && event.Reason != filter.Reason {
+			continue
 		}
+		if !filter.Since.IsZero() {
+			firstOK := !event.EventTime.Time.Before(filter.Since)
+			seriesOK := event.Series != nil && !event.Series.LastObservedTime.Time.Before(filter.Since)
+			if !firstOK && !seriesOK {
+				continue
+			}
+		}
+		if filter.Kind != "" && !strings.Contains(event.Note, filter.Kind) {
+			continue
+		}
+		if filter.Name != "" && !strings.Contains(event.Note, filter.Name) {
+			continue
+		}
+		matched = append(matched, event)
 	}
 	return matched
 }
@@ -276,13 +244,17 @@ func eventFirings(event eventsv1.Event) int {
 	return 1
 }
 
-// captureAutopilotEvents counts all autopilot event firings in the operator namespace.
-func captureAutopilotEvents() AutopilotEvents {
-	eventList := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
+// captureAutopilotEvents counts autopilot event firings in the operator namespace.
+// When since is non-zero, only events fired at or after that time are counted.
+func captureAutopilotEvents(since ...time.Time) AutopilotEvents {
+	var filter EventFilter
+	if len(since) > 0 {
+		filter.Since = since[0]
+	}
+	events := findEvents(filter)
 
 	var e AutopilotEvents
-	for _, event := range eventList.Items {
+	for _, event := range events {
 		n := eventFirings(event)
 		switch event.Reason {
 		case "ReconcileSucceeded":
@@ -360,51 +332,26 @@ func fetchMetricsBody() string {
 // captureAssetMetrics fetches all metrics for a specific asset from the operator's /metrics endpoint.
 // Labels are matched by kind/name/namespace. For missing_dependency the labels are group/version/kind
 // so it uses the kind parameter only.
-func captureAssetMetrics(kind, name, namespace string) AssetMetrics { //nolint:unparam
+func captureAssetMetrics(kind, name, namespace string) AssetMetrics {
 	body := fetchMetricsBody()
-	labelFilter := fmt.Sprintf(`kind="%s",name="%s",namespace="%s"`, kind, name, namespace)
+	labels := map[string]string{"kind": kind, "name": name, "namespace": namespace}
 
 	m := AssetMetrics{
-		ComplianceStatus:       -1,
-		ReconcileDurationCount: 0,
-		ReconcileDurationSum:   -1,
-		ThrashingTotal:         0,
-		PausedResources:        -1,
-		CustomizationInfo:      -1,
-		MissingDependency:      -1,
-		TombstoneStatus:        -1,
+		ComplianceStatus:       findMetricValueInBody(body, "kubevirt_autopilot_compliance_status", labels),
+		ReconcileDurationCount: int(findMetricValueInBody(body, "kubevirt_autopilot_reconcile_duration_seconds_count", labels)),
+		ReconcileDurationSum:   findMetricValueInBody(body, "kubevirt_autopilot_reconcile_duration_seconds_sum", labels),
+		ThrashingTotal:         int(findMetricValueInBody(body, "kubevirt_autopilot_thrashing_total", labels)),
+		PausedResources:        findMetricValueInBody(body, "kubevirt_autopilot_paused_resources", labels),
+		CustomizationInfo:      findMetricValueInBody(body, "kubevirt_autopilot_customization_info", labels),
+		MissingDependency:      findMetricValueInBody(body, "kubevirt_autopilot_missing_dependency", map[string]string{"kind": kind}),
+		TombstoneStatus:        findMetricValueInBody(body, "kubevirt_autopilot_tombstone_status", labels),
 	}
 
-	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "#") || line == "" {
-			continue
-		}
-
-		if strings.Contains(line, labelFilter) {
-			val := parseMetricValue(line)
-			switch {
-			case strings.HasPrefix(line, "kubevirt_autopilot_compliance_status"):
-				m.ComplianceStatus = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_reconcile_duration_seconds_count"):
-				m.ReconcileDurationCount = int(val)
-			case strings.HasPrefix(line, "kubevirt_autopilot_reconcile_duration_seconds_sum"):
-				m.ReconcileDurationSum = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_thrashing_total"):
-				m.ThrashingTotal = int(val)
-			case strings.HasPrefix(line, "kubevirt_autopilot_paused_resources"):
-				m.PausedResources = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_customization_info"):
-				m.CustomizationInfo = val
-			case strings.HasPrefix(line, "kubevirt_autopilot_tombstone_status"):
-				m.TombstoneStatus = val
-			}
-		}
-
-		// missing_dependency uses group/version/kind labels instead of kind/name/namespace
-		if strings.HasPrefix(line, "kubevirt_autopilot_missing_dependency") &&
-			strings.Contains(line, fmt.Sprintf(`kind="%s"`, kind)) {
-			m.MissingDependency = parseMetricValue(line)
-		}
+	if m.ReconcileDurationCount < 0 {
+		m.ReconcileDurationCount = 0
+	}
+	if m.ThrashingTotal < 0 {
+		m.ThrashingTotal = 0
 	}
 
 	return m
@@ -421,16 +368,32 @@ func parseMetricValue(line string) float64 {
 	return -1
 }
 
-// findEventsWithReasonAfter returns events matching the given reason that occurred after the specified time.
-func findEventsWithReasonAfter(reason string, after time.Time) []eventsv1.Event {
-	events := findEventsWithReason(reason)
-	var filtered []eventsv1.Event
-	for _, event := range events {
-		if event.EventTime.After(after) {
-			filtered = append(filtered, event)
+func matchesLabels(line string, labels map[string]string) bool {
+	for k, v := range labels {
+		if !strings.Contains(line, fmt.Sprintf(`%s="%s"`, k, v)) {
+			return false
 		}
 	}
-	return filtered
+	return true
+}
+
+func findMetricValueInBody(body, metricName string, labels map[string]string) float64 {
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, metricName) {
+			continue
+		}
+		if matchesLabels(line, labels) {
+			return parseMetricValue(line)
+		}
+	}
+	return -1
+}
+
+func findMetricValue(metricName string, labels map[string]string) float64 {
+	return findMetricValueInBody(fetchMetricsBody(), metricName, labels)
 }
 
 // deleteResource deletes a resource by GVK, name, and namespace. Safe to call if the resource doesn't exist.
@@ -440,32 +403,20 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
 	_ = k8sClient.Delete(ctx, obj)
+
+	EventuallyWithOffset(1, func() bool {
+		err := k8sClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, obj)
+		return apierrors.IsNotFound(err)
+	}, 2*time.Minute, 10*time.Second).Should(BeTrue(),
+		fmt.Sprintf("%s/%s should be fully deleted", gvk.Kind, name))
 }
 
-// ensureHCOExists creates a minimal HCO instance if one doesn't already exist.
+// ensureHCOExists fails the test if the HCO instance does not exist on the cluster.
 func ensureHCOExists() {
-	hco := &unstructured.Unstructured{}
-	hco.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
-	})
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)
-	if err == nil {
-		return
-	}
-	ExpectWithOffset(1, apierrors.IsNotFound(err)).To(BeTrue(),
-		fmt.Sprintf("unexpected error checking HCO: %v", err))
-	hco = &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": "hco.kubevirt.io/v1",
-			"kind":       "HyperConverged",
-			"metadata": map[string]any{
-				"name":      hcoName,
-				"namespace": operatorNamespace,
-			},
-			"spec": map[string]any{},
-		},
-	}
-	ExpectWithOffset(1, k8sClient.Create(ctx, hco)).To(Succeed())
+	By("ensuring HCO instance exists")
+	hco := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
+	ExpectWithOffset(1, k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco)).To(Succeed(),
+		fmt.Sprintf("HCO %s/%s must exist on the cluster", operatorNamespace, hcoName))
 }
 
 // removeManagedByLabel patches the HCO to remove the managed-by label.
@@ -494,10 +445,7 @@ func patchAutopilotAndWait(value string) {
 	ref := hcoRef()
 
 	// Check current value — skip if already set
-	current := &unstructured.Unstructured{}
-	current.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
-	})
+	current := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, current); err == nil {
 		annotations := current.GetAnnotations()
 		currentVal := annotations[autopilotAnnotation]
@@ -516,10 +464,7 @@ func patchAutopilotAndWait(value string) {
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		EventuallyWithOffset(1, func() string {
-			obj := &unstructured.Unstructured{}
-			obj.SetGroupVersionKind(schema.GroupVersionKind{
-				Group: "hco.kubevirt.io", Version: "v1", Kind: "HyperConverged",
-			})
+			obj := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 			if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, obj); err != nil {
 				return "error"
 			}
@@ -544,7 +489,7 @@ func patchAutopilotAndWait(value string) {
 	}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 	EventuallyWithOffset(1, func() bool {
-		for _, event := range findEventsWithReasonAfter("ReconcileSucceeded", patchTime) {
+		for _, event := range findEvents(EventFilter{Reason: "ReconcileSucceeded", Since: patchTime}) {
 			if event.Regarding.Name == hcoName {
 				return true
 			}
@@ -552,6 +497,7 @@ func patchAutopilotAndWait(value string) {
 		return false
 	}, 2*time.Minute, 2*time.Second).Should(BeTrue(), "Reconciliation should complete after patching autopilot")
 	waitForOperatorHealthy()
+	waitForMCPStable()
 }
 
 // autopilotPatch returns a JSON merge patch that sets the autopilot annotation.
@@ -563,15 +509,466 @@ func autopilotPatch(value string) []byte {
 	return []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`, autopilotAnnotation, value))
 }
 
-// hcoRef returns an unstructured reference to the HCO CR for use with Patch calls.
+var hcoGVK = schema.GroupVersionKind{Group: "hco.kubevirt.io", Version: "v1beta1", Kind: "HyperConverged"}
+
 func hcoRef() *unstructured.Unstructured {
+	return unstructuredRef(hcoGVK, hcoName, operatorNamespace)
+}
+
+// isOpenShiftCluster returns true when the ClusterVersion CRD exists,
+// which is always present on OCP but never on Kind.
+func isOpenShiftCluster() bool {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusterversions.config.openshift.io"}, crd)
+	return err == nil
+}
+
+func crdInstalled(name string) bool {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	return k8sClient.Get(ctx, types.NamespacedName{Name: name}, crd) == nil
+}
+
+// skipIfUnmanagedOnOCP skips the current spec when the asset is a
+// PrometheusRule running on OpenShift. The anti-thrashing and alert
+// suites set PrometheusRule to unmanaged mode to protect alert "for"
+// durations, which makes drift-detection tests for that asset a no-op.
+func skipIfUnmanagedOnOCP(asset testAsset) {
+	if asset.GVK.Kind == "PrometheusRule" && isOpenShiftCluster() {
+		Skip("PrometheusRule is set to unmanaged on OCP to protect alert durations")
+	}
+}
+
+const (
+	modeAnnotation = "platform.kubevirt.io/mode"
+	modeUnmanaged  = "unmanaged"
+)
+
+// --- Alert test helpers (OCP-only) ---
+
+func touchHCO() {
+	setAnnotation(hcoGVK, hcoName, operatorNamespace, "e2e.test/touch", fmt.Sprintf("%d", time.Now().UnixNano()))
+}
+
+func createBlockingWebhook(asset testAsset) {
+	plural := asset.Plural
+	failurePolicy := admissionregistrationv1.Fail
+	sideEffects := admissionregistrationv1.SideEffectClassNone
+	port := int32(443)
+
+	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: asset.webhookName(),
+		},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{
+			{
+				Name: "block." + plural + ".e2e.test",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: operatorNamespace,
+						Name:      "e2e-nonexistent-webhook",
+						Port:      &port,
+					},
+				},
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Operations: []admissionregistrationv1.OperationType{
+							admissionregistrationv1.Create,
+							admissionregistrationv1.Update,
+						},
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{asset.GVK.Group},
+							APIVersions: []string{asset.GVK.Version},
+							Resources:   []string{plural},
+						},
+					},
+				},
+				FailurePolicy: &failurePolicy,
+				SideEffects:   &sideEffects,
+				ObjectSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						managedByLabel: managedByValue,
+					},
+				},
+				AdmissionReviewVersions: []string{"v1"},
+			},
+		},
+	}
+
+	By(fmt.Sprintf("creating blocking webhook %s", asset.webhookName()))
+	ExpectWithOffset(1, k8sClient.Create(ctx, webhook)).To(Succeed())
+}
+
+func deleteBlockingWebhook(asset testAsset) {
+	By(fmt.Sprintf("deleting blocking webhook %s", asset.webhookName()))
+	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: asset.webhookName()},
+	}
+	err := k8sClient.Delete(ctx, webhook)
+	if err != nil && !apierrors.IsNotFound(err) {
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	}
+}
+
+func patchAlertForDurations(targetFor string) {
+	By(fmt.Sprintf("patching all alert 'for' durations to %s", targetFor))
 	obj := &unstructured.Unstructured{}
-	obj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "hco.kubevirt.io",
-		Version: "v1",
-		Kind:    "HyperConverged",
+	obj.SetGroupVersionKind(prometheusRuleGVK)
+	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{
+		Name:      prometheusRuleName,
+		Namespace: operatorNamespace,
+	}, obj)).To(Succeed())
+
+	groups, found, err := unstructured.NestedSlice(obj.Object, "spec", "groups")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	ExpectWithOffset(1, found).To(BeTrue(), "PrometheusRule should have spec.groups")
+
+	for _, group := range groups {
+		groupMap, ok := group.(map[string]any)
+		ExpectWithOffset(1, ok).To(BeTrue())
+		rules, ok := groupMap["rules"].([]any)
+		ExpectWithOffset(1, ok).To(BeTrue())
+		for _, rule := range rules {
+			ruleMap, ok := rule.(map[string]any)
+			ExpectWithOffset(1, ok).To(BeTrue())
+			if _, hasFor := ruleMap["for"]; hasFor {
+				ruleMap["for"] = targetFor
+			}
+		}
+	}
+
+	ExpectWithOffset(1, unstructured.SetNestedSlice(obj.Object, groups, "spec", "groups")).To(Succeed())
+	ExpectWithOffset(1, k8sClient.Update(ctx, obj)).To(Succeed())
+}
+
+type prometheusQueryResponse struct {
+	Status string `json:"status"`
+	Data   struct {
+		ResultType string `json:"resultType"`
+		Result     []any  `json:"result"`
+	} `json:"data"`
+}
+
+func queryPrometheus(promQL string) *prometheusQueryResponse {
+	route := &unstructured.Unstructured{}
+	route.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "route.openshift.io", Version: "v1", Kind: "Route",
 	})
-	obj.SetName(hcoName)
-	obj.SetNamespace(operatorNamespace)
-	return obj
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Name: "thanos-querier", Namespace: "openshift-monitoring",
+	}, route); err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot get thanos-querier route: %v\n", err)
+		return nil
+	}
+	host, _, _ := unstructured.NestedString(route.Object, "spec", "host")
+	if host == "" {
+		GinkgoWriter.Println("queryPrometheus: route has no host")
+		return nil
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot create clientset: %v\n", err)
+		return nil
+	}
+
+	expSeconds := int64(600)
+	tokenReq, err := clientset.CoreV1().ServiceAccounts("openshift-monitoring").
+		CreateToken(ctx, "prometheus-k8s", &authenticationv1.TokenRequest{
+			Spec: authenticationv1.TokenRequestSpec{
+				ExpirationSeconds: &expSeconds,
+			},
+		}, metav1.CreateOptions{})
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot create SA token: %v\n", err)
+		return nil
+	}
+
+	reqURL := fmt.Sprintf("https://%s/api/v1/query", host)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot build request: %v\n", err)
+		return nil
+	}
+	q := httpReq.URL.Query()
+	q.Set("query", promQL)
+	httpReq.URL.RawQuery = q.Encode()
+	httpReq.Header.Set("Authorization", "Bearer "+tokenReq.Status.Token)
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		},
+	}
+	httpResp, err := httpClient.Do(httpReq)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: HTTP error: %v\n", err)
+		return nil
+	}
+	defer httpResp.Body.Close()
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		GinkgoWriter.Printf("queryPrometheus: cannot read body: %v\n", err)
+		return nil
+	}
+
+	var resp prometheusQueryResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		GinkgoWriter.Printf("queryPrometheus: unmarshal error: %v, body: %s\n", err, string(body))
+		return nil
+	}
+
+	return &resp
+}
+
+func queryFiringAlert(alertName string, attempt, maxAttempts int, labelFilters ...string) map[string]string {
+	promQL := fmt.Sprintf(`ALERTS{alertname="%s",alertstate="firing"`, alertName)
+	for i := 0; i+1 < len(labelFilters); i += 2 {
+		promQL += fmt.Sprintf(`,%s="%s"`, labelFilters[i], labelFilters[i+1])
+	}
+	promQL += "}"
+	resp := queryPrometheus(promQL)
+	if resp == nil {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: no response\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+	if resp.Status != "success" || len(resp.Data.Result) == 0 {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: not firing yet\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+
+	resultMap, ok := resp.Data.Result[0].(map[string]any)
+	if !ok {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: unexpected result format\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+	metricRaw, ok := resultMap["metric"].(map[string]any)
+	if !ok {
+		GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: missing metric labels\n", alertName, attempt, maxAttempts)
+		return nil
+	}
+
+	labels := make(map[string]string, len(metricRaw))
+	for k, v := range metricRaw {
+		labels[k] = fmt.Sprint(v)
+	}
+
+	GinkgoWriter.Printf("queryFiringAlert(%s) [%d/%d]: firing — kind=%s name=%s severity=%s\n",
+		alertName, attempt, maxAttempts, labels["kind"], labels["name"], labels["severity"])
+	return labels
+}
+
+type missingDependency struct {
+	Kind    string
+	Group   string
+	Version string
+}
+
+func getMissingDependenciesFromMetrics() []missingDependency {
+	var deps []missingDependency
+	body := fetchMetricsBody()
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "kubevirt_autopilot_missing_dependency") && parseMetricValue(line) == 1 {
+			deps = append(deps, missingDependency{
+				Kind:    parseMetricLabel(line, "kind"),
+				Group:   parseMetricLabel(line, "group"),
+				Version: parseMetricLabel(line, "version"),
+			})
+		}
+	}
+	return deps
+}
+
+func parseMetricLabel(line, key string) string {
+	search := key + `="`
+	idx := strings.Index(line, search)
+	if idx < 0 {
+		return ""
+	}
+	start := idx + len(search)
+	end := strings.Index(line[start:], `"`)
+	if end < 0 {
+		return ""
+	}
+	return line[start : start+end]
+}
+
+// --- Anti-thrashing test helpers ---
+
+// triggerEditWar repeatedly modifies the managed-by label to trigger drift
+// detection until the operator exhausts its token-bucket budget and sets the
+// pause annotation. We modify managed-by (not add a new label) because SSA
+// drift detection only sees changes to fields owned by the operator's field
+// manager — an extra unmanaged label would be invisible to the dry-run diff.
+func triggerEditWar(gvk schema.GroupVersionKind, name, namespace string) {
+	driftPatch := []byte(fmt.Sprintf(`{"metadata":{"labels":{"%s":"tampered"}}}`, managedByLabel))
+	ref := unstructuredRef(gvk, name, namespace)
+
+	Eventually(func() bool {
+		obj, err := getUnstructuredResource(gvk, name, namespace)
+		if err != nil {
+			return false
+		}
+		if ann := obj.GetAnnotations(); ann != nil && ann[pauseAnnotation] == "true" {
+			return true
+		}
+		_ = k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, driftPatch))
+		touchHCO()
+		return false
+	}, 5*time.Minute, 2*time.Second).Should(BeTrue(),
+		fmt.Sprintf("Operator should set pause annotation on %s/%s after detecting edit war", gvk.Kind, name))
+}
+
+// removePauseAnnotation removes the reconcile-paused annotation from a managed resource.
+func removePauseAnnotation(gvk schema.GroupVersionKind, name, namespace string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`, pauseAnnotation))
+	ref := unstructuredRef(gvk, name, namespace)
+
+	EventuallyWithOffset(1, func() error {
+		return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))
+	}, timeout, interval).Should(Succeed(),
+		fmt.Sprintf("Should remove pause annotation from %s/%s", gvk.Kind, name))
+}
+
+// queryAlertNotFiring returns true when the given alert is NOT firing in Prometheus.
+func queryAlertNotFiring(alertName string, attempt, maxAttempts int, labelFilters ...string) bool {
+	labels := queryFiringAlert(alertName, attempt, maxAttempts, labelFilters...)
+	return labels == nil
+}
+
+// getOperatorLogs returns the operator pod logs since the given time.
+// Uses SinceSeconds (relative, kubelet-evaluated) instead of SinceTime
+// to avoid clock-skew issues between the test runner and the Kind node.
+func getOperatorLogs(since time.Time) string {
+	pod := getOperatorPod()
+	clientset, err := kubernetes.NewForConfig(cfg)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	container := "manager"
+	if len(pod.Spec.Containers) == 1 {
+		container = pod.Spec.Containers[0].Name
+	}
+
+	sinceSeconds := int64(time.Since(since).Seconds()) + 120
+	logs, err := clientset.CoreV1().Pods(operatorNamespace).
+		GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container:    container,
+			SinceSeconds: &sinceSeconds,
+		}).DoRaw(context.Background())
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	return string(logs)
+}
+
+// --- User override helpers ---
+
+func setAnnotation(gvk schema.GroupVersionKind, name, namespace, key, value string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}}}`, key, value))
+	ref := unstructuredRef(gvk, name, namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed(),
+		fmt.Sprintf("should set annotation %s on %s/%s", key, gvk.Kind, name))
+}
+
+func removeAnnotation(gvk schema.GroupVersionKind, name, namespace, key string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:null}}}`, key))
+	ref := unstructuredRef(gvk, name, namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed(),
+		fmt.Sprintf("should remove annotation %s from %s/%s", key, gvk.Kind, name))
+}
+
+func setLabel(gvk schema.GroupVersionKind, name, namespace, key, value string) {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"labels":{%q:%q}}}`, key, value))
+	ref := unstructuredRef(gvk, name, namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, patch))).To(Succeed(),
+		fmt.Sprintf("should set label %s on %s/%s", key, gvk.Kind, name))
+}
+
+func tamperField(asset testAsset, patchJSON string) {
+	ref := unstructuredRef(asset.GVK, asset.Name, asset.Namespace)
+	ExpectWithOffset(1, k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, []byte(patchJSON)))).To(Succeed(),
+		fmt.Sprintf("should tamper field on %s/%s", asset.GVK.Kind, asset.Name))
+}
+
+func readOverrideFieldValue(obj *unstructured.Unstructured, asset testAsset) string {
+	val, found, _ := unstructured.NestedFieldNoCopy(obj.Object, asset.Override.FieldPath()...)
+	if !found {
+		return ""
+	}
+	return fmt.Sprintf("%v", val)
+}
+
+func pollResourceField(asset testAsset, readFn func(*unstructured.Unstructured) string) func() (string, error) {
+	return func() (string, error) {
+		obj, err := getUnstructuredResource(asset.GVK, asset.Name, asset.Namespace)
+		if err != nil {
+			return "", err
+		}
+		return readFn(obj), nil
+	}
+}
+
+func findCustomizationMetric(kind, name, namespace, custType string) float64 {
+	return findMetricValue("kubevirt_autopilot_customization_info", map[string]string{
+		"kind": kind, "name": name, "namespace": namespace, "type": custType,
+	})
+}
+
+// waitForMCPStable waits until every MachineConfigPool on the cluster has
+// Updated=True, Updating=False, and Degraded=False. On non-OCP clusters
+// (e.g. Kind) the function returns immediately.
+// The elapsed wait time is logged so CI runs show how long MCP rollouts blocked the suite.
+func waitForMCPStable() {
+	if !isOpenShiftCluster() || !crdInstalled("machineconfigpools.machineconfiguration.openshift.io") {
+		GinkgoWriter.Println("waitForMCPStable: skipping — MachineConfigPool not available on this cluster")
+		return
+	}
+
+	mcpGVK := schema.GroupVersionKind{
+		Group:   "machineconfiguration.openshift.io",
+		Version: "v1",
+		Kind:    "MachineConfigPoolList",
+	}
+
+	start := time.Now()
+	By("waiting for all MachineConfigPools to be stable (Updated, not Updating, not Degraded)")
+
+	Eventually(func() (string, error) {
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(mcpGVK)
+		if err := k8sClient.List(ctx, list); err != nil {
+			return "", fmt.Errorf("listing MachineConfigPools: %w", err)
+		}
+
+		for _, mcp := range list.Items {
+			name := mcp.GetName()
+			conditions, found, err := unstructured.NestedSlice(mcp.Object, "status", "conditions")
+			if err != nil || !found {
+				return fmt.Sprintf("MCP %s has no conditions yet", name), nil
+			}
+
+			condMap := make(map[string]string)
+			for _, c := range conditions {
+				cm, ok := c.(map[string]any)
+				if !ok {
+					continue
+				}
+				cType, _ := cm["type"].(string)
+				cStatus, _ := cm["status"].(string)
+				condMap[cType] = cStatus
+			}
+
+			if condMap["Updated"] != "True" || condMap["Updating"] != "False" || condMap["Degraded"] != "False" {
+				return fmt.Sprintf("MCP %s not stable: Updated=%s Updating=%s Degraded=%s",
+					name, condMap["Updated"], condMap["Updating"], condMap["Degraded"]), nil
+			}
+		}
+		return "", nil
+	}, 30*time.Minute, 30*time.Second).Should(BeEmpty(),
+		"All MachineConfigPools should become stable")
+
+	elapsed := time.Since(start)
+	GinkgoWriter.Printf("MachineConfigPools stable after %s\n", elapsed.Truncate(time.Second))
 }

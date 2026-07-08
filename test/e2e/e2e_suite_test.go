@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -34,7 +35,7 @@ var _ = BeforeSuite(func() {
 
 	ctx, cancel = context.WithCancel(context.Background())
 
-	By("connecting to kind cluster")
+	By("connecting to cluster")
 	var err error
 	cfg, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred())
@@ -42,6 +43,7 @@ var _ = BeforeSuite(func() {
 
 	// Register apiextensions scheme so k8sClient can work with CRD objects
 	Expect(apiextensionsv1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(admissionregistrationv1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	// Create client
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -52,6 +54,8 @@ var _ = BeforeSuite(func() {
 	Eventually(func() error {
 		return k8sClient.List(ctx, &corev1.NamespaceList{})
 	}, 30*time.Second, 1*time.Second).Should(Succeed())
+
+	waitForMCPStable()
 })
 
 var _ = AfterSuite(func() {
