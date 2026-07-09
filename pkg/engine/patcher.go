@@ -298,6 +298,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 		desired, err = overrides.MaskIgnoredFields(desired, live)
 		if err != nil {
+			if p.eventRecorder != nil && renderCtx.HCO != nil {
+				p.eventRecorder.InvalidIgnoreFields(renderCtx.HCO, live.GetKind(), live.GetNamespace(), live.GetName(), err.Error())
+			}
 			return false, fmt.Errorf("failed to mask ignored fields: %w", err)
 		}
 	}

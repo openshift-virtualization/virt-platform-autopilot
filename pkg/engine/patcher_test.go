@@ -375,6 +375,60 @@ func TestThrashingStateResetOnPauseAnnotationRemoval(t *testing.T) {
 	}
 }
 
+// TestInvalidIgnoreFieldsEmitsEvent verifies that when the ignore-fields annotation
+// contains an invalid JSON pointer (missing leading /), the patcher emits an
+// InvalidIgnoreFields event before returning the error.
+func TestInvalidIgnoreFieldsEmitsEvent(t *testing.T) {
+	loader := pkgassets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	assetMeta := &pkgassets.AssetMetadata{
+		Name:      "psi-enable",
+		Path:      "active/machine-config/04-psi-enable.yaml",
+		Component: "MachineConfig",
+	}
+
+	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
+	renderCtx := pkgcontext.NewRenderContext(hco)
+
+	desired, err := renderer.RenderAsset(assetMeta, renderCtx)
+	if err != nil {
+		t.Fatalf("failed to render asset: %v", err)
+	}
+
+	live := desired.DeepCopy()
+	annotations := live.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations["platform.kubevirt.io/ignore-fields"] = "spec/no-leading-slash"
+	live.SetAnnotations(annotations)
+
+	fakeClient := fake.NewClientBuilder().WithObjects(live).Build()
+	rec := &countingRecorder{counts: make(map[string]int)}
+
+	p := &Patcher{
+		renderer:          renderer,
+		applier:           NewApplier(fakeClient, nil),
+		driftDetector:     &alwaysDriftChecker{},
+		throttle:          throttling.NewTokenBucket(),
+		thrashingDetector: throttling.NewThrashingDetector(),
+		client:            fakeClient,
+	}
+	p.SetEventRecorder(util.NewEventRecorder(rec))
+
+	_, reconcileErr := p.ReconcileAsset(context.Background(), assetMeta, renderCtx)
+	if reconcileErr == nil {
+		t.Fatal("expected error from invalid ignore-fields pointer, got nil")
+	}
+	if !strings.Contains(reconcileErr.Error(), "must start with /") {
+		t.Errorf("unexpected error: %v", reconcileErr)
+	}
+	if got := rec.counts[util.EventReasonInvalidIgnoreFields]; got != 1 {
+		t.Errorf("InvalidIgnoreFields event count = %d, want 1", got)
+	}
+}
+
 // TestCleanupExcludedAsset verifies that per-asset metric series are deleted when an
 // asset is excluded from the active set (allowlist narrowed, CRD removed, etc.).
 // Without the fix the compliance_status series lingers at its last value, misleading
