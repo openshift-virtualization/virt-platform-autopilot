@@ -36,10 +36,12 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			// Kubernetes API can return different error messages for missing CRDs:
 			// - "no matches for kind" - when API discovery is up-to-date
 			// - "could not find the requested resource" - when discovery cache is stale
-			// Both indicate the CRD is missing, so we accept either
+			// - "not allowed while custom resource definition is terminating" - CRD
+			//   deletion from a previous test hasn't fully completed yet
 			Expect(err.Error()).To(Or(
 				ContainSubstring("no matches for kind"),
 				ContainSubstring("could not find the requested resource"),
+				ContainSubstring("custom resource definition is terminating"),
 			))
 		})
 	})
