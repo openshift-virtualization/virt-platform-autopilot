@@ -287,8 +287,8 @@ func TestThrashingEventEmittedOnlyOnce(t *testing.T) {
 // the reconcile-paused annotation before the token bucket has refilled (< 6 s after pause).
 // Without the fix the in-memory consecutiveThrottles stays >= ThrashingThreshold, so the very
 // next throttled reconciliation immediately re-pauses the resource.
-// With the fix the thrashing state is cleared as soon as the pause annotation is absent,
-// so subsequent throttles start from 0 and do not trigger a re-pause.
+// With the fix both the thrashing state and the token bucket are reset as soon as the pause
+// annotation is absent, so the next reconciliation succeeds cleanly.
 func TestThrashingStateResetOnPauseAnnotationRemoval(t *testing.T) {
 	loader := pkgassets.NewLoader()
 	renderer := NewRenderer(loader)
@@ -353,17 +353,13 @@ func TestThrashingStateResetOnPauseAnnotationRemoval(t *testing.T) {
 		t.Fatalf("failed to remove pause annotation: %v", err)
 	}
 
-	// One more reconciliation while the bucket is still empty.
+	// One more reconciliation after unpause.
 	// Before the fix: consecutiveThrottles was still >= threshold → immediate re-pause.
-	// After the fix:  thrashing state is cleared → throttle count resets to 1 → no re-pause.
+	// After the fix:  both thrashing state and token bucket are reset → reconciliation succeeds.
 	_, reconcileErr := p.ReconcileAsset(context.Background(), assetMeta, renderCtx)
 
-	// The call must return a throttle error (not a pause error) and must NOT re-set the annotation.
-	if reconcileErr == nil {
-		t.Fatal("expected a throttle error (bucket still empty) but got nil")
-	}
-	if strings.Contains(reconcileErr.Error(), "edit war") {
-		t.Errorf("got pause-re-trigger error %q; want a plain throttle error — thrashing state was not reset", reconcileErr)
+	if reconcileErr != nil {
+		t.Fatalf("expected successful reconciliation after unpause, got: %v", reconcileErr)
 	}
 
 	afterRemoval := &unstructured.Unstructured{}
