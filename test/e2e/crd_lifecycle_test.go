@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -9,6 +11,11 @@ const (
 	machineConfigCRDName = "machineconfigs.machineconfiguration.openshift.io"
 	machineConfigCRDFile = "test/crds/openshift/machineconfig-crd.yaml"
 )
+
+var machineConfigDepLabels = map[string]string{
+	"group": "machineconfiguration.openshift.io",
+	"kind":  "Machineconfig",
+}
 
 var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 
@@ -28,6 +35,18 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 	})
 
 	It("should restart when managed CRD is created and create the swap-enable resource", func() {
+		By("verifying CRDMissing event was emitted after CRD removal")
+		Eventually(func() int {
+			return captureAutopilotEvents().CRDMissing
+		}, timeout, interval).Should(BeNumerically(">", 0),
+			"CRDMissing event should be emitted when CRD is absent")
+
+		By("verifying missing_dependency metric is 1 while CRD is absent")
+		Eventually(func() float64 {
+			return findMetricValue("kubevirt_autopilot_missing_dependency", machineConfigDepLabels)
+		}, timeout, interval).Should(Equal(1.0),
+			"missing_dependency metric should be 1 when CRD is missing")
+
 		prevCount := getManagerRestartCount()
 		installCRDFromFile(machineConfigCRDFile)
 		waitForCRDEstablished(machineConfigCRDName)
@@ -39,12 +58,35 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 			return err
 		}, timeout, interval).Should(Succeed(),
 			"Operator should create the 90-worker-swap-online MachineConfig after CRD installation")
+
+		By("verifying missing_dependency metric is 0 after CRD is installed")
+		Eventually(func() float64 {
+			return findMetricValue("kubevirt_autopilot_missing_dependency", machineConfigDepLabels)
+		}, timeout, interval).Should(Equal(0.0),
+			"missing_dependency metric should be 0 when CRD is present")
 	})
 
 	It("should restart when managed CRD is deleted", func() {
+		crdMissingBefore := captureAutopilotEvents().CRDMissing
+		deleteTime := time.Now()
+
 		prevCount := getManagerRestartCount()
 		removeCRD(machineConfigCRDName)
 		waitForOperatorRestart(prevCount)
+
+		By("verifying CRDMissing event was emitted after CRD deletion")
+		Eventually(func() int {
+			return captureAutopilotEvents(deleteTime).CRDMissing
+		}, timeout, interval).Should(BeNumerically(">", 0),
+			"CRDMissing event should be emitted after CRD deletion")
+		Expect(captureAutopilotEvents().CRDMissing).To(BeNumerically(">", crdMissingBefore),
+			"Total CRDMissing event count should increase")
+
+		By("verifying missing_dependency metric is 1 after CRD deletion")
+		Eventually(func() float64 {
+			return findMetricValue("kubevirt_autopilot_missing_dependency", machineConfigDepLabels)
+		}, timeout, interval).Should(Equal(1.0),
+			"missing_dependency metric should be 1 when CRD is deleted")
 	})
 
 	AfterAll(func() {
