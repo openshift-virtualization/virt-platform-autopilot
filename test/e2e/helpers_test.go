@@ -972,3 +972,116 @@ func waitForMCPStable() {
 	elapsed := time.Since(start)
 	GinkgoWriter.Printf("MachineConfigPools stable after %s\n", elapsed.Truncate(time.Second))
 }
+
+// stripCRDCELValidation removes all x-kubernetes-validations (CEL rules)
+// from a CRD's schema so we can create test resources that would otherwise
+// be rejected by strict naming/type validation rules (e.g. UIPlugin CRD
+// enforces spec.type values that conflict with tombstone test resources).
+func stripCRDCELValidation(crdName string) {
+	By(fmt.Sprintf("stripping CEL validation rules from CRD %s", crdName))
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).To(Succeed())
+
+	for i := range crd.Spec.Versions {
+		if crd.Spec.Versions[i].Schema != nil && crd.Spec.Versions[i].Schema.OpenAPIV3Schema != nil {
+			crd.Spec.Versions[i].Schema.OpenAPIV3Schema.XValidations = nil
+		}
+	}
+
+	ExpectWithOffset(1, k8sClient.Update(ctx, crd)).To(Succeed())
+	waitForCRDEstablished(crdName)
+}
+
+// --- Tombstone test helpers ---
+
+// createTombstoneResource creates a tombstone target resource on the cluster.
+// When withLabel is true, the resource carries the managed-by label that the
+// tombstone reconciler checks before deletion.
+func createTombstoneResource(ts testTombstone, withLabel bool) {
+	existing := unstructuredRef(ts.GVK, ts.Name, ts.Namespace)
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ts.Name, Namespace: ts.Namespace}, existing); err == nil {
+		ExpectWithOffset(1, k8sClient.Delete(ctx, existing)).To(Succeed(),
+			fmt.Sprintf("should delete pre-existing %s before re-creating", ts.label()))
+		EventuallyWithOffset(1, func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKey{Name: ts.Name, Namespace: ts.Namespace},
+				unstructuredRef(ts.GVK, ts.Name, ts.Namespace)))
+		}, timeout, interval).Should(BeTrue(),
+			fmt.Sprintf("pre-existing %s should be fully deleted", ts.label()))
+	}
+
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(ts.GVK)
+	obj.SetName(ts.Name)
+	if ts.Namespace != "" {
+		obj.SetNamespace(ts.Namespace)
+	}
+	if withLabel {
+		obj.SetLabels(map[string]string{
+			managedByLabel: managedByValue,
+		})
+	}
+	ExpectWithOffset(1, k8sClient.Create(ctx, obj)).To(Succeed(),
+		fmt.Sprintf("should create tombstone target %s", ts.label()))
+}
+
+// createTombstoneBlockingWebhook installs a ValidatingWebhookConfiguration that
+// rejects DELETE operations on the given resource type. The webhook targets
+// resources with the managed-by label and points to a nonexistent service so
+// that failurePolicy=Fail causes all matching deletes to be rejected.
+func createTombstoneBlockingWebhook(ts testTombstone) {
+	failurePolicy := admissionregistrationv1.Fail
+	sideEffects := admissionregistrationv1.SideEffectClassNone
+	port := int32(443)
+
+	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: ts.webhookName()},
+		Webhooks: []admissionregistrationv1.ValidatingWebhook{
+			{
+				Name: "block-delete." + ts.Plural + ".e2e.test",
+				ClientConfig: admissionregistrationv1.WebhookClientConfig{
+					Service: &admissionregistrationv1.ServiceReference{
+						Namespace: operatorNamespace,
+						Name:      "e2e-nonexistent-webhook",
+						Port:      &port,
+					},
+				},
+				Rules: []admissionregistrationv1.RuleWithOperations{
+					{
+						Operations: []admissionregistrationv1.OperationType{
+							admissionregistrationv1.Delete,
+						},
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{ts.GVK.Group},
+							APIVersions: []string{ts.GVK.Version},
+							Resources:   []string{ts.Plural},
+						},
+					},
+				},
+				FailurePolicy: &failurePolicy,
+				SideEffects:   &sideEffects,
+				ObjectSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						managedByLabel: managedByValue,
+					},
+				},
+				AdmissionReviewVersions: []string{"v1"},
+			},
+		},
+	}
+
+	By(fmt.Sprintf("creating tombstone-blocking webhook %s", ts.webhookName()))
+	ExpectWithOffset(1, k8sClient.Create(ctx, webhook)).To(Succeed())
+}
+
+// deleteTombstoneBlockingWebhook removes the DELETE-blocking webhook for
+// tombstone tests. Safe to call when the webhook does not exist.
+func deleteTombstoneBlockingWebhook(ts testTombstone) {
+	By(fmt.Sprintf("deleting tombstone-blocking webhook %s", ts.webhookName()))
+	webhook := &admissionregistrationv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: ts.webhookName()},
+	}
+	err := k8sClient.Delete(ctx, webhook)
+	if err != nil && !apierrors.IsNotFound(err) {
+		ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	}
+}
