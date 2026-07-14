@@ -1,14 +1,18 @@
 approvers:
-  - tiraboschi
-  - fabiand
   - dominikholler
+  - fabiand
+  - machadovilaca
+  - nunnatsa
+  - tiraboschi
 reviewers:
-  - tiraboschi
-  - fabiand
-  - dominikholler
   - Barakmor1
-  - tal-hason
-  - nirdothan
-  - mansam
+  - dominikholler
   - enp0s3
+  - fabiand
+  - mansam
+  - machadovilaca
+  - nirdothan
+  - nunnatsa
   - rlobillo
+  - tal-hason
+  - tiraboschi
