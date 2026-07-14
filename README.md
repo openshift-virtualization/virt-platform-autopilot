@@ -40,9 +40,11 @@ Autopilot has three maturity levels for features
 
 ### Status
 
-| Feature          | DP Version   | TP Version   | GA Version  |
-| OpenShift SWAP   | 4.22         | 5.0          |             |
-| FAR + SBR        | 5.0          |              |             |
+| Feature                | DP Version   | TP Version   | GA Version  |
+|------------------------|--------------|--------------|-------------|
+| OpenShift SWAP         | 4.22         | 5.0          |             |
+| FAR + SBR              | 5.0          |              |             |
+| Graceful Node Shutdown | 4.22         |              |             |
 
 ## Quick Start
 
