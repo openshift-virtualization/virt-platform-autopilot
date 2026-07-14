@@ -328,6 +328,19 @@ func TestIsAutopilotEnabled(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "annotation set to false",
+			obj: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"annotations": map[string]any{
+							AnnotationAutopilotEnabled: "false",
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
 			name: "annotation set to comma-separated asset names",
 			obj: &unstructured.Unstructured{
 				Object: map[string]any{
@@ -414,6 +427,7 @@ func TestParseAutopilotScope(t *testing.T) {
 		{name: "nil object", hco: nil, wantEnabled: false},
 		{name: "annotation absent", hco: noAnnotations, wantEnabled: false},
 		{name: "annotation empty", hco: hcoWith(""), wantEnabled: false},
+		{name: "annotation false", hco: hcoWith("false"), wantEnabled: false},
 		{name: "annotation true", hco: hcoWith("true"), wantEnabled: true, wantNilList: true},
 		{name: "single asset name", hco: hcoWith("swap-enable"), wantEnabled: true, wantList: []string{"swap-enable"}},
 		{name: "multiple asset names", hco: hcoWith("swap-enable,descheduler-loadaware,node-health-check"), wantEnabled: true, wantList: []string{"swap-enable", "descheduler-loadaware", "node-health-check"}},
