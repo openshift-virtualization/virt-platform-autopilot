@@ -203,6 +203,10 @@ func ParseAutopilotScope(hco *unstructured.Unstructured) (allowlist map[string]b
 		return nil, true // all assets
 	}
 
+	if val == "false" {
+		return nil, false
+	}
+
 	// Parse comma-separated asset name list.
 	names := strings.Split(val, ",")
 	allowlist = make(map[string]bool, len(names))
