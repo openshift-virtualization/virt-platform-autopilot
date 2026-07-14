@@ -1,8 +1,8 @@
 # virt-platform-autopilot
 
-Production-ready OpenShift Virtualization with zero manual configuration. The autopilot detects your hardware, applies best practices, and configures the platform automatically. **Convention over Configuration** for enterprise virtualization.
+Production-ready OpenShift Virtualization with zero manual configuration. The autopilot detects your hardware, cluster topology, applies best practices, and configures the platform automatically. **Convention over Configuration** for enterprise virtualization.
 
-## The Problem
+## Issue
 
 Traditional virtualization platform setup requires:
 - Manual NUMA topology configuration
@@ -12,9 +12,9 @@ Traditional virtualization platform setup requires:
 - Auto-remediation for node failures
 - Coordinating multiple operators, MachineConfigs, and KubeletConfigs
 
-**That's weeks of work requiring deep Kubernetes expertise.**
+That's weeks of work requiring deep Kubernetes expertise.
 
-## The Solution
+## Solution
 
 The autopilot applies opinionated best practices and manages your platform automatically:
 * **Production defaults** - Optimized HCO, platform configurations, kubelet settings
