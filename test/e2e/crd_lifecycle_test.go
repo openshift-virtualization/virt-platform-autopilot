@@ -52,11 +52,17 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 			return
 		}
 
-		// Restore the full CRD from test/crds/ so other tests still find it
+		// Restore the full CRD from test/crds/ so other tests still find it.
+		// Installing a managed CRD triggers a graceful operator restart to
+		// reconfigure watches, so we must wait for that restart before
+		// checking health.
 		if !crdInstalled(machineConfigCRDName) {
+			prevCount := getManagerRestartCount()
 			installCRDFromFile(machineConfigCRDFile)
 			waitForCRDEstablished(machineConfigCRDName)
+			waitForOperatorRestart(prevCount)
+		} else {
+			waitForOperatorHealthy()
 		}
-		waitForOperatorHealthy()
 	})
 })
