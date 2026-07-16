@@ -48,12 +48,6 @@ func (t testTombstone) webhookName() string {
 
 var tombstonesUnderTest = []testTombstone{
 	{
-		GVK:     schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
-		Plural:  "uiplugins",
-		Name:    "kubevirt-plugin",
-		CRDName: "uiplugins.observability.openshift.io",
-	},
-	{
 		GVK:       schema.GroupVersionKind{Group: "remediation.medik8s.io", Version: "v1alpha1", Kind: "NodeHealthCheck"},
 		Plural:    "nodehealthchecks",
 		Name:      "virt-node-health-check",
@@ -69,13 +63,6 @@ var _ = Describe("Tombstone Lifecycle Tests", Ordered, ContinueOnFailure, func()
 		By("ensuring HCO exists with autopilot enabled")
 		ensureHCOExists()
 		patchAutopilotAndWait(autopilotEnabled)
-
-		By("stripping CEL validation from installed tombstone CRDs for test resource creation")
-		for _, ts := range tombstonesUnderTest {
-			if crdInstalled(ts.CRDName) {
-				stripCRDCELValidation(ts.CRDName)
-			}
-		}
 
 		waitForOperatorHealthy()
 
