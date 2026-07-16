@@ -233,6 +233,10 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 
 		"readAsset": readAsset,
 
+		// hasAnnotation checks if an unstructured object has a specific annotation value
+		// Usage: {{ hasAnnotation .HCO.Object "platform.kubevirt.io/enable-incident-detection" "true" }}
+		"hasAnnotation": hasAnnotation,
+
 		"gzip": func(s string) (string, error) {
 			var buf bytes.Buffer
 			w := gzip.NewWriter(&buf)
@@ -245,6 +249,27 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 			return buf.String(), nil
 		},
 	}
+}
+
+// hasAnnotation returns true if the object's annotations contain key with the given value
+func hasAnnotation(obj any, key, value string) bool {
+	m, ok := obj.(map[string]any)
+	if !ok {
+		return false
+	}
+	metadata, ok := m["metadata"].(map[string]any)
+	if !ok {
+		return false
+	}
+	annotations, ok := metadata["annotations"].(map[string]any)
+	if !ok {
+		return false
+	}
+	v, ok := annotations[key]
+	if !ok {
+		return false
+	}
+	return fmt.Sprintf("%v", v) == value
 }
 
 // dig safely accesses nested fields with a default value
