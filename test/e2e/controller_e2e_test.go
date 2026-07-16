@@ -21,7 +21,7 @@ const (
 	operatorAppLabel      = "virt-platform-autopilot"
 	operatorComponentName = "virt-platform-autopilot"
 	hcoName               = "kubevirt-hyperconverged"
-	timeout               = 2 * time.Minute
+	timeout               = 3 * time.Minute
 	interval              = 2 * time.Second
 
 	// autopilotAnnotation is the opt-in annotation that must be present on the HCO CR
