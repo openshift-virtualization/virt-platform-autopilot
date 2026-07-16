@@ -983,25 +983,6 @@ func waitForMCPStable() {
 	GinkgoWriter.Printf("MachineConfigPools stable after %s\n", elapsed.Truncate(time.Second))
 }
 
-// stripCRDCELValidation removes all x-kubernetes-validations (CEL rules)
-// from a CRD's schema so we can create test resources that would otherwise
-// be rejected by strict naming/type validation rules (e.g. UIPlugin CRD
-// enforces spec.type values that conflict with tombstone test resources).
-func stripCRDCELValidation(crdName string) {
-	By(fmt.Sprintf("stripping CEL validation rules from CRD %s", crdName))
-	crd := &apiextensionsv1.CustomResourceDefinition{}
-	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{Name: crdName}, crd)).To(Succeed())
-
-	for i := range crd.Spec.Versions {
-		if crd.Spec.Versions[i].Schema != nil && crd.Spec.Versions[i].Schema.OpenAPIV3Schema != nil {
-			crd.Spec.Versions[i].Schema.OpenAPIV3Schema.XValidations = nil
-		}
-	}
-
-	ExpectWithOffset(1, k8sClient.Update(ctx, crd)).To(Succeed())
-	waitForCRDEstablished(crdName)
-}
-
 // --- Tombstone test helpers ---
 
 // createTombstoneResource creates a tombstone target resource on the cluster.
