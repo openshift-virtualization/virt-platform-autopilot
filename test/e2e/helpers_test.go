@@ -92,7 +92,7 @@ func waitForOperatorHealthy() {
 		"Operator pod should be Running and Ready")
 
 	By("verifying autopilot pod remains healthy")
-	Consistently(isOperatorReady, 2*time.Second, 500*time.Millisecond).Should(BeTrue(),
+	Consistently(isOperatorReady, 5*time.Second, 500*time.Millisecond).Should(BeTrue(),
 		"Operator pod should remain Running and Ready")
 }
 
