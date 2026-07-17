@@ -18,6 +18,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	gomegatypes "github.com/onsi/gomega/types"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -449,27 +450,36 @@ func patchAutopilotAndWait(value string) {
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, current); err == nil {
 		annotations := current.GetAnnotations()
 		currentVal := annotations[autopilotAnnotation]
-		isDisable := value == "" || value == "null"
-		if isDisable && currentVal == "" {
+		isRemove := value == "" || value == "null"
+		if isRemove && currentVal == "" {
 			return
 		}
-		if !isDisable && currentVal == value {
+		if !isRemove && currentVal == value {
 			return
 		}
 	}
 
-	if value == "" || value == "null" {
+	if value == "" || value == "null" || value == "false" {
 		EventuallyWithOffset(1, func() error {
 			return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, autopilotPatch(value)))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
+		var matcher gomegatypes.GomegaMatcher
+		var desc string
+		if value == "false" {
+			matcher = Equal("false")
+			desc = "Autopilot annotation should be set to false on HCO"
+		} else {
+			matcher = BeEmpty()
+			desc = "Autopilot annotation should be removed from HCO"
+		}
 		EventuallyWithOffset(1, func() string {
 			obj := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 			if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, obj); err != nil {
 				return "error"
 			}
 			return obj.GetAnnotations()[autopilotAnnotation]
-		}, timeout, interval).Should(BeEmpty(), "Autopilot annotation should be removed from HCO")
+		}, timeout, interval).Should(matcher, desc)
 
 		var prev AutopilotEvents
 		EventuallyWithOffset(1, func() bool {

@@ -26,9 +26,10 @@ const (
 
 	// autopilotAnnotation is the opt-in annotation that must be present on the HCO CR
 	// for the autopilot to activate. All e2e test HCO instances must carry it.
-	autopilotAnnotation = "platform.kubevirt.io/autopilot"
-	autopilotEnabled    = "true"
-	autopilotDisabled   = "" // removing the annotation disables autopilot; "false" does NOT work (CNV-89261)
+	autopilotAnnotation        = "platform.kubevirt.io/autopilot"
+	autopilotEnabled           = "true"
+	autopilotDisabledByFalse   = "false"
+	autopilotDisabledByRemoval = ""
 )
 
 const (
@@ -106,8 +107,8 @@ var _ = Describe("Controller E2E Tests", func() {
 		})
 
 		It("should adopt and label the unlabeled HCO when autopilot is enabled", func() {
-			By("disabling autopilot and removing managed-by label")
-			patchAutopilotAndWait(autopilotDisabled)
+			By("disabling autopilot via annotation=false and removing managed-by label")
+			patchAutopilotAndWait(autopilotDisabledByFalse)
 			removeManagedByLabel(managedByLabel)
 
 			By("capturing metrics before re-enabling")
@@ -150,8 +151,8 @@ var _ = Describe("Controller E2E Tests", func() {
 
 		It("should not reconcile when autopilot annotation is removed", func() {
 
-			By("disabling autopilot and removing managed-by label")
-			patchAutopilotAndWait(autopilotDisabled)
+			By("removing autopilot annotation and managed-by label")
+			patchAutopilotAndWait(autopilotDisabledByRemoval)
 			disableTime := time.Now()
 			removeManagedByLabel(managedByLabel)
 
