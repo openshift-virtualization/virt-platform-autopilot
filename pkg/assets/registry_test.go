@@ -361,6 +361,10 @@ func TestDefaultConditionEvaluator_EvaluateCondition(t *testing.T) {
 		testAnnotationConditions(ctx, t)
 	})
 
+	t.Run("image conditions", func(t *testing.T) {
+		testImageConditions(ctx, t)
+	})
+
 	t.Run("unknown condition type", func(t *testing.T) {
 		evaluator := &DefaultConditionEvaluator{}
 		condition := AssetCondition{Type: ConditionType("unknown-type")}
@@ -456,6 +460,38 @@ func testAnnotationConditions(ctx context.Context, t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			evaluator := &DefaultConditionEvaluator{Annotations: tt.annotations}
 			condition := AssetCondition{Type: ConditionTypeAnnotation, Key: tt.key, Value: tt.value}
+
+			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EvaluateCondition() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && satisfied != tt.wantSatisfied {
+				t.Errorf("EvaluateCondition() = %v, want %v", satisfied, tt.wantSatisfied)
+			}
+		})
+	}
+}
+
+func testImageConditions(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	tests := []struct {
+		name          string
+		images        map[string]string
+		key           string
+		wantSatisfied bool
+		wantErr       bool
+	}{
+		{"image present", map[string]string{"kubevirt-metrics-exporter": "quay.io/img:v1"}, "kubevirt-metrics-exporter", true, false},
+		{"image absent", map[string]string{}, "kubevirt-metrics-exporter", false, false},
+		{"image empty value", map[string]string{"kubevirt-metrics-exporter": ""}, "kubevirt-metrics-exporter", false, false},
+		{"missing key", map[string]string{}, "", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := &DefaultConditionEvaluator{Images: tt.images}
+			condition := AssetCondition{Type: ConditionTypeImage, Key: tt.key}
 
 			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
 			if (err != nil) != tt.wantErr {

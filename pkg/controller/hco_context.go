@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +33,8 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
+
+const relatedImagePrefix = "RELATED_IMAGE_"
 
 const (
 	// Node role labels
@@ -98,7 +102,30 @@ func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unst
 		HCO:      hco,
 		Hardware: hardware,
 		Topology: topology,
+		Images:   loadImages(),
 	}, nil
+}
+
+// loadImages scans environment variables for the RELATED_IMAGE_ prefix
+// (set in the CSV deployment spec by csv-generator --additional-images) and returns a normalized map.
+// E.g. RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER=img → {"kubevirt-metrics-exporter": "img"}.
+func loadImages() map[string]string {
+	images := make(map[string]string)
+	for _, env := range os.Environ() {
+		k, v, ok := strings.Cut(env, "=")
+		if !ok || v == "" {
+			continue
+		}
+		if !strings.HasPrefix(k, relatedImagePrefix) {
+			continue
+		}
+		key := strings.ToLower(strings.ReplaceAll(
+			strings.TrimPrefix(k, relatedImagePrefix), "_", "-"))
+		if key != "" {
+			images[key] = v
+		}
+	}
+	return images
 }
 
 // detectHardware scans the provided node list for hardware capabilities.

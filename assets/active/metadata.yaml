@@ -531,6 +531,119 @@ assets:
     reconcile_order: 20
     conditions: []
 
+  # Phase 1: KubeVirt Metrics Exporter - per-node DaemonSet collecting VM storage
+  # I/O latency via QMP, QGA and eBPF.
+  # Opt-in via: platform.kubevirt.io/enable-metrics-exporter=true
+  # Assets are split by CRD dependency so soft dependencies work correctly:
+  # core resources (always available), SCC (security.openshift.io), PodMonitor +
+  # PrometheusRule (monitoring.coreos.com), and Perses dashboard (perses.dev).
+  #
+  # Reconcile order: namespace (1) -> RBAC -> SCC prerequisites (2) -> DaemonSet (3)
+
+  - name: metrics-exporter-namespace
+    group: metrics-exporter
+    path: active/metrics-exporter/namespace.yaml
+    phase: 1
+    install: opt-in
+    component: Namespace
+    reconcile_order: 1
+    conditions: &metrics-exporter-conditions
+      - type: annotation
+        key: platform.kubevirt.io/enable-metrics-exporter
+        value: "true"
+      - type: image
+        key: kubevirt-metrics-exporter
+
+  - name: metrics-exporter-serviceaccount
+    group: metrics-exporter
+    path: active/metrics-exporter/serviceaccount.yaml
+    phase: 1
+    install: opt-in
+    component: ServiceAccount
+    reconcile_order: 2
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-clusterrole
+    group: metrics-exporter
+    path: active/metrics-exporter/clusterrole.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRole
+    reconcile_order: 2
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-clusterrolebinding
+    group: metrics-exporter
+    path: active/metrics-exporter/clusterrolebinding.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRoleBinding
+    reconcile_order: 2
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-scc
+    group: metrics-exporter
+    path: active/metrics-exporter/scc.yaml
+    phase: 1
+    install: opt-in
+    component: SecurityContextConstraints
+    reconcile_order: 2
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-scc-clusterrole
+    group: metrics-exporter
+    path: active/metrics-exporter/scc-clusterrole.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRole
+    reconcile_order: 2
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-scc-clusterrolebinding
+    group: metrics-exporter
+    path: active/metrics-exporter/scc-clusterrolebinding.yaml
+    phase: 1
+    install: opt-in
+    component: ClusterRoleBinding
+    reconcile_order: 2
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter
+    group: metrics-exporter
+    path: active/metrics-exporter/metrics-exporter.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: DaemonSet
+    reconcile_order: 3
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-podmonitor
+    group: metrics-exporter
+    path: active/metrics-exporter/podmonitor.yaml
+    phase: 1
+    install: opt-in
+    component: PodMonitor
+    reconcile_order: 3
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-prometheusrule
+    group: metrics-exporter
+    path: active/metrics-exporter/prometheusrule.yaml
+    phase: 1
+    install: opt-in
+    component: PrometheusRule
+    reconcile_order: 3
+    conditions: *metrics-exporter-conditions
+
+  - name: metrics-exporter-dashboard
+    group: metrics-exporter
+    path: active/metrics-exporter/dashboard.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDashboard
+    reconcile_order: 3
+    conditions: *metrics-exporter-conditions
+
   # Phase 2: Opt-in - Advanced features
   # TODO: Implement these assets:
   # - vfio-assign (machine-config/04-vfio-assign.yaml.tpl)
