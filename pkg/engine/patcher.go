@@ -339,10 +339,8 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		logger.V(1).Info("No drift detected, skipping apply",
 			"name", assetMeta.Name,
 		)
-		// Optionally record no-drift event (commented to avoid spam)
-		// if p.eventRecorder != nil && renderCtx.HCO != nil {
-		// 	p.eventRecorder.NoDriftDetected(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName())
-		// }
+		observability.SetCompliance(desired, 1)
+		observability.SetPaused(desired, false)
 		return false, nil
 	}
 
