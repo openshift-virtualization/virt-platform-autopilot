@@ -76,12 +76,49 @@ rules:
     verbs:
       - get
   # ========================================
+  # Transitive RBAC (from managed ClusterRole/Role assets)
+  # ========================================
+  - apiGroups:
+      - ""
+    resources:
+      - persistentvolumeclaims
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstances
+    verbs:
+      - get
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - use
+  # ========================================
   # Managed Resources (Dynamic - from assets/)
   # ========================================
   - apiGroups:
       - ""
     resources:
+      - namespaces
+      - serviceaccounts
       - services
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
     verbs:
       - create
       - get
@@ -153,6 +190,7 @@ rules:
   - apiGroups:
       - monitoring.coreos.com
     resources:
+      - podmonitors
       - prometheusrules
       - servicemonitors
     verbs:
@@ -187,6 +225,30 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - perses.dev
+    resources:
+      - persesdashboards
+      - persesdatasources
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterrolebindings
+      - clusterroles
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # NodeHealthCheck (includes tombstone cleanup)
   - apiGroups:
       - remediation.medik8s.io
@@ -195,6 +257,17 @@ rules:
     verbs:
       - create
       - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - create
       - get
       - list
       - patch

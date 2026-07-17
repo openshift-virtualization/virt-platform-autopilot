@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"os"
+	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -692,6 +694,79 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 
 		if err == nil {
 			t.Error("Build() should return error when HCO is nil")
+		}
+	})
+}
+
+func TestLoadImages(t *testing.T) {
+	// Save original env and restore after test
+	clearRelatedImageEnvVars := func() {
+		for _, env := range os.Environ() {
+			k, _, ok := strings.Cut(env, "=")
+			if ok && len(k) > len(relatedImagePrefix) && k[:len(relatedImagePrefix)] == relatedImagePrefix {
+				os.Unsetenv(k)
+			}
+		}
+	}
+
+	t.Run("single image", func(t *testing.T) {
+		clearRelatedImageEnvVars()
+		t.Setenv("RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER", "quay.io/img@sha256:abc")
+
+		images := loadImages()
+
+		if got := images["kubevirt-metrics-exporter"]; got != "quay.io/img@sha256:abc" {
+			t.Errorf("images[kubevirt-metrics-exporter] = %q, want %q", got, "quay.io/img@sha256:abc")
+		}
+	})
+
+	t.Run("multiple images", func(t *testing.T) {
+		clearRelatedImageEnvVars()
+		t.Setenv("RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER", "quay.io/me:v1")
+		t.Setenv("RELATED_IMAGE_SOME_OTHER", "quay.io/other:v2")
+
+		images := loadImages()
+
+		if len(images) != 2 {
+			t.Errorf("len(images) = %d, want 2", len(images))
+		}
+		if got := images["kubevirt-metrics-exporter"]; got != "quay.io/me:v1" {
+			t.Errorf("images[kubevirt-metrics-exporter] = %q", got)
+		}
+		if got := images["some-other"]; got != "quay.io/other:v2" {
+			t.Errorf("images[some-other] = %q", got)
+		}
+	})
+
+	t.Run("no related images", func(t *testing.T) {
+		clearRelatedImageEnvVars()
+
+		images := loadImages()
+
+		if len(images) != 0 {
+			t.Errorf("len(images) = %d, want 0", len(images))
+		}
+	})
+
+	t.Run("skips empty values", func(t *testing.T) {
+		clearRelatedImageEnvVars()
+		t.Setenv("RELATED_IMAGE_EMPTY", "")
+
+		images := loadImages()
+
+		if _, ok := images["empty"]; ok {
+			t.Error("should skip env vars with empty values")
+		}
+	})
+
+	t.Run("ignores non-prefixed vars", func(t *testing.T) {
+		clearRelatedImageEnvVars()
+		t.Setenv("SOME_OTHER_VAR", "value")
+
+		images := loadImages()
+
+		if len(images) != 0 {
+			t.Errorf("len(images) = %d, want 0", len(images))
 		}
 	})
 }

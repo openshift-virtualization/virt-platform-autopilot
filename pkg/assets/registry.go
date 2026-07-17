@@ -42,6 +42,7 @@ const (
 	ConditionTypeHardwareDetection ConditionType = "hardware-detection"
 	ConditionTypeFeatureGate       ConditionType = "feature-gate"
 	ConditionTypeAnnotation        ConditionType = "annotation"
+	ConditionTypeImage             ConditionType = "image"
 )
 
 // AssetCondition defines a condition that must be met for an asset to be applied
@@ -290,6 +291,7 @@ type DefaultConditionEvaluator struct {
 	HardwareContext map[string]bool   // Hardware detection results
 	FeatureGates    map[string]bool   // Feature gate states
 	Annotations     map[string]string // Annotation values
+	Images          map[string]string // Container images from RELATED_IMAGE_* env vars
 }
 
 // EvaluateCondition evaluates a single condition
@@ -322,6 +324,13 @@ func (e *DefaultConditionEvaluator) EvaluateCondition(ctx context.Context, condi
 			return true, nil
 		}
 		return actualValue == condition.Value, nil
+
+	case ConditionTypeImage:
+		if condition.Key == "" {
+			return false, fmt.Errorf("image condition requires key field")
+		}
+		img, ok := e.Images[condition.Key]
+		return ok && img != "", nil
 
 	default:
 		return false, fmt.Errorf("unknown condition type: %s", condition.Type)

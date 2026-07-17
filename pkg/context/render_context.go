@@ -52,6 +52,7 @@ type RenderContext struct {
 	HCO      *unstructured.Unstructured // Full HCO object, templates access directly
 	Hardware *HardwareContext           // Cluster-discovered hardware info
 	Topology *TopologyContext           // Cluster topology info (HCP, compact, node counts)
+	Images   map[string]string          // Container images from RELATED_IMAGE_* env vars
 }
 
 // HardwareContext contains cluster hardware detection results
@@ -140,6 +141,7 @@ func NewRenderContext(hco *unstructured.Unstructured) *RenderContext {
 		HCO:      hco,
 		Hardware: &HardwareContext{},
 		Topology: &TopologyContext{},
+		Images:   make(map[string]string),
 	}
 }
 

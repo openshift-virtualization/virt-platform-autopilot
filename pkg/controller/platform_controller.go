@@ -360,6 +360,9 @@ func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstruct
 
 	// Extract annotations from HCO
 	r.conditionEvaluator.Annotations = hco.GetAnnotations()
+
+	// Pass through available container images
+	r.conditionEvaluator.Images = ctx.Images
 }
 
 // extractFeatureGates extracts feature gates from HCO v1 spec.
