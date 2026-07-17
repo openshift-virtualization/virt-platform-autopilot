@@ -508,7 +508,6 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 	// --- Context 6: Invalid ignore-fields ---
 	Context("Invalid ignore-fields syntax", func() {
 		It("should emit InvalidIgnoreFields event for invalid path (no leading slash)", func() {
-			Skip("operator does not emit InvalidIgnoreFields events yet (CNV-92208: EventRecorder method exists but has no callers)")
 			if len(patchableAssets) == 0 {
 				Skip("no patchable assets available")
 			}
