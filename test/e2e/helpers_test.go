@@ -1011,6 +1011,11 @@ func createTombstoneResource(ts testTombstone, withLabel bool) {
 			managedByLabel: managedByValue,
 		})
 	}
+
+	if len(ts.Spec) > 0 {
+		ExpectWithOffset(1, unstructured.SetNestedMap(obj.Object, ts.Spec, "spec")).To(Succeed())
+	}
+
 	ExpectWithOffset(1, k8sClient.Create(ctx, obj)).To(Succeed(),
 		fmt.Sprintf("should create tombstone target %s", ts.label()))
 }

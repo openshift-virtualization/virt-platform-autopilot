@@ -33,6 +33,7 @@ type testTombstone struct {
 	Name      string
 	Namespace string
 	CRDName   string
+	Spec      map[string]any
 }
 
 func (t testTombstone) label() string {
@@ -53,6 +54,20 @@ var tombstonesUnderTest = []testTombstone{
 		Name:      "virt-node-health-check",
 		Namespace: "openshift-operators",
 		CRDName:   "nodehealthchecks.remediation.medik8s.io",
+		Spec: map[string]any{
+			"minHealthy": "51%",
+			"selector": map[string]any{
+				"matchLabels": map[string]any{
+					"kubernetes.io/os": "linux",
+				},
+			},
+			"remediationTemplate": map[string]any{
+				"apiVersion": "self-node-remediation.medik8s.io/v1alpha1",
+				"kind":       "SelfNodeRemediationTemplate",
+				"name":       "self-node-remediation",
+				"namespace":  "openshift-operators",
+			},
+		},
 	},
 }
 
