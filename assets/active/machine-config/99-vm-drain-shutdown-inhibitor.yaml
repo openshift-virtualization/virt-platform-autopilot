@@ -1,0 +1,44 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+    platform.kubevirt.io/managed-by: virt-platform-autopilot
+  name: 99-vm-drain-shutdown-inhibitor
+spec:
+  config:
+    ignition:
+      version: 3.5.0
+    storage:
+      files:
+      - path: /etc/systemd/logind.conf.d/10-inhibit-delay.conf
+        mode: 0644
+        contents:
+          compression: gzip
+          source: data:;base64,{{ readAsset "machine-config/99-vm-drain-shutdown-inhibitor/10-inhibit-delay.conf" | gzip | b64enc }}
+        overwrite: true
+      - path: /usr/local/bin/vm-drain-shutdown-inhibitor.py
+        mode: 0755
+        contents:
+          compression: gzip
+          source: data:;base64,{{ readAsset "machine-config/99-vm-drain-shutdown-inhibitor/vm-drain-shutdown-inhibitor.py" | gzip | b64enc }}
+        overwrite: true
+    systemd:
+      units:
+      - name: vm-drain-shutdown-inhibitor.service
+        enabled: true
+        contents: |
+          [Unit]
+          Description=VM drain shutdown inhibitor.
+          After=systemd-logind.service dbus.service crio.service
+          Requires=systemd-logind.service dbus.service
+          Wants=crio.service
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/vm-drain-shutdown-inhibitor.py
+          Restart=on-failure
+          RestartSec=5s
+          TimeoutStopSec=150s
+          [Install]
+          WantedBy=multi-user.target
+          
