@@ -52,6 +52,7 @@ spec:
               deployment:
                 applicationAwareConfig:
                   enable: false
+                deployNetworkResourcesInjector: true
                 deployVmConsoleProxy: false
                 uninstallStrategy: BlockUninstallIfWorkloadsExist
               security:
@@ -82,6 +83,7 @@ spec:
                 default:
                   applicationAwareConfig:
                     enable: false
+                  deployNetworkResourcesInjector: true
                   deployVmConsoleProxy: false
                   uninstallStrategy: BlockUninstallIfWorkloadsExist
                 description: Deployment contains all the configurations related to
@@ -161,6 +163,7 @@ spec:
                         type: string
                     type: object
                   deployNetworkResourcesInjector:
+                    default: true
                     description: |-
                       DeployNetworkResourcesInjector enables deployment of the network-resources-injector component.
                       When enabled, the network-resources-injector mutating webhook will be deployed to automatically
@@ -2287,19 +2290,16 @@ spec:
                     This feature is in Developer Preview.
                     Phase: alpha
 
-                  * persistentReservation:
-                    Enable persistent reservation of a LUN through the SCSI Persistent Reserve
-                    commands on Kubevirt. In order to issue privileged SCSI ioctls, the VM
-                    requires activation of the persistent reservation flag. Once this feature
-                    gate is enabled, then the additional container with the qemu-pr-helper is
-                    deployed inside the virt-handler pod. Enabling (or removing) the feature
-                    gate causes the redeployment of the virt-handler pod.
-                    Phase: alpha
-
                   * disableMDevConfiguration:
                     Deprecated: use spec.virtualization.mediatedDevicesConfiguration.enabled
                     instead. This feature gate is deprecated and will be removed in a future
                     release.
+                    Phase: deprecated
+
+                  * persistentReservation:
+                    This feature gate has graduated to a dedicated configuration field. Use
+                    spec.storage.persistentReservationConfiguration.enabled instead. This
+                    feature gate is deprecated and will be removed in a future release.
                     Phase: deprecated
                 items:
                   description: FeatureGate is an optional feature gate to enable or
@@ -2658,6 +2658,17 @@ spec:
                           global value
                         type: object
                     type: object
+                  persistentReservationConfiguration:
+                    description: |-
+                      PersistentReservationConfiguration controls the deployment of additional resources
+                      required for using SCSI persistent reservation in VMs
+                    properties:
+                      enabled:
+                        description: |-
+                          Enabled controls the deployment of additional resources like the pr-helper container
+                          for enabling the use of the SCSI persistent reservation in VMs, defaults to false.
+                        type: boolean
+                    type: object
                   scratchSpaceStorageClass:
                     description: |-
                       Override the storage class used for scratch space during transfer operations. The scratch space storage class
@@ -2750,6 +2761,7 @@ spec:
                   liveMigrationConfig:
                     allowAutoConverge: false
                     allowPostCopy: false
+                    allowWorkloadDisruption: false
                     completionTimeoutPerGiB: 150
                     parallelMigrationsPerCluster: 5
                     parallelOutboundMigrationsPerNode: 2
@@ -3023,6 +3035,7 @@ spec:
                     default:
                       allowAutoConverge: false
                       allowPostCopy: false
+                      allowWorkloadDisruption: false
                       completionTimeoutPerGiB: 150
                       parallelMigrationsPerCluster: 5
                       parallelOutboundMigrationsPerNode: 2
@@ -3047,6 +3060,15 @@ spec:
                           destination nodes can cause the migrated VM to crash or reach inconsistency.
                           Enable this option when evicting nodes is more important than keeping VMs
                           alive.
+                          Defaults to false.
+                        type: boolean
+                      allowWorkloadDisruption:
+                        default: false
+                        description: |-
+                          AllowWorkloadDisruption indicates that the migration shouldn't be
+                          canceled after the acceptable completion time is exceeded. Instead, if
+                          permitted, migration will be switched to post-copy or the VMI will be
+                          paused to allow the migration to complete.
                           Defaults to false.
                         type: boolean
                       bandwidthPerMigration:
@@ -5400,7 +5422,6 @@ spec:
                 enableMultiArchBootImageImport: false
                 incrementalBackup: false
                 objectGraph: false
-                persistentReservation: false
               liveMigrationConfig:
                 allowAutoConverge: false
                 allowPostCopy: false
@@ -6538,7 +6559,6 @@ spec:
                   enableMultiArchBootImageImport: false
                   incrementalBackup: false
                   objectGraph: false
-                  persistentReservation: false
                 description: |-
                   featureGates is a map of feature gate flags. Setting a flag to `true` will enable
                   the feature. Setting `false` or removing the feature gate, disables the feature.
@@ -6637,12 +6657,9 @@ spec:
                       Note: This feature is in Developer Preview.
                     type: boolean
                   persistentReservation:
-                    default: false
                     description: |-
-                      Enable persistent reservation of a LUN through the SCSI Persistent Reserve commands on Kubevirt.
-                      In order to issue privileged SCSI ioctls, the VM requires activation of the persistent reservation flag.
-                      Once this feature gate is enabled, then the additional container with the qemu-pr-helper is deployed inside the virt-handler pod.
-                      Enabling (or removing) the feature gate causes the redeployment of the virt-handler pod.
+                      This feature gate has graduated to a dedicated configuration field.
+                      Deprecated: use v1's spec.storage.persistentReservationConfiguration.enabled instead. This feature gate will be removed in a future release.
                     type: boolean
                   primaryUserDefinedNetworkBinding:
                     description: 'Deprecated: this feature gate is ignored.'
@@ -7834,6 +7851,15 @@ spec:
                       destination nodes can cause the migrated VM to crash or reach inconsistency.
                       Enable this option when evicting nodes is more important than keeping VMs
                       alive.
+                      Defaults to false.
+                    type: boolean
+                  allowWorkloadDisruption:
+                    default: false
+                    description: |-
+                      AllowWorkloadDisruption indicates that the migration shouldn't be
+                      canceled after the acceptable completion time is exceeded. Instead, if
+                      permitted, migration will be switched to post-copy or the VMI will be
+                      paused to allow the migration to complete.
                       Defaults to false.
                     type: boolean
                   bandwidthPerMigration:
