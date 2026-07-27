@@ -1077,6 +1077,20 @@ func deleteTombstoneBlockingWebhook(ts testTombstone) {
 	}
 }
 
+// waitForReconcileSucceeded waits until at least one ReconcileSucceeded event
+// on the HCO is observed since the given timestamp.
+func waitForReconcileSucceeded(since time.Time) {
+	EventuallyWithOffset(1, func() bool {
+		for _, event := range findEvents(EventFilter{Reason: "ReconcileSucceeded", Since: since}) {
+			if event.Regarding.Name == hcoName {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Minute, 2*time.Second).Should(BeTrue(),
+		"operator must emit at least one ReconcileSucceeded")
+}
+
 // exclusionEntryYAML returns a single disabled-resources YAML list entry.
 // namespace is optional; omit for cluster-scoped resources.
 func exclusionEntryYAML(kind, name, namespace string) string {
