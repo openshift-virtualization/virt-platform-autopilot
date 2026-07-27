@@ -876,3 +876,60 @@ func arrayItemSchema(schema *apiextensionsv1.JSONSchemaProps) *apiextensionsv1.J
 	}
 	return schema.Items.Schema
 }
+
+func TestFormatCondition(t *testing.T) {
+	tests := []struct {
+		name      string
+		condition AssetCondition
+		want      string
+	}{
+		{
+			name:      "annotation",
+			condition: AssetCondition{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-mtv", Value: "true"},
+			want:      "platform.kubevirt.io/enable-mtv=true",
+		},
+		{
+			name:      "feature gate",
+			condition: AssetCondition{Type: ConditionTypeFeatureGate, Value: "CPUManager"},
+			want:      "featureGate:CPUManager",
+		},
+		{
+			name:      "hardware detection",
+			condition: AssetCondition{Type: ConditionTypeHardwareDetection, Detector: "pciDevicesPresent"},
+			want:      "hardware:pciDevicesPresent",
+		},
+		{
+			name:      "image",
+			condition: AssetCondition{Type: ConditionTypeImage, Key: "kubevirt-metrics-exporter"},
+			want:      "image:kubevirt-metrics-exporter",
+		},
+		{
+			name:      "hco field unconfigured",
+			condition: AssetCondition{Type: ConditionTypeHCOFieldUnconfigured, Path: "spec.virtualization.ksmConfiguration"},
+			want:      "hcoUnconfigured:spec.virtualization.ksmConfiguration",
+		},
+		{
+			name:      "topology",
+			condition: AssetCondition{Type: ConditionTypeTopology, Field: "hasSchedulableMasters"},
+			want:      "topology:hasSchedulableMasters",
+		},
+		{
+			name:      "topology with false value",
+			condition: AssetCondition{Type: ConditionTypeTopology, Field: "hasSchedulableMasters", Value: "false"},
+			want:      "topology:hasSchedulableMasters=false",
+		},
+		{
+			name:      "empty annotation key",
+			condition: AssetCondition{Type: ConditionTypeAnnotation, Value: "true"},
+			want:      "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FormatCondition(tt.condition); got != tt.want {
+				t.Errorf("FormatCondition() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

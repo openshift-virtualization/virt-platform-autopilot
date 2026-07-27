@@ -26,6 +26,30 @@ The autopilot applies opinionated best practices and manages your platform autom
 
 **Install once. Run VMs. Customize via GitOps when needed.**
 
+## Features
+
+<!-- BEGIN FEATURE STATUS -->
+> **Note:** The autopilot framework is currently **TP** and requires `platform.kubevirt.io/autopilot=true` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.
+
+| Feature | Maturity | Install | Opt-in | Requires | Recommended |
+|---------|----------|---------|--------|----------|-------------|
+| In-Flight Operations | GA | always | - | - | - |
+| Kubelet Performance | GA | always | - | - | - |
+| Load-Aware Descheduler | GA | always | - | Kube Descheduler Operator | - |
+| Observability | GA | always | - | Cluster Observability Operator | - |
+| SWAP | GA | always | - | - | - |
+| CPU Manager | DP | opt-in | `featureGate:CPUManager` | - | - |
+| Kernel Samepage Merging (KSM) zero pages only | DP | opt-in | `platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration` | - | - |
+| KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-metrics-exporter=true` | - | Cluster Observability Operator |
+| Logging | DP | opt-in | `platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true` | Loki Operator, Red Hat OpenShift Logging Operator | - |
+| MTV Operator | DP | opt-in | `platform.kubevirt.io/enable-mtv=true` | - | - |
+| MetalLB Operator | DP | opt-in | `platform.kubevirt.io/enable-metallb=true` | - | - |
+| NHC with FAR remediator and SBR detection-mode config | DP | opt-in | `platform.kubevirt.io/enable-node-remediation=true` | Node Health Check Operator, Fence Agents Remediation Operator, Storage Based Remediation Operator | - |
+| PCI Passthrough | DP | opt-in | `platform.kubevirt.io/openshift=true, platform.kubevirt.io/enable-pci-passthrough=true` | - | - |
+| Transparent Huge Pages (THP) Tuning | DP | opt-in | `platform.kubevirt.io/enable-thp-tuning=true` | - | - |
+| Troubleshooting Panel | DP | opt-in | `platform.kubevirt.io/enable-korrel8r=true` | Cluster Observability Operator | - |
+<!-- END FEATURE STATUS -->
+
 ## Quick Start
 
 ### Prerequisites

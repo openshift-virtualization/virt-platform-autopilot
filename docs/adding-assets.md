@@ -318,6 +318,25 @@ The `assets/active/metadata.yaml` catalog defines all managed assets.
 
 **conditions**: Array of conditions that must ALL be true for asset to be applied.
 
+### Feature Metadata (`features:` section)
+
+The same `assets/active/metadata.yaml` file also defines user-facing feature entries in `features:`.
+When documenting dependencies there, use:
+
+- `requires`: Hard dependencies required for the feature to function at all.
+- `recommended`: Optional integrations that improve UX/visibility (for example dashboards or UI plugins) but are not required for core behavior.
+
+Example:
+
+```yaml
+- name: KubeVirt Metrics Exporter
+  description: Per-node VM storage I/O latency collection
+  maturity: dp
+  groups: [metrics-exporter]
+  recommended:
+    - Cluster Observability Operator
+```
+
 ### Condition Types
 
 #### Annotation Condition

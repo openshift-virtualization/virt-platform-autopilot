@@ -270,6 +270,7 @@ kubectl port-forward -n openshift-cnv deployment/virt-platform-autopilot 8081:80
 - `/debug/render` - Render all assets based on current HCO state
 - `/debug/render/{asset}` - Render specific asset by name
 - `/debug/exclusions` - List excluded/filtered assets with reasons
+- `/debug/features` - Feature catalog with maturity, install mode, and opt-in conditions
 - `/debug/tombstones` - List tombstones (resources marked for deletion)
 - `/debug/health` - Health check status
 
@@ -463,7 +464,8 @@ Kubernetes events are emitted for significant state changes:
 virt-platform-autopilot/
 ├── cmd/
 │   ├── main.go                    # Manager entrypoint
-│   └── rbac-gen/                  # RBAC generation tool
+│   ├── rbac-gen/                  # RBAC generation tool
+│   └── feature-status-gen/        # Feature status table/JSON generator
 ├── pkg/
 │   ├── controller/                # Main reconciler
 │   ├── engine/                    # Rendering, patching, drift detection
@@ -483,6 +485,7 @@ virt-platform-autopilot/
 │   └── tombstones/                # Obsolete resources for deletion
 ├── config/                        # Kubernetes manifests for deployment
 └── docs/                          # Documentation
+    └── generated/                 # Auto-generated artifacts (feature-status.json)
 ```
 
 ## Asset Management
@@ -536,6 +539,57 @@ assets:
 - `component`: Kubernetes Kind of the primary managed resource
 - `reconcile_order`: Processing order within a phase (lower = earlier)
 - `conditions`: Activation conditions (annotations, hardware detection, feature gates) — all must be satisfied (AND logic)
+
+### Feature Catalog
+
+The metadata catalog also contains a `features:` section that maps user-facing features to the underlying assets and groups. This is the source of truth for the feature status table in `README.md` and the structured JSON artifact at `docs/generated/feature-status.json`.
+
+```yaml
+features:
+  - name: SWAP
+    description: OpenShift worker node swap support
+    assets: [swap-enable]
+
+  - name: Logging
+    description: Integrated logging stack with LokiStack and ClusterLogForwarder
+    maturity: tp
+    groups: [logging, audit-logging]
+
+  - name: Metrics Exporter
+    description: Per-node VM storage I/O latency collection
+    maturity: dp
+    groups: [metrics-exporter]
+```
+
+**Feature fields:**
+
+- `name`: Human-readable feature name (displayed in the README table)
+- `description`: One-line description of the feature
+- `maturity`: Explicit maturity level — `dp` (Development Preview) or `tp` (Technology Preview). Only required for opt-in features; omit for GA features (auto-derived)
+- `assets`: List of individual asset names this feature comprises
+- `groups`: List of asset group names this feature comprises
+- `requires`: List of hard dependencies (e.g. operators) required for the feature to function
+- `recommended`: Optional integrations that improve UX/visibility but are not required for core function (for example dashboards/UI plugins)
+
+**Coverage validation:** The generator errors if any asset in the `assets:` section is not referenced by a feature entry (by name or group). Assets intentionally excluded from feature tracking (e.g. internal-only or not yet user-facing) must be listed in `excluded_assets:`:
+
+```yaml
+excluded_assets:
+  - hco-golden-config
+```
+
+**Maturity derivation rules:**
+
+| `maturity` field | Referenced assets' `install` | Derived maturity |
+|---|---|---|
+| `"dp"` | any | DP |
+| `"tp"` | any | TP |
+| omitted | all `always` | GA |
+| omitted | any `opt-in` | DP (fallback) |
+
+The opt-in annotation is automatically derived from the referenced assets' `conditions` — no duplication needed in the feature entry.
+
+Run `make generate-feature-status` after modifying the `features:` section to regenerate the README table and JSON artifact. CI validates consistency via `make verify-feature-status`.
 
 ### Soft Dependencies
 
@@ -602,6 +656,22 @@ make generate-rbac
 This scans `assets/active/` for resource types and generates:
 - ClusterRole with required permissions
 - RoleBindings for service account
+
+### Feature Status Generation
+
+The feature status table in `README.md` and the structured JSON artifact at `docs/generated/feature-status.json` are auto-generated from the `features:` section in `metadata.yaml`:
+
+```bash
+# After adding/modifying features in metadata.yaml, regenerate
+make generate-feature-status
+```
+
+This reads the feature catalog, resolves each feature's assets (by name or group), derives the maturity level and opt-in conditions, and carries dependency metadata (`requires` + `recommended`) into generated output:
+
+- **`docs/generated/feature-status.json`** — structured data for CI/test consumption (e.g. verifying that all opt-in features have working annotation paths)
+- **`README.md`** — markdown table injected between `<!-- BEGIN FEATURE STATUS -->` / `<!-- END FEATURE STATUS -->` sentinel comments
+
+CI validates both outputs via `make verify-feature-status`, which diffs the committed files against a fresh generation. The generator lives at `cmd/feature-status-gen/main.go`.
 
 ### Testing
 
