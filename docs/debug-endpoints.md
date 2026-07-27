@@ -169,6 +169,62 @@ curl http://localhost:8081/debug/exclusions?format=json | jq '.[] | select(.reas
     resource: "KubeDescheduler/cluster"
 ```
 
+#### `/debug/features`
+
+Returns the derived feature catalog: framework maturity/opt-in gate and the sorted feature list with maturity, install mode, opt-in conditions, hard dependencies (`requires`), and optional integrations (`recommended`).
+
+**Query Parameters:**
+- `format` - Output format: `yaml` (default) or `json`
+
+**Examples:**
+```bash
+# List all features (YAML)
+curl http://localhost:8081/debug/features
+
+# Pretty-print JSON (same shape as docs/generated/feature-status.json)
+curl http://localhost:8081/debug/features?format=json | jq '.'
+```
+
+**Response:**
+```json
+{
+  "framework": {
+    "maturity": "TP",
+    "opt_in": "platform.kubevirt.io/autopilot=true"
+  },
+  "features": [
+    {
+      "name": "SWAP",
+      "description": "OpenShift worker node swap support",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
+      "name": "Logging",
+      "description": "Integrated logging stack with LokiStack and ClusterLogForwarder",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true",
+      "requires": [
+        "Loki Operator",
+        "Red Hat OpenShift Logging Operator"
+      ]
+    },
+    {
+      "name": "KubeVirt Metrics Exporter",
+      "description": "Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-metrics-exporter=true",
+      "recommended": [
+        "Cluster Observability Operator"
+      ]
+    }
+  ]
+}
+```
+
 #### `/debug/tombstones`
 
 Lists all tombstones (obsolete resources to be deleted).
