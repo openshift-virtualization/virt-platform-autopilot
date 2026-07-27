@@ -144,6 +144,16 @@ verify-rbac: ## Verify RBAC matches generated (for CI)
 	@rm -f /tmp/generated-rbac.yaml
 	@echo "✓ RBAC is up-to-date"
 
+.PHONY: generate-feature-status
+generate-feature-status: ## Generate feature status table and JSON from metadata
+	@echo "Generating feature status from metadata..."
+	@go run cmd/feature-status-gen/main.go
+
+.PHONY: verify-feature-status
+verify-feature-status: ## Verify feature status matches generated (for CI)
+	@echo "Verifying feature status is up-to-date..."
+	@go run cmd/feature-status-gen/main.go --dry-run
+
 .PHONY: update-crds
 update-crds: ## Update CRD collection from upstream
 	hack/update-crds.sh

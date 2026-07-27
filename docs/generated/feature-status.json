@@ -1,0 +1,105 @@
+{
+  "framework": {
+    "maturity": "TP",
+    "opt_in": "platform.kubevirt.io/autopilot=true"
+  },
+  "features": [
+    {
+      "name": "SWAP",
+      "description": "OpenShift worker node swap support",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
+      "name": "Kubelet Performance",
+      "description": "Optimized kubelet settings for virtualization workloads",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
+      "name": "Observability",
+      "description": "Prometheus metrics, alerting rules, and Perses dashboards in the OpenShift console",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null,
+      "requires": [
+        "Cluster Observability Operator"
+      ]
+    },
+    {
+      "name": "Load-Aware Descheduler",
+      "description": "Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null,
+      "requires": [
+        "Kube Descheduler Operator"
+      ]
+    },
+    {
+      "name": "PCI Passthrough",
+      "description": "GPU/PCI device passthrough via VFIO",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/openshift=true"
+    },
+    {
+      "name": "CPU Manager",
+      "description": "Dedicated CPU pinning for guaranteed QoS workloads",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "featureGate:CPUManager"
+    },
+    {
+      "name": "MTV Operator",
+      "description": "Migration Toolkit for Virtualization",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-mtv=true"
+    },
+    {
+      "name": "MetalLB Operator",
+      "description": "Bare-metal load balancer for services",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-metallb=true"
+    },
+    {
+      "name": "Logging",
+      "description": "Integrated logging stack with LokiStack and ClusterLogForwarder",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true",
+      "requires": [
+        "Loki Operator",
+        "Red Hat OpenShift Logging Operator"
+      ]
+    },
+    {
+      "name": "Troubleshooting Panel",
+      "description": "Korrel8r observability signal correlation in the console",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-korrel8r=true",
+      "requires": [
+        "Cluster Observability Operator"
+      ]
+    },
+    {
+      "name": "Metrics Exporter",
+      "description": "Per-node VM storage I/O latency collection via QMP, QGA, and eBPF",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-metrics-exporter=true"
+    },
+    {
+      "name": "In-Flight Operations",
+      "description": "OperationRuleSet-based coordination for safe concurrent operations",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    }
+  ]
+}
