@@ -2,7 +2,10 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,13 +36,14 @@ const (
 )
 
 const (
-	swapMcName            = "90-worker-swap-online"
-	consistentlyDuration  = 10 * time.Second
-	consistentlyInterval  = 1 * time.Second
-	prometheusRuleName    = "virt-platform-autopilot-alerts"
-	managedByValue        = "virt-platform-autopilot"
-	assetSwapEnable       = "swap-enable"
-	assetPrometheusAlerts = "prometheus-alerts"
+	swapMcName                  = "90-worker-swap-online"
+	consistentlyDuration        = 10 * time.Second
+	consistentlyInterval        = 1 * time.Second
+	prometheusRuleName          = "virt-platform-autopilot-alerts"
+	managedByValue              = "virt-platform-autopilot"
+	assetSwapEnable             = "swap-enable"
+	assetPrometheusAlerts       = "prometheus-alerts"
+	disabledResourcesAnnotation = "platform.kubevirt.io/disabled-resources"
 )
 
 var (
@@ -441,6 +445,132 @@ var _ = Describe("Controller E2E Tests", func() {
 		AfterAll(func() {
 			By("Restoring autopilot to enable after tests")
 			patchAutopilotAndWait(autopilotEnabled)
+		})
+	})
+
+	Context("Disabled resources via annotation", Ordered, func() {
+		BeforeAll(func() {
+			ensureHCOExists()
+			ensureCRDInstalled("prometheusrules.monitoring.coreos.com")
+			ensureCRDInstalled("machineconfigs.machineconfiguration.openshift.io")
+			patchAutopilotAndWait(assetPrometheusAlerts + "," + assetSwapEnable)
+		})
+
+		It("should skip excluded asset while continuing to reconcile others (non-existent kind in annotation is ignored)", func() {
+			testStartTime := time.Now()
+
+			By("excluding PrometheusRule via disabled-resources annotation; annotation also contains a non-existent kind to verify it is silently ignored")
+			exclusionYAML := strings.Join([]string{
+				exclusionEntryYAML(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace),
+				exclusionEntryYAML("NonExistentCRD", "does-not-exist", ""),
+			}, "\n")
+			setAnnotation(hcoGVK, hcoName, operatorNamespace, disabledResourcesAnnotation, exclusionYAML)
+
+			By("deleting PrometheusRule to trigger the exclusion path")
+			deleteResource(prometheusRuleGVK, prometheusRuleName, operatorNamespace)
+
+			touchHCO()
+			waitForOperatorHealthy()
+
+			By("verifying PrometheusRule is not recreated")
+			Consistently(func() bool {
+				_, err := getUnstructuredResource(prometheusRuleGVK, prometheusRuleName, operatorNamespace)
+				return apierrors.IsNotFound(err)
+			}, consistentlyDuration, consistentlyInterval).Should(BeTrue(),
+				"excluded PrometheusRule must not be recreated by operator")
+
+			By("verifying no AssetApplied event for excluded asset")
+			Expect(findEvents(EventFilter{
+				Reason: "AssetApplied",
+				Kind:   prometheusRuleGVK.Kind,
+				Name:   prometheusRuleName,
+				Since:  testStartTime,
+			})).To(BeEmpty(), "AssetApplied must not fire for excluded asset")
+
+			By("verifying no DriftDetected event for excluded asset")
+			Expect(findEvents(EventFilter{
+				Reason: "DriftDetected",
+				Kind:   prometheusRuleGVK.Kind,
+				Name:   prometheusRuleName,
+				Since:  testStartTime,
+			})).To(BeEmpty(), "DriftDetected must not fire for excluded asset")
+
+			By("introducing drift on MachineConfig (non-excluded asset) to prove operator is still active")
+			mcRef := unstructuredRef(machineConfigGVK, swapMcName, "")
+			Expect(k8sClient.Patch(ctx, mcRef, client.RawPatch(types.MergePatchType,
+				[]byte(fmt.Sprintf(`{"metadata":{"labels":{%q:"tampered"}}}`, managedByLabel))))).To(Succeed())
+
+			touchHCO()
+
+			By("verifying managed-by label is restored on MachineConfig")
+			Eventually(func() string {
+				mc, err := getUnstructuredResource(machineConfigGVK, swapMcName, "")
+				if err != nil {
+					return ""
+				}
+				return mc.GetLabels()[managedByLabel]
+			}, timeout, interval).Should(Equal(managedByValue),
+				"non-excluded MachineConfig must be reconciled while excluded PrometheusRule stays absent")
+
+			By("verifying PrometheusRule is still absent after MachineConfig reconciliation")
+			Consistently(func() bool {
+				_, err := getUnstructuredResource(prometheusRuleGVK, prometheusRuleName, operatorNamespace)
+				return apierrors.IsNotFound(err)
+			}, consistentlyDuration, consistentlyInterval).Should(BeTrue(),
+				"excluded PrometheusRule must not be recreated")
+		})
+
+		It("should respect exclusion after operator pod restart", func() {
+			By("restarting operator pod (annotation and absent PR inherited from previous test)")
+			restartOperatorPod()
+
+			By("verifying exclusion is respected after cold-start reconcile")
+			Consistently(func() bool {
+				_, err := getUnstructuredResource(prometheusRuleGVK, prometheusRuleName, operatorNamespace)
+				return apierrors.IsNotFound(err)
+			}, consistentlyDuration, consistentlyInterval).Should(BeTrue(),
+				"disabled-resources annotation must be read on initial reconcile, not only on watch events")
+		})
+
+		It("should recreate asset when removed from disabled list", func() {
+			recreateTime := time.Now()
+			By("replacing disabled-resources annotation to keep only the non-existent kind (PrometheusRule exclusion lifted)")
+			setAnnotation(hcoGVK, hcoName, operatorNamespace, disabledResourcesAnnotation,
+				exclusionEntryYAML("NonExistentCRD", "does-not-exist", ""))
+			touchHCO()
+
+			By("verifying PrometheusRule is recreated")
+			Eventually(func() error {
+				_, err := getUnstructuredResource(prometheusRuleGVK, prometheusRuleName, operatorNamespace)
+				return err
+			}, timeout, interval).Should(Succeed(),
+				"PrometheusRule must be recreated once exclusion is lifted")
+
+			By("verifying AssetApplied event fired for re-included asset")
+			Eventually(func() []eventsv1.Event {
+				return findEvents(EventFilter{
+					Reason: "AssetApplied",
+					Kind:   prometheusRuleGVK.Kind,
+					Name:   prometheusRuleName,
+					Since:  recreateTime,
+				})
+			}, timeout, interval).ShouldNot(BeEmpty(), "AssetApplied must fire when exclusion is lifted")
+
+			By("verifying compliance_status metric is 1 after recreation")
+			Eventually(func() float64 {
+				return captureAssetMetrics(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace).ComplianceStatus
+			}, timeout, interval).Should(Equal(1.0),
+				"compliance_status must be 1 (synced) after PrometheusRule is recreated")
+		})
+
+		AfterAll(func() {
+			By("removing disabled-resources annotation")
+			removeAnnotation(hcoGVK, hcoName, operatorNamespace, disabledResourcesAnnotation)
+
+			By("restoring autopilot annotation to recreate managed assets")
+			patchAutopilotAndWait(autopilotEnabled)
+
+			waitForOperatorHealthy()
 		})
 	})
 
