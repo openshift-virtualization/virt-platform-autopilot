@@ -100,6 +100,12 @@ test/crds/
 - Path: `config/crd/bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml`
 - Local: `remediation/fenceagentsremediations.fence-agents-remediation.medik8s.io.yaml`
 
+**Storage Based Remediation**
+- Repository: https://github.com/medik8s/storage-based-remediation
+- Branch: `main`
+- Path: `config/crd/bases/storage-based-remediation.medik8s.io_storagebasedremediationconfigs.yaml`
+- Local: `remediation/storagebasedremediationconfigs.storage-based-remediation.medik8s.io.yaml`
+
 
 ### Third-Party Operators
 

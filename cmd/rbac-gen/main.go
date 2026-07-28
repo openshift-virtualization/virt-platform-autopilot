@@ -103,6 +103,7 @@ func formatRulesWithComments(static, transitive, dynamic []rbac.Rule) string {
 		"CRD Discovery (for soft dependency detection and template introspection)",
 		"OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)",
 		"Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)",
+		"CDI StorageProfiles (for RWX StorageClass auto-detection in templates)",
 	}
 	for i, rule := range static {
 		if i < len(staticComments) {
@@ -180,6 +181,8 @@ func commentForAPIGroup(group string) string {
 		return "Self Node Remediation"
 	case "fence-agents-remediation.medik8s.io":
 		return "Fence Agents Remediation"
+	case "storage-based-remediation.medik8s.io":
+		return "Storage Based Remediation"
 	case "forklift.konveyor.io":
 		return "Migration Toolkit for Virtualization (MTV)"
 	case "metallb.io":

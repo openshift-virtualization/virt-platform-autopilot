@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"sort"
 	"text/template"
 
 	sprig "github.com/Masterminds/sprig/v3"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	embeddedassets "github.com/kubevirt/virt-platform-autopilot/assets"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
@@ -248,6 +250,12 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 			}
 			return buf.String(), nil
 		},
+
+		// storageProfileRWXClass returns a StorageClass that supports ReadWriteMany + Filesystem,
+		// detected via CDI StorageProfiles. Returns "" if none found, or alphabetically first
+		// if multiple exist. Override with platform.kubevirt.io/sbr-storage-class annotation.
+		// Usage: {{ storageProfileRWXClass }}
+		"storageProfileRWXClass": r.storageProfileRWXClassFunc(),
 	}
 }
 
@@ -558,4 +566,64 @@ func readAsset(path string) (string, error) {
 		return "", fmt.Errorf("readAsset %s: %w", path, err)
 	}
 	return string(data), nil
+}
+
+// storageProfileRWXClassFunc discovers RWX Filesystem StorageClasses via CDI StorageProfiles.
+// Returns "" when none found, or the alphabetically first when multiple exist.
+// When multiple RWX classes are available, the admin should set
+// platform.kubevirt.io/sbr-storage-class on HCO to pick the correct one explicitly.
+func (r *Renderer) storageProfileRWXClassFunc() func() string {
+	return func() string {
+		if r.client == nil {
+			return ""
+		}
+
+		profiles := &unstructured.UnstructuredList{}
+		profiles.SetKind("StorageProfileList")
+		profiles.SetAPIVersion("cdi.kubevirt.io/v1beta1")
+
+		if err := r.client.List(context.Background(), profiles); err != nil {
+			logf.Log.WithName("storageProfileRWXClass").V(2).Info("could not list StorageProfiles, skipping auto-detection", "cause", err)
+			return ""
+		}
+
+		var candidates []string
+		for _, profile := range profiles.Items {
+			if profileSupportsRWXFilesystem(profile.Object) {
+				candidates = append(candidates, profile.GetName())
+			}
+		}
+		if len(candidates) == 0 {
+			return ""
+		}
+		sort.Strings(candidates)
+		return candidates[0]
+	}
+}
+
+func profileSupportsRWXFilesystem(obj map[string]any) bool {
+	sets, found, err := unstructured.NestedSlice(obj, "status", "claimPropertySets")
+	if err != nil {
+		logf.Log.WithName("storageProfileRWXClass").V(2).Info("could not read claimPropertySets, skipping profile", "cause", err)
+	}
+	if !found {
+		return false
+	}
+	for _, set := range sets {
+		s, ok := set.(map[string]any)
+		if !ok {
+			continue
+		}
+		volumeMode, _, _ := unstructured.NestedString(s, "volumeMode")
+		if volumeMode != "Filesystem" {
+			continue
+		}
+		modes, _, _ := unstructured.NestedStringSlice(s, "accessModes")
+		for _, mode := range modes {
+			if mode == "ReadWriteMany" {
+				return true
+			}
+		}
+	}
+	return false
 }

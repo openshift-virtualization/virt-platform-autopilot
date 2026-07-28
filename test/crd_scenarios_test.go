@@ -95,6 +95,7 @@ var _ = Describe("CRD Lifecycle Scenarios", func() {
 			ExpectCRDInstalled(ctx, k8sClient, "nodehealthchecks.remediation.medik8s.io")
 			ExpectCRDInstalled(ctx, k8sClient, "selfnoderemediations.self-node-remediation.medik8s.io")
 			ExpectCRDInstalled(ctx, k8sClient, "fenceagentsremediations.fence-agents-remediation.medik8s.io")
+			ExpectCRDInstalled(ctx, k8sClient, "storagebasedremediationconfigs.storage-based-remediation.medik8s.io")
 
 			By("installing operator CRDs")
 			err = InstallCRDs(ctx, k8sClient, CRDSetOperators)

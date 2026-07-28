@@ -75,6 +75,13 @@ rules:
       - namespaces
     verbs:
       - get
+  # CDI StorageProfiles (for RWX StorageClass auto-detection in templates)
+  - apiGroups:
+      - cdi.kubevirt.io
+    resources:
+      - storageprofiles
+    verbs:
+      - list
   # ========================================
   # Transitive RBAC (from managed ClusterRole/Role assets)
   # ========================================
@@ -278,6 +285,18 @@ rules:
       - security.openshift.io
     resources:
       - securitycontextconstraints
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  # Storage Based Remediation
+  - apiGroups:
+      - storage-based-remediation.medik8s.io
+    resources:
+      - storagebasedremediationconfigs
     verbs:
       - create
       - get
