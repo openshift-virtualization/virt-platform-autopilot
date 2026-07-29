@@ -187,6 +187,17 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - perses.dev
+    resources:
+      - persesdashboards
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # NodeHealthCheck (includes tombstone cleanup)
   - apiGroups:
       - remediation.medik8s.io
