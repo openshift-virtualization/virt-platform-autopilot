@@ -192,8 +192,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"namespace", desired.GetNamespace(),
 			"objectName", desired.GetName(),
 		)
-		// Don't emit metrics or events repeatedly - annotation is self-documenting
-		// User must remove annotation to resume reconciliation
+		// Repopulate the gauge every reconcile: gauge.Set(1) is idempotent and has
+		// zero side effects. Without this, the metric is absent after pod restart
+		// because all in-memory gauges are lost on restart (CNV-94143).
+		observability.SetPaused(desired, true)
 		return false, nil
 	}
 
