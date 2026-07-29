@@ -220,6 +220,16 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		}
 	}
 
+	// Clear all stale customization series before re-evaluating this cycle.
+	// SetCustomization is additive; without this, a series set in a prior reconcile
+	// (e.g. "unmanaged") survives at 1 indefinitely after the annotation is removed
+	// and the asset transitions to a different type.
+	if liveExists {
+		for _, ct := range []string{"patch", "ignore", "unmanaged"} {
+			observability.ClearCustomization(desired, ct)
+		}
+	}
+
 	// Step 2: Check opt-out annotation (mode: unmanaged)
 	if liveExists && overrides.IsUnmanaged(live) {
 		logger.V(1).Info("Asset is unmanaged, skipping",
