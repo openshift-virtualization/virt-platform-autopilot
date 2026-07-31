@@ -162,6 +162,17 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 			}
 		})
 
+		It("should not report other customization types while patch is active", func() {
+			for _, asset := range patchableAssets {
+				Expect(findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "unmanaged")).
+					To(BeNumerically("<=", 0),
+						fmt.Sprintf("customization_info{type=unmanaged} must be absent while patch is active on %s/%s", asset.GVK.Kind, asset.Name))
+				Expect(findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "ignore")).
+					To(BeNumerically("<=", 0),
+						fmt.Sprintf("customization_info{type=ignore} must be absent while patch is active on %s/%s", asset.GVK.Kind, asset.Name))
+			}
+		})
+
 		It("should apply the patch to all patchable assets", func() {
 			for _, asset := range patchableAssets {
 				asset := asset
@@ -243,6 +254,16 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 						fmt.Sprintf("annotation e2e-patch-test should be removed from %s/%s after patch removal", asset.GVK.Kind, asset.Name))
 				}
 			}
+
+			By("verifying customization_info{type=patch} is cleared after annotation removal")
+			for _, asset := range patchableAssets {
+				asset := asset
+				Eventually(func() float64 {
+					return findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "patch")
+				}, timeout, interval).Should(BeNumerically("<=", 0),
+					fmt.Sprintf("customization_info{type=patch} should be absent after removing patch annotation from %s/%s", asset.GVK.Kind, asset.Name))
+			}
+
 			waitForOperatorHealthy()
 		})
 	})
@@ -475,6 +496,17 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 			}
 		})
 
+		It("should not report other customization types while ignore is active", func() {
+			for _, asset := range ignoreFieldAssets {
+				Expect(findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "unmanaged")).
+					To(BeNumerically("<=", 0),
+						fmt.Sprintf("customization_info{type=unmanaged} must be absent while ignore is active on %s/%s", asset.GVK.Kind, asset.Name))
+				Expect(findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "patch")).
+					To(BeNumerically("<=", 0),
+						fmt.Sprintf("customization_info{type=patch} must be absent while ignore is active on %s/%s", asset.GVK.Kind, asset.Name))
+			}
+		})
+
 		It("should restore the operator-controlled field after removing ignore-fields", func() {
 			By("removing ignore-fields annotation from all assets")
 			for _, asset := range ignoreFieldAssets {
@@ -501,6 +533,16 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 				removeAnnotation(asset.GVK, asset.Name, asset.Namespace, ignoreFieldsAnnotation)
 			}
 			touchHCO()
+
+			By("verifying customization_info{type=ignore} is cleared after annotation removal")
+			for _, asset := range ignoreFieldAssets {
+				asset := asset
+				Eventually(func() float64 {
+					return findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "ignore")
+				}, timeout, interval).Should(BeNumerically("<=", 0),
+					fmt.Sprintf("customization_info{type=ignore} should be absent after removing ignore-fields from %s/%s", asset.GVK.Kind, asset.Name))
+			}
+
 			waitForOperatorHealthy()
 		})
 	})
@@ -612,6 +654,17 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 			}
 		})
 
+		It("should not report other customization types while unmanaged is active", func() {
+			for _, asset := range assetsUnderTestAvailable {
+				Expect(findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "patch")).
+					To(BeNumerically("<=", 0),
+						fmt.Sprintf("customization_info{type=patch} must be absent while unmanaged is active on %s/%s", asset.GVK.Kind, asset.Name))
+				Expect(findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "ignore")).
+					To(BeNumerically("<=", 0),
+						fmt.Sprintf("customization_info{type=ignore} must be absent while unmanaged is active on %s/%s", asset.GVK.Kind, asset.Name))
+			}
+		})
+
 		It("should resume reconciliation and correct drift when unmanaged annotation is removed", func() {
 			By("removing unmanaged annotation from all assets")
 			for _, asset := range assetsUnderTestAvailable {
@@ -637,6 +690,15 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 						fmt.Sprintf("managed-by label should be restored to %q on %s/%s after resuming managed mode",
 							managedByValue, asset.GVK.Kind, asset.Name))
 				}
+			}
+
+			By("verifying customization_info{type=unmanaged} is cleared after annotation removal")
+			for _, asset := range assetsUnderTestAvailable {
+				asset := asset
+				Eventually(func() float64 {
+					return findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "unmanaged")
+				}, timeout, interval).Should(BeNumerically("<=", 0),
+					fmt.Sprintf("customization_info{type=unmanaged} should be absent after removing unmanaged annotation from %s/%s", asset.GVK.Kind, asset.Name))
 			}
 		})
 
