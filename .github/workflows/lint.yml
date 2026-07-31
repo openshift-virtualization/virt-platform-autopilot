@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    name: Code Linting (Go + Shell)
+    name: Code Linting (Go + Shell + Python)
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -61,6 +61,12 @@ jobs:
 
       - name: Run shellcheck
         run: make shellcheck
+
+      - name: Install flake8 and isort
+        run: pip install flake8 isort
+
+      - name: Run flake8 (Python linting)
+        run: make lint-python
 
       - name: Install promtool
         run: |
