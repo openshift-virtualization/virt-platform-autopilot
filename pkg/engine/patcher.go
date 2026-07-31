@@ -192,8 +192,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"namespace", desired.GetNamespace(),
 			"objectName", desired.GetName(),
 		)
-		// Don't emit metrics or events repeatedly - annotation is self-documenting
-		// User must remove annotation to resume reconciliation
+		// Repopulate the gauge every reconcile: gauge.Set(1) is idempotent and has
+		// zero side effects. Without this, the metric is absent after pod restart
+		// because all in-memory gauges are lost on restart (CNV-94143).
+		observability.SetPaused(desired, true)
 		return false, nil
 	}
 
@@ -215,6 +217,16 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			)
 			p.thrashingDetector.Reset(earlyKey)
 			p.throttle.Reset(earlyKey)
+		}
+	}
+
+	// Clear all stale customization series before re-evaluating this cycle.
+	// SetCustomization is additive; without this, a series set in a prior reconcile
+	// (e.g. "unmanaged") survives at 1 indefinitely after the annotation is removed
+	// and the asset transitions to a different type.
+	if liveExists {
+		for _, ct := range []string{"patch", "ignore", "unmanaged"} {
+			observability.ClearCustomization(desired, ct)
 		}
 	}
 
