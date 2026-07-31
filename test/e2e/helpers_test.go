@@ -1076,3 +1076,54 @@ func deleteTombstoneBlockingWebhook(ts testTombstone) {
 		ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	}
 }
+
+// waitForReconcileSucceeded waits until at least one ReconcileSucceeded event
+// on the HCO is observed since the given timestamp.
+func waitForReconcileSucceeded(since time.Time) {
+	EventuallyWithOffset(1, func() bool {
+		for _, event := range findEvents(EventFilter{Reason: "ReconcileSucceeded", Since: since}) {
+			if event.Regarding.Name == hcoName {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Minute, 2*time.Second).Should(BeTrue(),
+		"operator must emit at least one ReconcileSucceeded")
+}
+
+// exclusionEntryYAML returns a single disabled-resources YAML list entry.
+// namespace is optional; omit for cluster-scoped resources.
+func exclusionEntryYAML(kind, name, namespace string) string {
+	if namespace != "" {
+		return fmt.Sprintf("- kind: %s\n  name: %s\n  namespace: %s", kind, name, namespace)
+	}
+	return fmt.Sprintf("- kind: %s\n  name: %s", kind, name)
+}
+
+// restartOperatorPod deletes the operator pod and waits for a replacement pod
+// with a new UID to become Running, then waits for the operator to be healthy.
+func restartOperatorPod() {
+	By("deleting operator pod to trigger restart")
+	operatorPod := getOperatorPod()
+	oldUID := operatorPod.UID
+	ExpectWithOffset(1, k8sClient.Delete(ctx, operatorPod)).To(Succeed())
+
+	By("waiting for replacement pod with new UID to become Running")
+	EventuallyWithOffset(1, func() bool {
+		podList := &corev1.PodList{}
+		if err := k8sClient.List(ctx, podList,
+			client.InNamespace(operatorNamespace),
+			client.MatchingLabels{"app": operatorAppLabel},
+		); err != nil {
+			return false
+		}
+		for _, p := range podList.Items {
+			if p.UID != oldUID && p.Status.Phase == corev1.PodRunning {
+				return true
+			}
+		}
+		return false
+	}, timeout, interval).Should(BeTrue(),
+		"replacement operator pod should be Running after deletion")
+	waitForOperatorHealthy()
+}
