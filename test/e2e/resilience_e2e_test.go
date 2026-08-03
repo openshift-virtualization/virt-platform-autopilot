@@ -153,15 +153,13 @@ var _ = Describe("Operator Resilience After Restart", Ordered, ContinueOnFailure
 			fmt.Sprintf("pause annotation must survive operator restart on %s/%s — it lives in etcd, not operator memory",
 				resilienceAsset.GVK.Kind, resilienceAsset.Name))
 
-		// TODO CNV-94143: paused_resources not repopulated after restart when pause annotation present.
-		// Uncomment once fixed:
-		// By(fmt.Sprintf("verifying paused_resources=1 repopulated for %s/%s after restart",
-		// 	resilienceAsset.GVK.Kind, resilienceAsset.Name))
-		// Eventually(func() float64 {
-		// 	return captureAssetMetrics(resilienceAsset.GVK.Kind, resilienceAsset.Name, resilienceAsset.Namespace).PausedResources
-		// }, timeout, interval).Should(Equal(1.0),
-		// 	fmt.Sprintf("paused_resources for %s/%s must be 1 after restart — operator must re-read pause annotation from cluster",
-		// 		resilienceAsset.GVK.Kind, resilienceAsset.Name))
+		By(fmt.Sprintf("verifying paused_resources=1 repopulated for %s/%s after restart",
+			resilienceAsset.GVK.Kind, resilienceAsset.Name))
+		Eventually(func() float64 {
+			return captureAssetMetrics(resilienceAsset.GVK.Kind, resilienceAsset.Name, resilienceAsset.Namespace).PausedResources
+		}, timeout, interval).Should(Equal(1.0),
+			fmt.Sprintf("paused_resources for %s/%s must be 1 after restart — operator must re-read pause annotation from cluster",
+				resilienceAsset.GVK.Kind, resilienceAsset.Name))
 
 		By(fmt.Sprintf("verifying operator does not reconcile %s/%s while paused",
 			resilienceAsset.GVK.Kind, resilienceAsset.Name))
