@@ -18,7 +18,14 @@ package assets
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"sigs.k8s.io/yaml"
 )
 
 func TestNewRegistry(t *testing.T) {
@@ -597,4 +604,157 @@ func TestCrdNameFromGVK(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestAssetBooleanStringMismatch validates that asset templates do not use bare YAML
+// booleans (true/false) for CRD fields declared as type: string.
+//
+// When sigs.k8s.io/yaml parses bare `true`, it produces Go bool(true). SSA then
+// sends a JSON boolean to the API server, which rejects it if the CRD field is
+// type: string with enum ["true","false"]. The fix is to quote: "true".
+func TestAssetBooleanStringMismatch(t *testing.T) {
+	crdIndex := loadCRDIndex(t)
+	if len(crdIndex) == 0 {
+		t.Fatal("No CRDs found in test/crds/")
+	}
+	t.Logf("Loaded %d CRDs from test/crds/", len(crdIndex))
+
+	loader := NewLoader()
+	registry, err := NewRegistry(loader)
+	if err != nil {
+		t.Fatalf("Failed to create registry: %v", err)
+	}
+
+	var mismatches []string
+
+	for _, asset := range registry.catalog.Assets {
+		if asset.RequiredCRD == "" || asset.Path == "" {
+			continue
+		}
+
+		crd, ok := crdIndex[asset.RequiredCRD]
+		if !ok {
+			continue
+		}
+
+		schema := storageVersionSchema(crd)
+		if schema == nil {
+			continue
+		}
+
+		content, err := loader.LoadAsset(asset.Path)
+		if err != nil {
+			continue
+		}
+
+		isTemplate := strings.HasSuffix(asset.Path, ".tpl") || strings.HasSuffix(asset.Path, ".tmpl")
+		if isTemplate {
+			content = preprocessAssetTemplate(content)
+		}
+
+		for _, doc := range strings.Split(string(content), "\n---\n") {
+			doc = strings.TrimSpace(doc)
+			if doc == "" {
+				continue
+			}
+			var obj map[string]any
+			if err := yaml.Unmarshal([]byte(doc), &obj); err != nil {
+				continue
+			}
+			findBoolStringMismatches(obj, schema, "", asset.Name, &mismatches)
+		}
+	}
+
+	if len(mismatches) > 0 {
+		t.Errorf("Found %d YAML boolean(s) in CRD string fields (use quoted \"true\"/\"false\" instead):\n  %s",
+			len(mismatches), strings.Join(mismatches, "\n  "))
+	}
+}
+
+// loadCRDIndex walks test/crds/ and returns a map of CRD name to parsed CRD.
+func loadCRDIndex(t *testing.T) map[string]*apiextensionsv1.CustomResourceDefinition {
+	t.Helper()
+
+	crdsDir := filepath.Join("..", "..", "test", "crds")
+	if _, err := os.Stat(crdsDir); os.IsNotExist(err) {
+		t.Skipf("test/crds/ directory not found at %s", crdsDir)
+	}
+
+	index := make(map[string]*apiextensionsv1.CustomResourceDefinition)
+	_ = filepath.Walk(crdsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || filepath.Ext(path) != ".yaml" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		if err := yaml.Unmarshal(data, crd); err != nil {
+			return nil
+		}
+		if crd.Name != "" {
+			index[crd.Name] = crd
+		}
+		return nil
+	})
+	return index
+}
+
+// storageVersionSchema returns the OpenAPI schema for the storage version of a CRD.
+func storageVersionSchema(crd *apiextensionsv1.CustomResourceDefinition) *apiextensionsv1.JSONSchemaProps {
+	for _, v := range crd.Spec.Versions {
+		if v.Storage && v.Schema != nil {
+			return v.Schema.OpenAPIV3Schema
+		}
+	}
+	return nil
+}
+
+// findBoolStringMismatches recursively walks a parsed YAML object and checks each
+// boolean leaf against the CRD schema. If the schema declares the field as type: string,
+// it records a mismatch.
+func findBoolStringMismatches(obj map[string]any, schema *apiextensionsv1.JSONSchemaProps, path, assetName string, mismatches *[]string) {
+	if schema == nil {
+		return
+	}
+	if schema.XPreserveUnknownFields != nil && *schema.XPreserveUnknownFields {
+		return
+	}
+
+	for key, val := range obj {
+		fieldPath := path + "." + key
+		fieldSchema, ok := schema.Properties[key]
+		if !ok {
+			continue
+		}
+
+		switch v := val.(type) {
+		case bool:
+			if fieldSchema.Type == "string" {
+				*mismatches = append(*mismatches,
+					fmt.Sprintf("%s: field %s is bool but CRD declares type: string", assetName, fieldPath))
+			}
+		case map[string]any:
+			findBoolStringMismatches(v, &fieldSchema, fieldPath, assetName, mismatches)
+		case []any:
+			itemSchema := arrayItemSchema(&fieldSchema)
+			if itemSchema == nil {
+				continue
+			}
+			for i, item := range v {
+				if m, ok := item.(map[string]any); ok {
+					findBoolStringMismatches(m, itemSchema, fmt.Sprintf("%s[%d]", fieldPath, i), assetName, mismatches)
+				}
+			}
+		}
+	}
+}
+
+// arrayItemSchema extracts the schema for array items.
+func arrayItemSchema(schema *apiextensionsv1.JSONSchemaProps) *apiextensionsv1.JSONSchemaProps {
+	if schema.Type != "array" || schema.Items == nil {
+		return nil
+	}
+	return schema.Items.Schema
 }
