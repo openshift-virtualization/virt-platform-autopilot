@@ -1,3 +1,4 @@
+{{- $envOverrides := dig "metadata" "annotations" "platform.kubevirt.io/metrics-exporter-env" "{}" .HCO.Object | fromJson }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -33,25 +34,25 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: ENABLE_QMP
-              value: "true"
+              value: {{ index $envOverrides "ENABLE_QMP" | default "true" | quote }}
             - name: ENABLE_QGA
-              value: "true"
+              value: {{ index $envOverrides "ENABLE_QGA" | default "true" | quote }}
             - name: QGA_POLL_INTERVAL
-              value: "1m"
+              value: {{ index $envOverrides "QGA_POLL_INTERVAL" | default "1m" | quote }}
             - name: ENABLE_EBPF
-              value: "true"
+              value: {{ index $envOverrides "ENABLE_EBPF" | default "true" | quote }}
             - name: ENABLE_EBPF_BLOCK
-              value: "true"
+              value: {{ index $envOverrides "ENABLE_EBPF_BLOCK" | default "true" | quote }}
             - name: ENABLE_EBPF_NFS
-              value: "true"
+              value: {{ index $envOverrides "ENABLE_EBPF_NFS" | default "true" | quote }}
             - name: ENABLE_EBPF_NFS_KPROBE
-              value: "false"
+              value: {{ index $envOverrides "ENABLE_EBPF_NFS_KPROBE" | default "false" | quote }}
             - name: QMP_POLL_INTERVAL
-              value: "1m"
+              value: {{ index $envOverrides "QMP_POLL_INTERVAL" | default "1m" | quote }}
             - name: EBPF_SCAN_INTERVAL
-              value: "30"
+              value: {{ index $envOverrides "EBPF_SCAN_INTERVAL" | default "30" | quote }}
             - name: LOG_LEVEL
-              value: "info"
+              value: {{ index $envOverrides "LOG_LEVEL" | default "info" | quote }}
           ports:
             - name: metrics
               containerPort: 8080

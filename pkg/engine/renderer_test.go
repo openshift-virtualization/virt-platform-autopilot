@@ -431,6 +431,182 @@ func TestRenderTemplate(t *testing.T) {
 	})
 }
 
+func TestMetricsExporterEnvOverrides(t *testing.T) {
+	loader := assets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	t.Run("no annotation uses all defaults", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"name":      "kubevirt-hyperconverged",
+						"namespace": "openshift-cnv",
+					},
+				},
+			},
+			Images: map[string]string{
+				"kubevirt-metrics-exporter": "quay.io/kubevirt/metrics-exporter:latest",
+			},
+		}
+
+		assetMeta := &assets.AssetMetadata{
+			Name: "metrics-exporter",
+			Path: "active/metrics-exporter/metrics-exporter.yaml.tpl",
+		}
+
+		obj, err := renderer.RenderAsset(assetMeta, ctx)
+		if err != nil {
+			t.Fatalf("RenderAsset() error = %v", err)
+		}
+		if obj == nil {
+			t.Fatal("RenderAsset() returned nil")
+		}
+
+		envVars := extractEnvVars(t, obj)
+		assertEnvValue(t, envVars, "ENABLE_QMP", "true")
+		assertEnvValue(t, envVars, "ENABLE_QGA", "true")
+		assertEnvValue(t, envVars, "QGA_POLL_INTERVAL", "1m")
+		assertEnvValue(t, envVars, "ENABLE_EBPF", "true")
+		assertEnvValue(t, envVars, "ENABLE_EBPF_BLOCK", "true")
+		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS", "true")
+		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS_KPROBE", "false")
+		assertEnvValue(t, envVars, "QMP_POLL_INTERVAL", "1m")
+		assertEnvValue(t, envVars, "EBPF_SCAN_INTERVAL", "30")
+		assertEnvValue(t, envVars, "LOG_LEVEL", "info")
+	})
+
+	t.Run("partial override merges with defaults", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"name":      "kubevirt-hyperconverged",
+						"namespace": "openshift-cnv",
+						"annotations": map[string]any{
+							"platform.kubevirt.io/metrics-exporter-env": `{"LOG_LEVEL":"debug","ENABLE_QMP":"false","EBPF_SCAN_INTERVAL":"60"}`,
+						},
+					},
+				},
+			},
+			Images: map[string]string{
+				"kubevirt-metrics-exporter": "quay.io/kubevirt/metrics-exporter:latest",
+			},
+		}
+
+		assetMeta := &assets.AssetMetadata{
+			Name: "metrics-exporter",
+			Path: "active/metrics-exporter/metrics-exporter.yaml.tpl",
+		}
+
+		obj, err := renderer.RenderAsset(assetMeta, ctx)
+		if err != nil {
+			t.Fatalf("RenderAsset() error = %v", err)
+		}
+		if obj == nil {
+			t.Fatal("RenderAsset() returned nil")
+		}
+
+		envVars := extractEnvVars(t, obj)
+
+		// Overridden values
+		assertEnvValue(t, envVars, "LOG_LEVEL", "debug")
+		assertEnvValue(t, envVars, "ENABLE_QMP", "false")
+		assertEnvValue(t, envVars, "EBPF_SCAN_INTERVAL", "60")
+
+		// Non-overridden values keep defaults
+		assertEnvValue(t, envVars, "ENABLE_QGA", "true")
+		assertEnvValue(t, envVars, "QGA_POLL_INTERVAL", "1m")
+		assertEnvValue(t, envVars, "ENABLE_EBPF", "true")
+		assertEnvValue(t, envVars, "ENABLE_EBPF_BLOCK", "true")
+		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS", "true")
+		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS_KPROBE", "false")
+		assertEnvValue(t, envVars, "QMP_POLL_INTERVAL", "1m")
+	})
+
+	t.Run("empty JSON object uses all defaults", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]any{
+					"metadata": map[string]any{
+						"name":      "kubevirt-hyperconverged",
+						"namespace": "openshift-cnv",
+						"annotations": map[string]any{
+							"platform.kubevirt.io/metrics-exporter-env": `{}`,
+						},
+					},
+				},
+			},
+			Images: map[string]string{
+				"kubevirt-metrics-exporter": "quay.io/kubevirt/metrics-exporter:latest",
+			},
+		}
+
+		assetMeta := &assets.AssetMetadata{
+			Name: "metrics-exporter",
+			Path: "active/metrics-exporter/metrics-exporter.yaml.tpl",
+		}
+
+		obj, err := renderer.RenderAsset(assetMeta, ctx)
+		if err != nil {
+			t.Fatalf("RenderAsset() error = %v", err)
+		}
+		if obj == nil {
+			t.Fatal("RenderAsset() returned nil")
+		}
+
+		envVars := extractEnvVars(t, obj)
+		assertEnvValue(t, envVars, "LOG_LEVEL", "info")
+		assertEnvValue(t, envVars, "ENABLE_QMP", "true")
+		assertEnvValue(t, envVars, "EBPF_SCAN_INTERVAL", "30")
+	})
+}
+
+// extractEnvVars pulls env vars from the rendered DaemonSet into a name->value map.
+func extractEnvVars(t *testing.T, obj *unstructured.Unstructured) map[string]string {
+	t.Helper()
+	containers, found, err := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+	if err != nil || !found || len(containers) == 0 {
+		t.Fatal("could not find containers in rendered DaemonSet")
+	}
+
+	container, ok := containers[0].(map[string]any)
+	if !ok {
+		t.Fatal("container is not a map")
+	}
+
+	envList, ok := container["env"].([]any)
+	if !ok {
+		t.Fatal("env is not a list")
+	}
+
+	result := make(map[string]string)
+	for _, item := range envList {
+		envMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := envMap["name"].(string)
+		value, _ := envMap["value"].(string)
+		if name != "" {
+			result[name] = value
+		}
+	}
+	return result
+}
+
+func assertEnvValue(t *testing.T, envVars map[string]string, name, expected string) {
+	t.Helper()
+	got, exists := envVars[name]
+	if !exists {
+		t.Errorf("env var %s not found in rendered output", name)
+		return
+	}
+	if got != expected {
+		t.Errorf("env var %s = %q, want %q", name, got, expected)
+	}
+}
+
 func TestRenderAsset(t *testing.T) {
 	t.Run("identifies template vs static files", func(t *testing.T) {
 		loader := assets.NewLoader()
