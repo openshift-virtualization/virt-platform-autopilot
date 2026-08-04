@@ -99,6 +99,12 @@ func StaticRules() []Rule {
 			Resources: []string{"namespaces"},
 			Verbs:     []string{"get"},
 		},
+		// Rule 7: CDI StorageProfiles (for RWX StorageClass auto-detection in templates)
+		{
+			APIGroups: []string{"cdi.kubevirt.io"},
+			Resources: []string{"storageprofiles"},
+			Verbs:     []string{"list"},
+		},
 	}
 }
 

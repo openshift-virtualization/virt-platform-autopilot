@@ -398,9 +398,14 @@ func TestIsManagedCRD(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "NodeHealthCheck is not managed (removed)",
+			name:     "NodeHealthCheck is managed",
 			crdName:  "nodehealthchecks.remediation.medik8s.io",
-			expected: false,
+			expected: true,
+		},
+		{
+			name:     "StorageBasedRemediationConfig is managed",
+			crdName:  "storagebasedremediationconfigs.storage-based-remediation.medik8s.io",
+			expected: true,
 		},
 		{
 			name:     "ForkliftController is managed",

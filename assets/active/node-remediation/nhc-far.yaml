@@ -1,0 +1,25 @@
+apiVersion: remediation.medik8s.io/v1alpha1
+kind: NodeHealthCheck
+metadata:
+  name: far
+spec:
+  minHealthy: "51%"
+  remediationTemplate:
+    apiVersion: fence-agents-remediation.medik8s.io/v1alpha1
+    kind: FenceAgentsRemediationTemplate
+    name: fenceagentsremediationtemplate-default
+    namespace: openshift-workload-availability
+  selector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/worker
+        operator: Exists
+  unhealthyConditions:
+    - duration: 300s
+      status: "False"
+      type: Ready
+    - duration: 300s
+      status: Unknown
+      type: Ready
+    - duration: 300s
+      status: "True"
+      type: SBRStorageUnhealthy

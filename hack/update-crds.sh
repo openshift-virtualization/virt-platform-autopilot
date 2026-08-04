@@ -117,6 +117,7 @@ declare -a CRD_METADATA=(
     "Medik8s Remediation|NodeHealthCheck|medik8s/node-healthcheck-operator|main|config/crd/bases/remediation.medik8s.io_nodehealthchecks.yaml|remediation/nodehealthchecks.remediation.medik8s.io.yaml"
     "Medik8s Remediation|Self Node Remediation|medik8s/self-node-remediation|main|config/crd/bases/self-node-remediation.medik8s.io_selfnoderemediations.yaml|remediation/selfnoderemediations.self-node-remediation.medik8s.io.yaml"
     "Medik8s Remediation|Fence Agents Remediation|medik8s/fence-agents-remediation|main|config/crd/bases/fence-agents-remediation.medik8s.io_fenceagentsremediations.yaml|remediation/fenceagentsremediations.fence-agents-remediation.medik8s.io.yaml"
+    "Medik8s Remediation|Storage Based Remediation|medik8s/storage-based-remediation|main|config/crd/bases/storage-based-remediation.medik8s.io_storagebasedremediationconfigs.yaml|remediation/storagebasedremediationconfigs.storage-based-remediation.medik8s.io.yaml"
 
     # Third-Party Operators
     "Third-Party Operators|MTV (Forklift)|kubev2v/forklift|main|operator/config/crd/bases/forklift.konveyor.io_forkliftcontrollers.yaml|operators/forklift.konveyor.io_forkliftcontrollers.yaml"

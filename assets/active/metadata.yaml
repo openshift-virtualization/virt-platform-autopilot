@@ -763,6 +763,36 @@ assets:
     reconcile_order: 3
     conditions: *metrics-exporter-conditions
 
+  # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
+  # (picks alphabetically first RWX Filesystem class). Omits field when none found.
+  # Admin should set platform.kubevirt.io/sbr-storage-class on HCO if multiple RWX classes exist.
+  # Opt-in (tech preview): requires platform.kubevirt.io/enable-node-remediation annotation.
+  - name: sbr-detection-config
+    path: active/node-remediation/storage-based-remediation-config.yaml.tpl
+    gate_crd: storagebasedremediationconfigs.storage-based-remediation.medik8s.io
+    phase: 1
+    install: opt-in
+    component: StorageBasedRemediationConfig
+    reconcile_order: 1
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-node-remediation
+        value: "true"
+
+  # NHC with FAR remediator. User must create fenceagentsremediationtemplate-default
+  # in openshift-workload-availability with BMC credentials.
+  - name: nhc-far
+    path: active/node-remediation/nhc-far.yaml
+    gate_crd: nodehealthchecks.remediation.medik8s.io
+    phase: 1
+    install: opt-in
+    component: NodeHealthCheck
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-node-remediation
+        value: "true"
+
   # Phase 2: Opt-in - Advanced features
   # TODO: Implement these assets:
   # - vfio-assign (machine-config/04-vfio-assign.yaml.tpl)
