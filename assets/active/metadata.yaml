@@ -76,6 +76,42 @@ assets:
     component: MachineConfig
     reconcile_order: 1
 
+  - name: ksm-zero-only
+    group: ksm-zero-only
+    path: active/machine-config/05-ksm-zero-only.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-ksm-zero-only
+        value: "true"
+
+  - name: ksm-cluster-monitoring
+    group: ksm-zero-only
+    path: active/monitoring/cluster-monitoring-ksm.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: ConfigMap
+    reconcile_order: 2
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-ksm-zero-only
+        value: "true"
+
+  - name: thp-tuning
+    group: thp-tuning
+    path: active/machine-config/06-thp-tuning.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-thp-tuning
+        value: "true"
+
   # Phase 1: OpenShift Kubelet (soft dependency on KubeletConfig CRD)
   - name: kubelet-perf-settings
     path: active/kubelet/perf-settings.yaml.tpl

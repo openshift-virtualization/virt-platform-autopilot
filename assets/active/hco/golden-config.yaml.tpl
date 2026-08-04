@@ -1,3 +1,4 @@
+{{- $ksmZeroOnly := hasAnnotation .HCO.Object "platform.kubevirt.io/enable-ksm-zero-only" "true" }}
 apiVersion: hco.kubevirt.io/v1
 kind: HyperConverged
 metadata:
@@ -6,5 +7,8 @@ metadata:
   annotations:
     platform.kubevirt.io/managed-by: virt-platform-autopilot
     platform.kubevirt.io/version: "1.0.0"
-spec: {}
+spec:
+{{- if $ksmZeroOnly }}
+  ksmConfiguration: null
+{{- end }}
 
