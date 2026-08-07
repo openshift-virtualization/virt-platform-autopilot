@@ -4,6 +4,6 @@ metadata:
   name: forklift-controller
   namespace: openshift-mtv
 spec:
-  feature_ui: true
-  feature_validation: true
-  feature_volume_populator: true
+  feature_ui_plugin: "true"
+  feature_validation: "true"
+  feature_volume_populator: "true"
