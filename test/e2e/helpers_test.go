@@ -774,6 +774,54 @@ type missingDependency struct {
 	Version string
 }
 
+// discoveredAsset identifies a managed asset found in the operator metrics at runtime.
+type discoveredAsset struct {
+	Kind      string
+	Name      string
+	Namespace string
+}
+
+func (a discoveredAsset) label() string {
+	if a.Namespace != "" {
+		return fmt.Sprintf("%s/%s/%s", a.Kind, a.Namespace, a.Name)
+	}
+	return fmt.Sprintf("%s/%s", a.Kind, a.Name)
+}
+
+// discoverActiveAssets parses the operator metrics endpoint and returns all assets
+// found in either kubevirt_autopilot_paused_resources or kubevirt_autopilot_compliance_status.
+// The union covers paused assets (which emit paused_resources=1 but never reach
+// compliance_status) and any asset visible only in compliance_status due to timing.
+// Covers both GA and opt-in assets without requiring a hardcoded list.
+func discoverActiveAssets() []discoveredAsset {
+	body := fetchMetricsBody()
+	seen := map[string]bool{}
+	var assets []discoveredAsset
+
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "kubevirt_autopilot_paused_resources") &&
+			!strings.HasPrefix(line, "kubevirt_autopilot_compliance_status") {
+			continue
+		}
+		kind := parseMetricLabel(line, "kind")
+		name := parseMetricLabel(line, "name")
+		namespace := parseMetricLabel(line, "namespace")
+		if kind == "" || name == "" {
+			continue
+		}
+		key := kind + "/" + namespace + "/" + name
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		assets = append(assets, discoveredAsset{Kind: kind, Name: name, Namespace: namespace})
+	}
+	return assets
+}
+
 func getMissingDependenciesFromMetrics() []missingDependency {
 	var deps []missingDependency
 	body := fetchMetricsBody()
