@@ -665,6 +665,17 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 			}
 		})
 
+		It("should clear compliance_status while unmanaged", func() {
+			for _, asset := range assetsUnderTestAvailable {
+				asset := asset
+				Eventually(func() float64 {
+					return captureAssetMetrics(asset.GVK.Kind, asset.Name, asset.Namespace).ComplianceStatus
+				}, timeout, interval).Should(Equal(-1.0),
+					fmt.Sprintf("compliance_status must be absent (-1=not found) while %s/%s is unmanaged",
+						asset.GVK.Kind, asset.Name))
+			}
+		})
+
 		It("should resume reconciliation and correct drift when unmanaged annotation is removed", func() {
 			By("removing unmanaged annotation from all assets")
 			for _, asset := range assetsUnderTestAvailable {
@@ -699,6 +710,16 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 					return findCustomizationMetric(asset.GVK.Kind, asset.Name, asset.Namespace, "unmanaged")
 				}, timeout, interval).Should(BeNumerically("<=", 0),
 					fmt.Sprintf("customization_info{type=unmanaged} should be absent after removing unmanaged annotation from %s/%s", asset.GVK.Kind, asset.Name))
+			}
+
+			By("verifying compliance_status is re-emitted as 1 after resuming managed mode")
+			for _, asset := range assetsUnderTestAvailable {
+				asset := asset
+				Eventually(func() float64 {
+					return captureAssetMetrics(asset.GVK.Kind, asset.Name, asset.Namespace).ComplianceStatus
+				}, timeout, interval).Should(Equal(1.0),
+					fmt.Sprintf("compliance_status must be 1 for %s/%s after resuming managed mode",
+						asset.GVK.Kind, asset.Name))
 			}
 		})
 

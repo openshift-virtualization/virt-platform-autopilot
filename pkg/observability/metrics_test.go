@@ -145,6 +145,39 @@ func TestSetCustomization(t *testing.T) {
 	}
 }
 
+func TestClearCompliance(t *testing.T) {
+	// Reset metrics before test
+	ComplianceStatus.Reset()
+
+	obj := &unstructured.Unstructured{}
+	obj.SetKind("HyperConverged")
+	obj.SetName("kubevirt-hyperconverged")
+	obj.SetNamespace("kubevirt-hyperconverged")
+
+	// Set and then clear compliance
+	SetCompliance(obj, 1)
+	ClearCompliance(obj)
+
+	// After clearing, the metric should not exist
+	count := testutil.CollectAndCount(ComplianceStatus)
+	if count != 0 {
+		t.Errorf("expected 0 metrics after clear, got %d", count)
+	}
+
+	// Verify a different resource's series is not affected
+	other := &unstructured.Unstructured{}
+	other.SetKind("Service")
+	other.SetName("other-service")
+	other.SetNamespace("other-ns")
+	SetCompliance(other, 1)
+	ClearCompliance(obj)
+	count = testutil.CollectAndCount(ComplianceStatus)
+	if count != 1 {
+		t.Errorf("expected 1 metric after clearing only one resource, got %d", count)
+	}
+	ComplianceStatus.Reset()
+}
+
 func TestClearCustomization(t *testing.T) {
 	// Reset metrics before test
 	CustomizationInfo.Reset()
