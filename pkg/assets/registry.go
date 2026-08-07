@@ -68,9 +68,28 @@ type AssetMetadata struct {
 	RequiredCRD     string                     `json:"-"` // Derived from template at load time; empty for core API types
 }
 
+// FeatureMetadata defines a user-facing feature composed of one or more assets
+type FeatureMetadata struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Maturity    string   `json:"maturity,omitempty"` // "dp" or "tp"; empty = auto-derive from install mode
+	Assets      []string `json:"assets,omitempty"`   // individual asset names
+	Groups      []string `json:"groups,omitempty"`   // asset group names
+	Requires    []string `json:"requires,omitempty"` // soft dependencies (e.g. operator names)
+}
+
+// FrameworkMetadata defines the maturity of the autopilot framework itself
+type FrameworkMetadata struct {
+	Maturity string `json:"maturity,omitempty"` // "dp", "tp", or empty (GA)
+	OptIn    string `json:"opt_in,omitempty"`   // global opt-in annotation; empty when GA
+}
+
 // AssetCatalog contains all asset metadata
 type AssetCatalog struct {
-	Assets []AssetMetadata `json:"assets"`
+	Assets         []AssetMetadata   `json:"assets"`
+	Framework      FrameworkMetadata `json:"framework"`
+	ExcludedAssets []string          `json:"excluded_assets,omitempty"`
+	Features       []FeatureMetadata `json:"features"`
 }
 
 // Registry manages the asset catalog and provides querying capabilities

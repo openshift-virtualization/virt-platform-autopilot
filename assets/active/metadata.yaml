@@ -800,3 +800,84 @@ assets:
   # - node-maintenance-operator (operators/node-maintenance.yaml.tpl)
   # - fence-agents-operator (operators/fence-agents.yaml.tpl)
   # - usb-passthrough (machine-config/05-usb-passthrough.yaml.tpl)
+
+# Framework-level maturity. Remove opt_in once the autopilot graduates to GA.
+framework:
+  maturity: tp
+  opt_in: platform.kubevirt.io/autopilot=true
+
+# Feature catalog: maps user-facing features to assets/groups.
+# - maturity is required only for opt-in features ("dp" or "tp")
+# - features whose assets are all install: always are auto-classified as GA
+# - opt-in conditions are derived from the referenced assets (no duplication)
+# - every asset must be covered by a feature entry or listed in excluded_assets
+
+# Assets intentionally excluded from feature tracking (e.g. internal-only,
+# not yet user-facing, or managed externally).
+excluded_assets:
+  - hco-golden-config
+
+features:
+  - name: SWAP
+    description: OpenShift worker node swap support
+    assets: [swap-enable]
+
+  - name: Kubelet Performance
+    description: Optimized kubelet settings for virtualization workloads
+    assets: [kubelet-perf-settings]
+
+  - name: Observability
+    description: Prometheus metrics, alerting rules, and Perses dashboards in the OpenShift console
+    assets: [metrics-service, metrics-servicemonitor, prometheus-alerts, monitoring-ui-plugin]
+    requires:
+      - Cluster Observability Operator
+
+  - name: Load-Aware Descheduler
+    description: Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics
+    assets: [descheduler-loadaware, psi-enable]
+    requires:
+      - Kube Descheduler Operator
+
+  - name: PCI Passthrough
+    description: GPU/PCI device passthrough via VFIO
+    maturity: dp
+    assets: [pci-passthrough]
+
+  - name: CPU Manager
+    description: Dedicated CPU pinning for guaranteed QoS workloads
+    maturity: dp
+    assets: [kubelet-cpu-manager]
+
+  - name: MTV Operator
+    description: Migration Toolkit for Virtualization
+    maturity: dp
+    assets: [mtv-operator]
+
+  - name: MetalLB Operator
+    description: Bare-metal load balancer for services
+    maturity: dp
+    assets: [metallb-operator]
+
+  - name: Logging
+    description: Integrated logging stack with LokiStack and ClusterLogForwarder
+    maturity: dp
+    groups: [logging, audit-logging]
+    requires:
+      - Loki Operator
+      - Red Hat OpenShift Logging Operator
+
+  - name: Troubleshooting Panel
+    description: Korrel8r observability signal correlation in the console
+    maturity: dp
+    assets: [troubleshooting-panel-ui-plugin]
+    requires:
+      - Cluster Observability Operator
+
+  - name: Metrics Exporter
+    description: Per-node VM storage I/O latency collection via QMP, QGA, and eBPF
+    maturity: dp
+    groups: [metrics-exporter]
+
+  - name: In-Flight Operations
+    description: OperationRuleSet-based coordination for safe concurrent operations
+    groups: [inflightoperations]

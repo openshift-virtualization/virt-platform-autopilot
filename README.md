@@ -26,6 +26,27 @@ The autopilot applies opinionated best practices and manages your platform autom
 
 **Install once. Run VMs. Customize via GitOps when needed.**
 
+## Features
+
+<!-- BEGIN FEATURE STATUS -->
+> **Note:** The autopilot framework is currently **TP** and requires `platform.kubevirt.io/autopilot=true` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.
+
+| Feature | Maturity | Install | Opt-in | Requires |
+|---------|----------|---------|--------|----------|
+| SWAP | GA | always | - | - |
+| Kubelet Performance | GA | always | - | - |
+| Observability | GA | always | - | Cluster Observability Operator |
+| Load-Aware Descheduler | GA | always | - | Kube Descheduler Operator |
+| PCI Passthrough | DP | opt-in | `platform.kubevirt.io/openshift=true` | - |
+| CPU Manager | DP | opt-in | `featureGate:CPUManager` | - |
+| MTV Operator | DP | opt-in | `platform.kubevirt.io/enable-mtv=true` | - |
+| MetalLB Operator | DP | opt-in | `platform.kubevirt.io/enable-metallb=true` | - |
+| Logging | DP | opt-in | `platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true` | Loki Operator, Red Hat OpenShift Logging Operator |
+| Troubleshooting Panel | DP | opt-in | `platform.kubevirt.io/enable-korrel8r=true` | Cluster Observability Operator |
+| Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-metrics-exporter=true` | - |
+| In-Flight Operations | GA | always | - | - |
+<!-- END FEATURE STATUS -->
+
 ## Quick Start
 
 ### Prerequisites
