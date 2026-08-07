@@ -187,8 +187,34 @@ shellcheck: ## Run shellcheck on all shell scripts
 		echo "  On macOS: brew install shellcheck"; \
 		exit 1; \
 	fi
-	@echo "Running shellcheck on hack/ scripts..."
-	@find hack -name '*.sh' -type f -exec shellcheck -x {} +
+	@echo "Running shellcheck on hack/ and assets/ scripts..."
+	@find hack assets -name '*.sh' -type f -exec shellcheck -x {} +
+
+.PHONY: lint-python
+lint-python: ## Run flake8 and isort on Python scripts in assets/
+	@if ! command -v flake8 >/dev/null 2>&1; then \
+		echo "flake8 not found. Please install it:"; \
+		echo "  On Fedora/RHEL: sudo dnf install python3-flake8"; \
+		echo "  On Ubuntu/Debian: sudo apt-get install python3-flake8"; \
+		echo "  On macOS: brew install flake8"; \
+		exit 1; \
+	fi
+	@if ! command -v isort >/dev/null 2>&1; then \
+		echo "isort not found. Please install it:"; \
+		echo "  On Fedora/RHEL: sudo dnf install python3-isort"; \
+		echo "  On Ubuntu/Debian: sudo apt-get install python3-isort"; \
+		echo "  On macOS: brew install isort"; \
+		exit 1; \
+	fi
+	@scripts=$$(find assets -name '*.py' -type f); \
+	if [ -n "$$scripts" ]; then \
+		echo "Running flake8 on asset Python scripts..."; \
+		flake8 $$scripts; \
+		echo "Running isort on asset Python scripts..."; \
+		isort --check --diff $$scripts; \
+	else \
+		echo "No Python scripts found in assets/"; \
+	fi
 
 ##@ Observability
 
