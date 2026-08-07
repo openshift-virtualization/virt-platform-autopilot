@@ -8,8 +8,9 @@ Computes and applies vm.watermark_scale_factor so that:
 import os
 import sys
 import time
-import yaml
 from collections import namedtuple
+
+import yaml
 
 KUBELET_CONFIG_PATHS = [
     "/var/lib/kubelet/config.json",
