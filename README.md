@@ -1,8 +1,8 @@
 # virt-platform-autopilot
 
-Production-ready OpenShift Virtualization with zero manual configuration. The autopilot detects your hardware, applies best practices, and configures the platform automatically. **Convention over Configuration** for enterprise virtualization.
+Production-ready OpenShift Virtualization with zero manual configuration. The autopilot detects your hardware, cluster topology, applies best practices, and configures the platform automatically. **Convention over Configuration** for enterprise virtualization.
 
-## The Problem
+## Issue
 
 Traditional virtualization platform setup requires:
 - Manual NUMA topology configuration
@@ -12,9 +12,9 @@ Traditional virtualization platform setup requires:
 - Auto-remediation for node failures
 - Coordinating multiple operators, MachineConfigs, and KubeletConfigs
 
-**That's weeks of work requiring deep Kubernetes expertise.**
+That's weeks of work requiring deep Kubernetes expertise.
 
-## The Solution
+## Solution
 
 The autopilot applies opinionated best practices and manages your platform automatically:
 * **Production defaults** - Optimized HCO, platform configurations, kubelet settings
@@ -24,7 +24,27 @@ The autopilot applies opinionated best practices and manages your platform autom
 * **GitOps-friendly** - Declarative control via annotations, fully customizable
 * **Convention over Configuration** - Opinionated entry point, flexible when needed
 
-**Install once. Run VMs. Customize via GitOps when needed.**
+Install once. Run VMs. Customize via GitOps when needed.
+
+## Features
+
+### Maturity Levels
+
+Autopilot has three maturity levels for features
+
+| Level                    | Default?      | Description                                |
+|--------------------------|---------------|--------------------------------------------|
+| Development Preview (DP) | No (opt-in)   | The feature is available as opt-in, with few documentation, for early adopters.
+| Technology Preview (TP)  | No (opt-in)   | The feature is avaialble as opt-in, with documentation, on track to GA.
+| General Availability     | Yes (opt-out) | The feature is available by default, an admin can decide to opt-out.
+
+### Status
+
+| Feature                | DP Version   | TP Version   | GA Version  |
+|------------------------|--------------|--------------|-------------|
+| OpenShift SWAP         | 4.22         | 5.0          |             |
+| FAR + SBR              | 5.0          |              |             |
+| Graceful Node Shutdown | 4.22         |              |             |
 
 ## Quick Start
 
