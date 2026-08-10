@@ -402,6 +402,27 @@ func TestRenderTemplate(t *testing.T) {
 		}
 	})
 
+	t.Run("handles topology context", func(t *testing.T) {
+		ctx := &pkgcontext.RenderContext{
+			HCO: &unstructured.Unstructured{
+				Object: map[string]any{},
+			},
+			Topology: &pkgcontext.TopologyContext{
+				IsCompact: true,
+			},
+		}
+
+		template := "{{ if .Topology.IsCompact }}compact{{ else }}regular{{ end }}"
+		rendered, err := renderer.renderTemplate("test", template, ctx)
+		if err != nil {
+			t.Fatalf("renderTemplate() error = %v", err)
+		}
+
+		if !strings.Contains(string(rendered), "compact") {
+			t.Errorf("renderTemplate() did not handle topology context: %s", string(rendered))
+		}
+	})
+
 	t.Run("returns error for invalid template", func(t *testing.T) {
 		ctx := &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
@@ -427,6 +448,68 @@ func TestRenderTemplate(t *testing.T) {
 		_, err := renderer.renderTemplate("test", template, ctx)
 		if err == nil {
 			t.Error("renderTemplate() should return error for dangerous function 'env'")
+		}
+	})
+}
+
+func TestPSIMachineConfigTopologyRole(t *testing.T) {
+	loader := assets.NewLoader()
+	renderer := NewRenderer(loader)
+
+	workerMeta := &assets.AssetMetadata{
+		Name: "psi-enable",
+		Path: "active/machine-config/04-psi-enable.yaml",
+	}
+	masterMeta := &assets.AssetMetadata{
+		Name: "psi-enable-master",
+		Path: "active/machine-config/05-psi-enable-master.yaml.tpl",
+	}
+
+	t.Run("worker MC always renders with worker role", func(t *testing.T) {
+		ctx := pkgcontext.NewRenderContext(&unstructured.Unstructured{Object: map[string]any{}})
+
+		obj, err := renderer.RenderAsset(workerMeta, ctx)
+		if err != nil {
+			t.Fatalf("RenderAsset() error = %v", err)
+		}
+		if obj == nil {
+			t.Fatal("RenderAsset() returned nil")
+		}
+
+		labels := obj.GetLabels()
+		if got := labels["machineconfiguration.openshift.io/role"]; got != "worker" {
+			t.Errorf("role label = %q, want %q", got, "worker")
+		}
+	})
+
+	t.Run("master MC renders when masters are schedulable", func(t *testing.T) {
+		ctx := pkgcontext.NewRenderContext(&unstructured.Unstructured{Object: map[string]any{}})
+		ctx.Topology = &pkgcontext.TopologyContext{HasSchedulableMasters: true}
+
+		obj, err := renderer.RenderAsset(masterMeta, ctx)
+		if err != nil {
+			t.Fatalf("RenderAsset() error = %v", err)
+		}
+		if obj == nil {
+			t.Fatal("RenderAsset() returned nil for schedulable masters")
+		}
+
+		labels := obj.GetLabels()
+		if got := labels["machineconfiguration.openshift.io/role"]; got != "master" {
+			t.Errorf("role label = %q, want %q", got, "master")
+		}
+	})
+
+	t.Run("master MC skipped when masters not schedulable", func(t *testing.T) {
+		ctx := pkgcontext.NewRenderContext(&unstructured.Unstructured{Object: map[string]any{}})
+		ctx.Topology = &pkgcontext.TopologyContext{HasSchedulableMasters: false}
+
+		obj, err := renderer.RenderAsset(masterMeta, ctx)
+		if err != nil {
+			t.Fatalf("RenderAsset() error = %v", err)
+		}
+		if obj != nil {
+			t.Error("RenderAsset() should return nil when masters are not schedulable")
 		}
 	})
 }
