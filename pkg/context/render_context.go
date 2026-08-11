@@ -74,6 +74,12 @@ type TopologyContext struct {
 	// meaning control-plane nodes run regular workloads (typical 3-node clusters).
 	IsCompact bool
 
+	// HasSchedulableMasters is true when the OpenShift Scheduler CR has
+	// spec.mastersSchedulable=true, meaning control-plane nodes run regular
+	// workloads.  On such clusters MachineConfigs must also target the master
+	// MachineConfigPool because the MCO assigns those nodes to the master pool.
+	HasSchedulableMasters bool
+
 	// ControlPlaneTopology is the raw value from Infrastructure CR
 	// status.controlPlaneTopology: "HighlyAvailable", "SingleReplica", or "External".
 	// Empty string when the Infrastructure CR is unavailable (non-OpenShift).
@@ -107,19 +113,20 @@ type TopologyContext struct {
 // AsMap converts TopologyContext to a flat map for condition evaluation.
 func (t *TopologyContext) AsMap() map[string]interface{} {
 	return map[string]interface{}{
-		"isHCP":                t.IsHCP,
-		"isCompact":            t.IsCompact,
-		"controlPlaneTopology": t.ControlPlaneTopology,
-		"cloudProvider":        t.CloudProvider,
-		"isAWS":                t.IsAWS,
-		"isAzure":              t.IsAzure,
-		"isGCP":                t.IsGCP,
-		"isBareMetal":          t.IsBareMetal,
-		"isVSphere":            t.IsVSphere,
-		"isOpenStack":          t.IsOpenStack,
-		"masterCount":          t.MasterCount,
-		"workerCount":          t.WorkerCount,
-		"totalNodeCount":       t.TotalNodeCount,
+		"isHCP":                 t.IsHCP,
+		"isCompact":             t.IsCompact,
+		"hasSchedulableMasters": t.HasSchedulableMasters,
+		"controlPlaneTopology":  t.ControlPlaneTopology,
+		"cloudProvider":         t.CloudProvider,
+		"isAWS":                 t.IsAWS,
+		"isAzure":               t.IsAzure,
+		"isGCP":                 t.IsGCP,
+		"isBareMetal":           t.IsBareMetal,
+		"isVSphere":             t.IsVSphere,
+		"isOpenStack":           t.IsOpenStack,
+		"masterCount":           t.MasterCount,
+		"workerCount":           t.WorkerCount,
+		"totalNodeCount":        t.TotalNodeCount,
 	}
 }
 
