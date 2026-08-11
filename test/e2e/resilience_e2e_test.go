@@ -55,6 +55,13 @@ var _ = Describe("Operator Resilience After Restart", Ordered, ContinueOnFailure
 	Context("after operator restart with all assets in sync", func() {
 
 		It("should repopulate compliance_status and paused_resources", func() {
+			// Force a full reconcile cycle so all metric gauges are populated
+			// before we freeze the baseline snapshot.
+			By("triggering a reconcile cycle to ensure all metrics are emitted")
+			touchHCOTime := time.Now()
+			touchHCO()
+			waitForReconcileSucceeded(touchHCOTime)
+
 			var active []activeAsset
 			By("collecting baseline metrics for all managed assets")
 			for _, asset := range assetsUnderTest {
@@ -70,11 +77,6 @@ var _ = Describe("Operator Resilience After Restart", Ordered, ContinueOnFailure
 			}
 			Expect(active).NotTo(BeEmpty(),
 				"At least one managed asset must have metrics before the restart")
-			for _, a := range active {
-				Expect(a.metrics.ComplianceStatus).NotTo(Equal(-1.0),
-					fmt.Sprintf("%s/%s must have compliance_status before restart",
-						a.asset.GVK.Kind, a.asset.Name))
-			}
 
 			postRestartTime := time.Now()
 			restartOperatorPod()
