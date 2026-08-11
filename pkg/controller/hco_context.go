@@ -45,6 +45,9 @@ const (
 	// infrastructureResourceName is the singleton Infrastructure CR name on OpenShift.
 	infrastructureResourceName = "cluster"
 
+	// schedulerResourceName is the singleton Scheduler CR name on OpenShift.
+	schedulerResourceName = "cluster"
+
 	// controlPlaneTopologyExternal is the Infrastructure CR value that indicates HCP.
 	controlPlaneTopologyExternal = "External"
 )
@@ -221,6 +224,27 @@ func (b *RenderContextBuilder) detectTopology(ctx context.Context, nodes []corev
 		// Non-OpenShift cluster — topology fields remain at zero values.
 	default:
 		return topology, fmt.Errorf("failed to fetch Infrastructure CR: %w", err)
+	}
+
+	// Fetch the OpenShift Scheduler CR to detect schedulable masters.
+	// When spec.mastersSchedulable is true, the MCO assigns master nodes to the
+	// master MCP so MachineConfigs must also target role: master to apply there.
+	scheduler := &unstructured.Unstructured{}
+	scheduler.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "config.openshift.io",
+		Version: "v1",
+		Kind:    "Scheduler",
+	})
+
+	err = b.client.Get(ctx, types.NamespacedName{Name: schedulerResourceName}, scheduler)
+	switch {
+	case err == nil:
+		schedulable, _, _ := unstructured.NestedBool(scheduler.Object, "spec", "mastersSchedulable")
+		topology.HasSchedulableMasters = schedulable
+	case apierrors.IsNotFound(err):
+		// Non-OpenShift cluster or Scheduler CR absent — default to false.
+	default:
+		return topology, fmt.Errorf("failed to fetch Scheduler CR: %w", err)
 	}
 
 	return topology, nil

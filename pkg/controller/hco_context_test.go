@@ -419,6 +419,15 @@ func infraCR(cpTopology, platformType string) *unstructured.Unstructured {
 	}}
 }
 
+func schedulerCR(mastersSchedulable bool) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "config.openshift.io/v1",
+		"kind":       "Scheduler",
+		"metadata":   map[string]any{"name": "cluster"},
+		"spec":       map[string]any{"mastersSchedulable": mastersSchedulable},
+	}}
+}
+
 func fakeBuilderWith(objects ...client.Object) *RenderContextBuilder {
 	scheme := runtime.NewScheme()
 	_ = corev1.AddToScheme(scheme)
@@ -434,12 +443,15 @@ func TestDetectTopology_CompactCluster(t *testing.T) {
 		masterWorkerNode("node-2"),
 	}
 
-	topo, err := fakeBuilderWith().detectTopology(context.Background(), nodes)
+	topo, err := fakeBuilderWith(schedulerCR(true)).detectTopology(context.Background(), nodes)
 	if err != nil {
 		t.Fatalf("detectTopology() error = %v", err)
 	}
 	if !topo.IsCompact {
 		t.Error("expected IsCompact=true for 3 master+worker nodes")
+	}
+	if !topo.HasSchedulableMasters {
+		t.Error("expected HasSchedulableMasters=true when Scheduler CR mastersSchedulable=true")
 	}
 	if topo.IsHCP {
 		t.Error("expected IsHCP=false")
@@ -464,12 +476,15 @@ func TestDetectTopology_RegularCluster(t *testing.T) {
 		workerOnlyNode("worker-1"),
 	}
 
-	topo, err := fakeBuilderWith().detectTopology(context.Background(), nodes)
+	topo, err := fakeBuilderWith(schedulerCR(false)).detectTopology(context.Background(), nodes)
 	if err != nil {
 		t.Fatalf("detectTopology() error = %v", err)
 	}
 	if topo.IsCompact {
 		t.Error("expected IsCompact=false for dedicated masters/workers")
+	}
+	if topo.HasSchedulableMasters {
+		t.Error("expected HasSchedulableMasters=false when mastersSchedulable=false")
 	}
 	if topo.IsHCP {
 		t.Error("expected IsHCP=false")
@@ -480,6 +495,35 @@ func TestDetectTopology_RegularCluster(t *testing.T) {
 	if topo.WorkerCount != 2 {
 		t.Errorf("WorkerCount = %d, want 2", topo.WorkerCount)
 	}
+}
+
+func TestDetectTopology_SchedulableMasters(t *testing.T) {
+	t.Run("scheduler CR mastersSchedulable=true", func(t *testing.T) {
+		nodes := []corev1.Node{masterOnlyNode("master-0"), workerOnlyNode("worker-0")}
+
+		topo, err := fakeBuilderWith(schedulerCR(true)).detectTopology(context.Background(), nodes)
+		if err != nil {
+			t.Fatalf("detectTopology() error = %v", err)
+		}
+		if !topo.HasSchedulableMasters {
+			t.Error("expected HasSchedulableMasters=true")
+		}
+		if topo.IsCompact {
+			t.Error("expected IsCompact=false (has dedicated workers)")
+		}
+	})
+
+	t.Run("scheduler CR absent", func(t *testing.T) {
+		nodes := []corev1.Node{masterWorkerNode("node-0")}
+
+		topo, err := fakeBuilderWith().detectTopology(context.Background(), nodes)
+		if err != nil {
+			t.Fatalf("detectTopology() error = %v", err)
+		}
+		if topo.HasSchedulableMasters {
+			t.Error("expected HasSchedulableMasters=false when Scheduler CR absent")
+		}
+	})
 }
 
 func TestDetectTopology_HCP(t *testing.T) {

@@ -76,6 +76,15 @@ assets:
     component: MachineConfig
     reconcile_order: 1
 
+  - name: psi-enable-master
+    group: descheduler-loadaware
+    gate_crd: kubedeschedulers.operator.openshift.io
+    path: active/machine-config/05-psi-enable-master.yaml.tpl
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
+
   # Phase 1: OpenShift Kubelet (soft dependency on KubeletConfig CRD)
   - name: kubelet-perf-settings
     path: active/kubelet/perf-settings.yaml.tpl
