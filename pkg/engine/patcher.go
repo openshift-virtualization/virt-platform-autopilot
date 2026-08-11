@@ -128,6 +128,16 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 				"name", desired.GetName(),
 				"annotation", DisabledResourcesAnnotation,
 			)
+			// Clear metrics that would be misleading if stale:
+			// - compliance_status: staying at 1 would imply the operator is
+			//   actively verifying the asset, which it is not.
+			// - paused_resources: staying at 1 would imply an active edit war.
+			// customization_info is intentionally left untouched: the underlying
+			// annotations persist on the object while excluded, so the metric
+			// accurately reflects their presence. When exclusion is lifted the
+			// managed reconcile re-evaluates them from scratch.
+			observability.ClearCompliance(desired)
+			observability.SetPaused(desired, false)
 			return false, nil
 		}
 	}
@@ -238,6 +248,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"namespace", desired.GetNamespace(),
 			"objectName", desired.GetName(),
 		)
+		// Clear stale managed-state metrics so they don't persist across an
+		// unmanaged period or a paused→unmanaged transition.
+		observability.ClearCompliance(desired)
+		observability.SetPaused(desired, false)
 		// Track unmanaged customization
 		observability.SetCustomization(desired, "unmanaged")
 

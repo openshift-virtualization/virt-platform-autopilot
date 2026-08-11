@@ -176,6 +176,18 @@ func SetCustomization(obj *unstructured.Unstructured, customizationType string) 
 	).Set(1)
 }
 
+// ClearCompliance removes the compliance_status series for a resource.
+// Called when an asset enters unmanaged mode or is excluded via disabled-resources
+// so the metric is absent from /metrics rather than retaining a stale value
+// from the last managed reconcile cycle.
+func ClearCompliance(obj *unstructured.Unstructured) {
+	ComplianceStatus.DeleteLabelValues(
+		obj.GetKind(),
+		obj.GetName(),
+		obj.GetNamespace(),
+	)
+}
+
 // ClearCustomization removes a customization metric when the annotation is removed.
 func ClearCustomization(obj *unstructured.Unstructured, customizationType string) {
 	CustomizationInfo.DeleteLabelValues(

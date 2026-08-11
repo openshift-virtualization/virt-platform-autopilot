@@ -456,6 +456,42 @@ var _ = Describe("Controller E2E Tests", func() {
 			patchAutopilotAndWait(assetPrometheusAlerts + "," + assetSwapEnable)
 		})
 
+		It("should clear compliance_status but preserve customization annotations when a previously-unmanaged asset is excluded via disabled-resources", func() {
+			DeferCleanup(func() {
+				removeAnnotation(hcoGVK, hcoName, operatorNamespace, disabledResourcesAnnotation)
+				removeAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation)
+				touchHCO()
+				waitForOperatorHealthy()
+			})
+
+			By("setting unmanaged mode on PrometheusRule")
+			setAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation, modeUnmanaged)
+			touchHCO()
+
+			By("waiting for customization_info{type=unmanaged} to appear")
+			Eventually(func() float64 {
+				return findCustomizationMetric(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace, "unmanaged")
+			}, timeout, interval).Should(Equal(1.0),
+				"customization_info{type=unmanaged} must be 1 while PrometheusRule is unmanaged")
+
+			By("adding PrometheusRule to disabled-resources while it is still unmanaged")
+			setAnnotation(hcoGVK, hcoName, operatorNamespace, disabledResourcesAnnotation,
+				exclusionEntryYAML(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace))
+			touchHCO()
+			waitForOperatorHealthy()
+
+			By("verifying compliance_status is cleared once the asset is excluded")
+			Eventually(func() float64 {
+				return captureAssetMetrics(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace).ComplianceStatus
+			}, timeout, interval).Should(Equal(-1.0),
+				"compliance_status must be absent while PrometheusRule is excluded")
+
+			By("verifying customization_info{type=unmanaged} persists while excluded — annotation still exists on the object")
+			Expect(findCustomizationMetric(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace, "unmanaged")).
+				To(Equal(1.0),
+					"customization_info{type=unmanaged} must remain 1 while excluded: the annotation persists on the object and will be re-evaluated when exclusion is lifted")
+		})
+
 		It("should skip excluded asset while continuing to reconcile others (non-existent kind in annotation is ignored)", func() {
 			testStartTime := time.Now()
 
@@ -471,6 +507,16 @@ var _ = Describe("Controller E2E Tests", func() {
 
 			touchHCO()
 			waitForOperatorHealthy()
+
+			By("verifying compliance_status is cleared while excluded")
+			Eventually(func() float64 {
+				return captureAssetMetrics(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace).ComplianceStatus
+			}, timeout, interval).Should(Equal(-1.0),
+				"compliance_status must be absent (-1=not found) while PrometheusRule is excluded via disabled-resources")
+
+			By("verifying paused_resources is not stuck at 1 while excluded")
+			Expect(captureAssetMetrics(prometheusRuleGVK.Kind, prometheusRuleName, operatorNamespace).PausedResources).
+				NotTo(Equal(1.0), "paused_resources must not be 1 while PrometheusRule is excluded")
 
 			By("verifying PrometheusRule is not recreated")
 			Consistently(func() bool {
