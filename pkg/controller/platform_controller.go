@@ -43,6 +43,12 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
+const (
+	metricsExporterAnnotation = "platform.kubevirt.io/enable-metrics-exporter"
+	metricsExporterImageKey   = "kubevirt-metrics-exporter"
+	metricsExporterImageEnv   = "RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER"
+)
+
 // PlatformReconciler reconciles the virt platform based on HCO state
 type PlatformReconciler struct {
 	client.Client
@@ -252,6 +258,31 @@ func isInAllowlist(asset *assets.AssetMetadata, allowlist map[string]bool) bool 
 	return asset.Group != "" && allowlist[asset.Group]
 }
 
+// warnIfMetricsExporterImageMissing emits an INFO log and Warning event when the
+// metrics-exporter opt-in annotation is set but RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER
+// was not injected into the operator pod. Without this, assets are silently skipped.
+func (r *PlatformReconciler) warnIfMetricsExporterImageMissing(ctx context.Context, renderCtx *pkgcontext.RenderContext) {
+	if renderCtx == nil || renderCtx.HCO == nil {
+		return
+	}
+	if renderCtx.HCO.GetAnnotations()[metricsExporterAnnotation] != "true" {
+		return
+	}
+	if img := renderCtx.Images[metricsExporterImageKey]; img != "" {
+		return
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Info("metrics-exporter opted in but image is unset; assets will be skipped",
+		"annotation", metricsExporterAnnotation,
+		"imageKey", metricsExporterImageKey,
+		"envVar", metricsExporterImageEnv,
+	)
+	if r.eventRecorder != nil {
+		r.eventRecorder.ImageMissing(renderCtx.HCO, metricsExporterImageKey, metricsExporterImageEnv)
+	}
+}
+
 // assetCRDsAvailable checks both the auto-detected RequiredCRD and the explicit GateCRD.
 // Returns false (skip) if either CRD is absent or cannot be checked.
 func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
@@ -291,6 +322,8 @@ func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *asse
 // The allowlist is an additional filter on top of the existing opt-in/conditions logic.
 func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkgcontext.RenderContext, allowlist map[string]bool) error {
 	logger := log.FromContext(ctx)
+
+	r.warnIfMetricsExporterImageMissing(ctx, renderCtx)
 
 	// Get all assets sorted by reconcile_order (HCO should be 0, others 1+)
 	allAssets := r.registry.ListAssetsByReconcileOrder()

@@ -57,6 +57,7 @@ const (
 	EventReasonApplyFailed             = "ApplyFailed"
 	EventReasonRenderFailed            = "RenderFailed"
 	EventReasonHardwareDetectionFailed = "HardwareDetectionFailed"
+	EventReasonImageMissing            = "ImageMissing"
 
 	// Tombstone events
 	EventReasonTombstoneDeleted = "TombstoneDeleted"
@@ -146,6 +147,13 @@ func (e *EventRecorder) ThrashingDetected(object runtime.Object, kind, namespace
 func (e *EventRecorder) AssetSkipped(object runtime.Object, assetName, reason string) {
 	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonAssetSkipped, assetNameAction(EventReasonAssetSkipped, assetName),
 		"Skipped asset %s: %s", assetName, reason)
+}
+
+// ImageMissing records that an opt-in feature cannot be applied because a
+// required RELATED_IMAGE_* environment variable is unset in the operator pod.
+func (e *EventRecorder) ImageMissing(object runtime.Object, imageKey, envVar string) {
+	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonImageMissing, assetNameAction(EventReasonImageMissing, imageKey),
+		"Image %q is unset (%s); assets gated on this image will be skipped", imageKey, envVar)
 }
 
 // UnmanagedMode records that a resource is in unmanaged mode

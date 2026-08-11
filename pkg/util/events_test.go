@@ -368,6 +368,29 @@ func TestEventRecorder_AssetSkipped(t *testing.T) {
 	}
 }
 
+func TestEventRecorder_ImageMissing(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+	recorder.ImageMissing(obj, "kubevirt-metrics-exporter", "RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER")
+
+	event := fake.LastEvent()
+	if event == nil {
+		t.Fatal("Expected event to be recorded")
+	}
+
+	if event.EventType != EventTypeWarning {
+		t.Errorf("Expected EventType=%s, got %s", EventTypeWarning, event.EventType)
+	}
+	if event.Reason != EventReasonImageMissing {
+		t.Errorf("Expected Reason=%s, got %s", EventReasonImageMissing, event.Reason)
+	}
+	if expected := "ImageMissing kubevirt-metrics-exporter"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
+}
+
 func TestEventRecorder_MultipleEvents(t *testing.T) {
 	fake := &FakeRecorder{}
 	recorder := NewEventRecorder(fake)

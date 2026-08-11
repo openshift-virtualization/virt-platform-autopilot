@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -24,12 +26,33 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/events"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
+
+// fakeEventRecorder captures events for controller-package tests.
+type fakeEventRecorder struct {
+	events []recordedEvent
+}
+
+type recordedEvent struct {
+	eventType string
+	reason    string
+}
+
+func (f *fakeEventRecorder) Eventf(regarding runtime.Object, related runtime.Object, eventtype, reason, action, note string, args ...any) {
+	_ = fmt.Sprintf(note, args...)
+	f.events = append(f.events, recordedEvent{eventType: eventtype, reason: reason})
+}
+
+func (f *fakeEventRecorder) WithLogger(logger klog.Logger) events.EventRecorderLogger {
+	return f
+}
 
 func TestExtractFeatureGates(t *testing.T) {
 	tests := []struct {
@@ -165,7 +188,6 @@ func TestNewPlatformReconciler(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		reconciler, err := NewPlatformReconciler(fakeClient, fakeClient, "test-namespace")
-
 		if err != nil {
 			t.Fatalf("NewPlatformReconciler() error = %v", err)
 		}
@@ -658,6 +680,79 @@ func TestAssetSelectionWithAutopilotAnnotation(t *testing.T) {
 
 			passed := applyAllowlistFilter(reconciler, allowlist)
 			checkAllowlistResults(t, tt.annotationValue, passed, tt.wantInAllowlist, tt.wantNotInAllowlist)
+		})
+	}
+}
+
+func TestWarnIfMetricsExporterImageMissing(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	reconciler, err := NewPlatformReconciler(fakeClient, fakeClient, "test-namespace")
+	if err != nil {
+		t.Fatalf("NewPlatformReconciler() error = %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		images      map[string]string
+		wantEvent   bool
+	}{
+		{
+			name:        "annotation unset — no warning",
+			annotations: nil,
+			images:      nil,
+			wantEvent:   false,
+		},
+		{
+			name:        "annotation true and image present — no warning",
+			annotations: map[string]string{metricsExporterAnnotation: "true"},
+			images:      map[string]string{metricsExporterImageKey: "quay.io/img@sha256:abc"},
+			wantEvent:   false,
+		},
+		{
+			name:        "annotation true and image missing — warning",
+			annotations: map[string]string{metricsExporterAnnotation: "true"},
+			images:      map[string]string{},
+			wantEvent:   true,
+		},
+		{
+			name:        "annotation true and image empty — warning",
+			annotations: map[string]string{metricsExporterAnnotation: "true"},
+			images:      map[string]string{metricsExporterImageKey: ""},
+			wantEvent:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fake := &fakeEventRecorder{}
+			reconciler.SetEventRecorder(util.NewEventRecorder(fake))
+
+			hco := &unstructured.Unstructured{}
+			hco.SetAnnotations(tt.annotations)
+			renderCtx := &pkgcontext.RenderContext{
+				HCO:    hco,
+				Images: tt.images,
+			}
+
+			reconciler.warnIfMetricsExporterImageMissing(context.Background(), renderCtx)
+
+			got := len(fake.events) > 0
+			if got != tt.wantEvent {
+				t.Fatalf("event recorded = %v, want %v (events=%+v)", got, tt.wantEvent, fake.events)
+			}
+			if tt.wantEvent {
+				event := fake.events[len(fake.events)-1]
+				if event.reason != util.EventReasonImageMissing {
+					t.Errorf("Reason = %q, want %q", event.reason, util.EventReasonImageMissing)
+				}
+				if event.eventType != util.EventTypeWarning {
+					t.Errorf("EventType = %q, want %q", event.eventType, util.EventTypeWarning)
+				}
+			}
 		})
 	}
 }
