@@ -331,7 +331,7 @@ rules:
       - patch
       - update
       - watch
-  # Storage Based Remediation
+  # Storage-Based Remediation
   - apiGroups:
       - storage-based-remediation.medik8s.io
     resources:
