@@ -48,9 +48,10 @@ import (
 // We avoid importing operator-framework/api to keep the dependency tree small.
 
 type PolicyRule struct {
-	APIGroups []string `json:"apiGroups"`
-	Resources []string `json:"resources"`
-	Verbs     []string `json:"verbs"`
+	APIGroups     []string `json:"apiGroups"`
+	Resources     []string `json:"resources"`
+	ResourceNames []string `json:"resourceNames,omitempty"`
+	Verbs         []string `json:"verbs"`
 }
 
 type StrategyDeploymentPermissions struct {
@@ -405,11 +406,15 @@ through the existing HyperConverged resource.`,
 func buildClusterPermissions(rules []rbac.Rule) []StrategyDeploymentPermissions {
 	policyRules := make([]PolicyRule, 0, len(rules))
 	for _, r := range rules {
-		policyRules = append(policyRules, PolicyRule{
+		pr := PolicyRule{
 			APIGroups: r.APIGroups,
 			Resources: r.Resources,
 			Verbs:     r.Verbs,
-		})
+		}
+		if len(r.ResourceNames) > 0 {
+			pr.ResourceNames = r.ResourceNames
+		}
+		policyRules = append(policyRules, pr)
 	}
 	return []StrategyDeploymentPermissions{
 		{

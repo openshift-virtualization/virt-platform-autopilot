@@ -155,6 +155,12 @@ func writeRule(b *strings.Builder, rule rbac.Rule) {
 			fmt.Fprintf(b, "      - %s\n", group)
 		}
 	}
+	if len(rule.ResourceNames) > 0 {
+		b.WriteString("    resourceNames:\n")
+		for _, name := range rule.ResourceNames {
+			fmt.Fprintf(b, "      - %s\n", name)
+		}
+	}
 	b.WriteString("    resources:\n")
 	for _, r := range rule.Resources {
 		fmt.Fprintf(b, "      - %s\n", r)

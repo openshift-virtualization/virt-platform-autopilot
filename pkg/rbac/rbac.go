@@ -38,14 +38,24 @@ import (
 type Resource struct {
 	APIVersion  string
 	Kind        string
+	Name        string
 	NeedsDelete bool // true if found in tombstones (requires delete verb)
 }
 
 // Rule represents a single ClusterRole policy rule.
 type Rule struct {
-	APIGroups []string
-	Resources []string
-	Verbs     []string
+	APIGroups     []string
+	Resources     []string
+	ResourceNames []string
+	Verbs         []string
+}
+
+// sensitiveKinds are resource types that require resourceNames scoping to
+// prevent privilege escalation via the operator's service account.
+var sensitiveKinds = map[string]bool{
+	"SecurityContextConstraints": true,
+	"ClusterRole":                true,
+	"ClusterRoleBinding":         true,
 }
 
 // StaticRules returns the fixed infrastructure RBAC rules that every release of
@@ -110,9 +120,10 @@ func StaticRules() []Rule {
 
 // policyRule mirrors the Kubernetes PolicyRule structure for YAML unmarshalling.
 type policyRule struct {
-	APIGroups []string `yaml:"apiGroups"`
-	Resources []string `yaml:"resources"`
-	Verbs     []string `yaml:"verbs"`
+	APIGroups     []string `yaml:"apiGroups"`
+	Resources     []string `yaml:"resources"`
+	ResourceNames []string `yaml:"resourceNames,omitempty"`
+	Verbs         []string `yaml:"verbs"`
 }
 
 // TransitiveRules scans ClusterRole and Role objects in the active/ subtree of fsys
@@ -168,41 +179,59 @@ func collectRoleRules(content []byte, rules *[]policyRule) {
 	}
 }
 
-// mergeTransitiveRules groups policy rules by API group, unions resources and verbs
-// within each group, and returns a deterministically sorted slice of Rules.
+// mergeTransitiveRules groups policy rules by (API group, resourceNames), unions
+// resources and verbs within each group, and returns a deterministically sorted
+// slice of Rules. Rules with different resourceNames are kept separate.
 func mergeTransitiveRules(collected []policyRule) []Rule {
-	type groupInfo struct {
-		resources map[string]bool
-		verbs     map[string]bool
+	type mergeKey struct {
+		apiGroup      string
+		resourceNames string // sorted, comma-joined
 	}
-	groups := make(map[string]*groupInfo)
+	type groupInfo struct {
+		resourceNames []string
+		resources     map[string]bool
+		verbs         map[string]bool
+	}
+	groups := make(map[mergeKey]*groupInfo)
 
 	for _, rule := range collected {
+		sortedNames := make([]string, len(rule.ResourceNames))
+		copy(sortedNames, rule.ResourceNames)
+		sort.Strings(sortedNames)
+		namesKey := strings.Join(sortedNames, ",")
+
 		for _, apiGroup := range rule.APIGroups {
-			if groups[apiGroup] == nil {
-				groups[apiGroup] = &groupInfo{
-					resources: make(map[string]bool),
-					verbs:     make(map[string]bool),
+			key := mergeKey{apiGroup: apiGroup, resourceNames: namesKey}
+			if groups[key] == nil {
+				groups[key] = &groupInfo{
+					resourceNames: sortedNames,
+					resources:     make(map[string]bool),
+					verbs:         make(map[string]bool),
 				}
 			}
 			for _, r := range rule.Resources {
-				groups[apiGroup].resources[r] = true
+				groups[key].resources[r] = true
 			}
 			for _, v := range rule.Verbs {
-				groups[apiGroup].verbs[v] = true
+				groups[key].verbs[v] = true
 			}
 		}
 	}
 
-	apiGroupKeys := make([]string, 0, len(groups))
-	for g := range groups {
-		apiGroupKeys = append(apiGroupKeys, g)
+	keys := make([]mergeKey, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
 	}
-	sort.Strings(apiGroupKeys)
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].apiGroup != keys[j].apiGroup {
+			return keys[i].apiGroup < keys[j].apiGroup
+		}
+		return keys[i].resourceNames < keys[j].resourceNames
+	})
 
 	var result []Rule
-	for _, group := range apiGroupKeys {
-		info := groups[group]
+	for _, key := range keys {
+		info := groups[key]
 
 		resources := make([]string, 0, len(info.resources))
 		for r := range info.resources {
@@ -216,11 +245,15 @@ func mergeTransitiveRules(collected []policyRule) []Rule {
 		}
 		sort.Strings(verbs)
 
-		result = append(result, Rule{
-			APIGroups: []string{group},
+		rule := Rule{
+			APIGroups: []string{key.apiGroup},
 			Resources: resources,
 			Verbs:     verbs,
-		})
+		}
+		if len(info.resourceNames) > 0 && info.resourceNames[0] != "" {
+			rule.ResourceNames = info.resourceNames
+		}
+		result = append(result, rule)
 	}
 	return result
 }
@@ -312,47 +345,83 @@ func preprocessTemplate(content []byte) []byte {
 	return exprRe.ReplaceAll(content, []byte(`"dummy-value"`))
 }
 
+// parseAssetDoc extracts apiVersion, kind, and metadata.name from a single YAML
+// document. Returns ok=false if the document is unparseable or irrelevant.
+func parseAssetDoc(docStr string) (apiVersion, kind, name string, ok bool) {
+	var doc map[string]any
+	if err := yaml.Unmarshal([]byte(docStr), &doc); err != nil {
+		return "", "", "", false
+	}
+
+	apiVersion, ok1 := doc["apiVersion"].(string)
+	kind, ok2 := doc["kind"].(string)
+	if !ok1 || !ok2 || apiVersion == "" || kind == "" {
+		return "", "", "", false
+	}
+	if kind == "List" || kind == "CustomResourceDefinition" {
+		return "", "", "", false
+	}
+
+	if meta, mok := doc["metadata"].(map[string]any); mok {
+		name, _ = meta["name"].(string)
+	}
+	if name == "dummy-value" {
+		name = ""
+	}
+	return apiVersion, kind, name, true
+}
+
+// deduplicationKey returns the map key used to deduplicate resources.
+// Sensitive kinds include the resource name so each named instance is tracked.
+func deduplicationKey(apiVersion, kind, name string) string {
+	if sensitiveKinds[kind] && name != "" {
+		return apiVersion + "/" + kind + "/" + name
+	}
+	return apiVersion + "/" + kind
+}
+
+// upgradeNeedsDelete marks an already-seen resource as requiring delete permissions.
+func upgradeNeedsDelete(resources *[]Resource, apiVersion, kind, name string) {
+	matchByName := sensitiveKinds[kind] && name != ""
+	for i := range *resources {
+		r := &(*resources)[i]
+		if r.APIVersion != apiVersion || r.Kind != kind {
+			continue
+		}
+		if matchByName && r.Name != name {
+			continue
+		}
+		r.NeedsDelete = true
+		return
+	}
+}
+
 // processAssetFile extracts Kubernetes GVKs from YAML content (supports multi-doc files).
+// For sensitive kinds (SCCs, ClusterRoles, ClusterRoleBindings), each distinct named
+// resource gets its own entry so that dynamic rules can be scoped with resourceNames.
 func processAssetFile(content []byte, seen map[string]bool, resources *[]Resource, needsDelete bool) {
-	docs := strings.Split(string(content), "\n---\n")
-	for _, docStr := range docs {
+	for _, docStr := range strings.Split(string(content), "\n---\n") {
 		docStr = strings.TrimSpace(docStr)
 		if docStr == "" {
 			continue
 		}
 
-		var doc map[string]any
-		if err := yaml.Unmarshal([]byte(docStr), &doc); err != nil {
-			continue // template remnants or invalid YAML — skip
-		}
-
-		apiVersion, ok1 := doc["apiVersion"].(string)
-		kind, ok2 := doc["kind"].(string)
-		if !ok1 || !ok2 || apiVersion == "" || kind == "" {
+		apiVersion, kind, name, ok := parseAssetDoc(docStr)
+		if !ok {
 			continue
 		}
 
-		// Skip meta-types that don't require RBAC permissions
-		if kind == "List" || kind == "CustomResourceDefinition" {
-			continue
-		}
-
-		key := apiVersion + "/" + kind
+		key := deduplicationKey(apiVersion, kind, name)
 		if !seen[key] {
 			seen[key] = true
 			*resources = append(*resources, Resource{
 				APIVersion:  apiVersion,
 				Kind:        kind,
+				Name:        name,
 				NeedsDelete: needsDelete,
 			})
 		} else if needsDelete {
-			// Upgrade an already-seen resource to require delete permissions
-			for i := range *resources {
-				if (*resources)[i].APIVersion == apiVersion && (*resources)[i].Kind == kind {
-					(*resources)[i].NeedsDelete = true
-					break
-				}
-			}
+			upgradeNeedsDelete(resources, apiVersion, kind, name)
 		}
 	}
 }
@@ -403,60 +472,134 @@ func extractResources(fsys fs.FS) ([]Resource, error) {
 	return resources, nil
 }
 
-// generateDynamicRules groups discovered resources by API group and produces
-// deterministically ordered RBAC rules.
-func generateDynamicRules(resources []Resource) []Rule {
-	type groupInfo struct {
-		resources   []string
-		needsDelete bool
+type normalGroupInfo struct {
+	resources   map[string]bool
+	needsDelete bool
+}
+
+type sensitiveResourceInfo struct {
+	names       map[string]bool
+	needsDelete bool
+}
+
+// managementVerbs returns the standard verb set, optionally including delete.
+func managementVerbs(needsDelete bool) []string {
+	verbs := []string{"create", "get", "list", "patch", "update", "watch"}
+	if needsDelete {
+		verbs = append(verbs, "delete")
+		sort.Strings(verbs)
 	}
-	grouped := make(map[string]*groupInfo)
+	return verbs
+}
+
+// scopedSensitiveRules generates rules for a single sensitive resource type
+// within an API group. When resource names are known, it produces an unscoped
+// create rule plus a scoped management rule; otherwise a single unscoped rule.
+func scopedSensitiveRules(group, resource string, info *sensitiveResourceInfo) []Rule {
+	names := sortedKeys(info.names)
+	if len(names) == 0 {
+		return []Rule{{
+			APIGroups: []string{group},
+			Resources: []string{resource},
+			Verbs:     managementVerbs(info.needsDelete),
+		}}
+	}
+
+	scopedVerbs := []string{"get", "list", "patch", "update", "watch"}
+	if info.needsDelete {
+		scopedVerbs = append(scopedVerbs, "delete")
+		sort.Strings(scopedVerbs)
+	}
+	return []Rule{
+		{
+			APIGroups: []string{group},
+			Resources: []string{resource},
+			Verbs:     []string{"create"},
+		},
+		{
+			APIGroups:     []string{group},
+			Resources:     []string{resource},
+			ResourceNames: names,
+			Verbs:         scopedVerbs,
+		},
+	}
+}
+
+// generateDynamicRules groups discovered resources by API group and produces
+// deterministically ordered RBAC rules. Sensitive resource types (SCCs, RBAC)
+// are scoped with resourceNames to prevent privilege escalation.
+func generateDynamicRules(resources []Resource) []Rule {
+	normalGrouped := make(map[string]*normalGroupInfo)
+	sensitiveGrouped := make(map[string]map[string]*sensitiveResourceInfo)
 
 	for _, res := range resources {
 		group, _, resource := parseGVK(res.APIVersion, res.Kind)
-		if grouped[group] == nil {
-			grouped[group] = &groupInfo{}
-		}
-		grouped[group].resources = append(grouped[group].resources, resource)
-		if res.NeedsDelete {
-			grouped[group].needsDelete = true
+		if sensitiveKinds[res.Kind] {
+			if sensitiveGrouped[group] == nil {
+				sensitiveGrouped[group] = make(map[string]*sensitiveResourceInfo)
+			}
+			if sensitiveGrouped[group][resource] == nil {
+				sensitiveGrouped[group][resource] = &sensitiveResourceInfo{names: make(map[string]bool)}
+			}
+			if res.Name != "" {
+				sensitiveGrouped[group][resource].names[res.Name] = true
+			}
+			if res.NeedsDelete {
+				sensitiveGrouped[group][resource].needsDelete = true
+			}
+		} else {
+			if normalGrouped[group] == nil {
+				normalGrouped[group] = &normalGroupInfo{resources: make(map[string]bool)}
+			}
+			normalGrouped[group].resources[resource] = true
+			if res.NeedsDelete {
+				normalGrouped[group].needsDelete = true
+			}
 		}
 	}
 
-	// Sort groups alphabetically for deterministic output
-	var groups []string
-	for g := range grouped {
-		groups = append(groups, g)
+	allGroups := make(map[string]bool)
+	for g := range normalGrouped {
+		allGroups[g] = true
 	}
-	sort.Strings(groups)
+	for g := range sensitiveGrouped {
+		allGroups[g] = true
+	}
+	sortedGroups := sortedKeys(allGroups)
 
 	var rules []Rule
-	for _, group := range groups {
-		info := grouped[group]
-
-		// Deduplicate and sort resources
-		resourceSet := make(map[string]bool)
-		for _, r := range info.resources {
-			resourceSet[r] = true
-		}
-		var unique []string
-		for r := range resourceSet {
-			unique = append(unique, r)
-		}
-		sort.Strings(unique)
-
-		verbs := []string{"create", "get", "list", "patch", "update", "watch"}
-		if info.needsDelete {
-			verbs = append(verbs, "delete")
-			sort.Strings(verbs)
+	for _, group := range sortedGroups {
+		if info, ok := normalGrouped[group]; ok {
+			rules = append(rules, Rule{
+				APIGroups: []string{group},
+				Resources: sortedKeys(info.resources),
+				Verbs:     managementVerbs(info.needsDelete),
+			})
 		}
 
-		rules = append(rules, Rule{
-			APIGroups: []string{group},
-			Resources: unique,
-			Verbs:     verbs,
-		})
+		if resourceMap, ok := sensitiveGrouped[group]; ok {
+			for _, resource := range sortedKeys(mapKeys(resourceMap)) {
+				rules = append(rules, scopedSensitiveRules(group, resource, resourceMap[resource])...)
+			}
+		}
 	}
 
 	return rules
+}
+
+func mapKeys[V any](m map[string]V) map[string]bool {
+	keys := make(map[string]bool, len(m))
+	for k := range m {
+		keys[k] = true
+	}
+	return keys
+}
+
+func sortedKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

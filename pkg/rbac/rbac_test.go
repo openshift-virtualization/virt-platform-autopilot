@@ -234,6 +234,37 @@ func TestMergeTransitiveRules_MultiAPIGroupInSingleRule(t *testing.T) {
 	}
 }
 
+func TestMergeTransitiveRules_PreservesResourceNames(t *testing.T) {
+	input := []policyRule{
+		{APIGroups: []string{"security.openshift.io"}, Resources: []string{"securitycontextconstraints"}, ResourceNames: []string{"my-scc"}, Verbs: []string{"use"}},
+	}
+	result := mergeTransitiveRules(input)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(result))
+	}
+	if len(result[0].ResourceNames) != 1 || result[0].ResourceNames[0] != "my-scc" {
+		t.Errorf("expected resourceNames [my-scc], got %v", result[0].ResourceNames)
+	}
+}
+
+func TestMergeTransitiveRules_SeparatesRulesWithDifferentResourceNames(t *testing.T) {
+	input := []policyRule{
+		{APIGroups: []string{"security.openshift.io"}, Resources: []string{"securitycontextconstraints"}, Verbs: []string{"get"}},
+		{APIGroups: []string{"security.openshift.io"}, Resources: []string{"securitycontextconstraints"}, ResourceNames: []string{"my-scc"}, Verbs: []string{"use"}},
+	}
+	result := mergeTransitiveRules(input)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 rules (unscoped + scoped), got %d", len(result))
+	}
+	// Unscoped (empty resourceNames) sorts before scoped ("my-scc")
+	if len(result[0].ResourceNames) != 0 {
+		t.Errorf("expected first rule to have no resourceNames, got %v", result[0].ResourceNames)
+	}
+	if len(result[1].ResourceNames) != 1 || result[1].ResourceNames[0] != "my-scc" {
+		t.Errorf("expected second rule to have resourceNames [my-scc], got %v", result[1].ResourceNames)
+	}
+}
+
 // ---- TransitiveRules ----
 
 func makeFS(files map[string]string) fstest.MapFS {
@@ -360,6 +391,142 @@ rules:
 	}
 	if len(rules) != 1 {
 		t.Fatalf("expected 1 transitive rule from template file, got %d", len(rules))
+	}
+}
+
+func TestTransitiveRules_PreservesResourceNames(t *testing.T) {
+	fsys := makeFS(map[string]string{
+		"active/scc/scc-role.yaml": `
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: my-scc-role
+rules:
+- apiGroups: ["security.openshift.io"]
+  resources: ["securitycontextconstraints"]
+  resourceNames: ["my-custom-scc"]
+  verbs: ["use"]
+`,
+	})
+	rules, err := TransitiveRules(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(rules))
+	}
+	if len(rules[0].ResourceNames) != 1 || rules[0].ResourceNames[0] != "my-custom-scc" {
+		t.Errorf("expected resourceNames [my-custom-scc], got %v", rules[0].ResourceNames)
+	}
+}
+
+// ---- DynamicRules ----
+
+func TestDynamicRules_ScopesSCCWithResourceNames(t *testing.T) {
+	fsys := makeFS(map[string]string{
+		"active/scc/scc.yaml": `
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: my-scc
+`,
+	})
+	rules, err := DynamicRules(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 rules (create + scoped), got %d", len(rules))
+	}
+	// First rule: unscoped create
+	if rules[0].Verbs[0] != "create" || len(rules[0].Verbs) != 1 {
+		t.Errorf("expected first rule to be create-only, got %v", rules[0].Verbs)
+	}
+	if len(rules[0].ResourceNames) != 0 {
+		t.Errorf("expected first rule to have no resourceNames, got %v", rules[0].ResourceNames)
+	}
+	// Second rule: scoped management
+	if len(rules[1].ResourceNames) != 1 || rules[1].ResourceNames[0] != "my-scc" {
+		t.Errorf("expected second rule to have resourceNames [my-scc], got %v", rules[1].ResourceNames)
+	}
+	hasCreate := false
+	for _, v := range rules[1].Verbs {
+		if v == "create" {
+			hasCreate = true
+		}
+	}
+	if hasCreate {
+		t.Errorf("scoped rule should not contain create verb, got %v", rules[1].Verbs)
+	}
+}
+
+func TestDynamicRules_ScopesClusterRolesWithResourceNames(t *testing.T) {
+	fsys := makeFS(map[string]string{
+		"active/comp/role.yaml": `
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: comp-role
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get"]
+`,
+		"active/comp/binding.yaml": `
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: comp-binding
+roleRef:
+  kind: ClusterRole
+  name: comp-role
+subjects:
+- kind: ServiceAccount
+  name: comp-sa
+`,
+	})
+	rules, err := DynamicRules(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Expect: CRB create, CRB scoped, CR create, CR scoped = 4 rules
+	if len(rules) != 4 {
+		t.Fatalf("expected 4 rules, got %d: %+v", len(rules), rules)
+	}
+	// Find the scoped ClusterRole rule
+	var scopedCR *Rule
+	for i := range rules {
+		if len(rules[i].ResourceNames) > 0 && rules[i].Resources[0] == "clusterroles" {
+			scopedCR = &rules[i]
+			break
+		}
+	}
+	if scopedCR == nil {
+		t.Fatal("expected a scoped ClusterRole rule")
+	}
+	if len(scopedCR.ResourceNames) != 1 || scopedCR.ResourceNames[0] != "comp-role" {
+		t.Errorf("expected resourceNames [comp-role], got %v", scopedCR.ResourceNames)
+	}
+}
+
+func TestDynamicRules_NonSensitiveTypesUnscoped(t *testing.T) {
+	fsys := makeFS(map[string]string{
+		"active/ns/ns.yaml": `
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: my-namespace
+`,
+	})
+	rules, err := DynamicRules(fsys)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(rules) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(rules))
+	}
+	if len(rules[0].ResourceNames) != 0 {
+		t.Errorf("non-sensitive types should not have resourceNames, got %v", rules[0].ResourceNames)
 	}
 }
 

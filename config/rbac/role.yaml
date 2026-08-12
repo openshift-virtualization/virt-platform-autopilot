@@ -102,6 +102,8 @@ rules:
       - get
   - apiGroups:
       - security.openshift.io
+    resourceNames:
+      - kubevirt-metrics-exporter
     resources:
       - securitycontextconstraints
     verbs:
@@ -260,9 +262,39 @@ rules:
       - rbac.authorization.k8s.io
     resources:
       - clusterrolebindings
+    verbs:
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resourceNames:
+      - kubevirt-metrics-exporter
+      - kubevirt-metrics-exporter-scc
+      - logging-collector-application
+      - logging-collector-audit
+      - logging-collector-infrastructure
+      - logging-collector-logs-writer
+    resources:
+      - clusterrolebindings
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
       - clusterroles
     verbs:
       - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resourceNames:
+      - kubevirt-metrics-exporter
+      - kubevirt-metrics-exporter-scc
+    resources:
+      - clusterroles
+    verbs:
       - get
       - list
       - patch
@@ -287,6 +319,13 @@ rules:
       - securitycontextconstraints
     verbs:
       - create
+  - apiGroups:
+      - security.openshift.io
+    resourceNames:
+      - kubevirt-metrics-exporter
+    resources:
+      - securitycontextconstraints
+    verbs:
       - get
       - list
       - patch
