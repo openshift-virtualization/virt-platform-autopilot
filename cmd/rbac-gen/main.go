@@ -182,7 +182,7 @@ func commentForAPIGroup(group string) string {
 	case "fence-agents-remediation.medik8s.io":
 		return "Fence Agents Remediation"
 	case "storage-based-remediation.medik8s.io":
-		return "Storage Based Remediation"
+		return "Storage-Based Remediation"
 	case "forklift.konveyor.io":
 		return "Migration Toolkit for Virtualization (MTV)"
 	case "metallb.io":
