@@ -1,0 +1,218 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubevirt-metrics-exporter-alerts
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app.kubernetes.io/name: kubevirt-metrics-exporter
+spec:
+  groups:
+    - name: kubevirt-storage-io
+      rules:
+        - alert: VMIStorageWriteLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, name, disk, le) (
+              rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="write"}[5m])
+            )) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High P99 write latency for VM {{ $labels.namespace }}/{{ $labels.name }} disk {{ $labels.disk }}"
+            description: >-
+              P99 hypervisor-side write latency for disk {{ $labels.disk }} on VM
+              {{ $labels.namespace }}/{{ $labels.name }} has exceeded 100ms for
+              10 minutes (current value: {{ $value | humanizeDuration }}).
+              Note: reported value is approximate due to histogram bucket granularity.
+
+        - alert: VMIStorageReadLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, name, disk, le) (
+              rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="read"}[5m])
+            )) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High P99 read latency for VM {{ $labels.namespace }}/{{ $labels.name }} disk {{ $labels.disk }}"
+            description: >-
+              P99 hypervisor-side read latency for disk {{ $labels.disk }} on VM
+              {{ $labels.namespace }}/{{ $labels.name }} has exceeded 100ms for
+              10 minutes (current value: {{ $value | humanizeDuration }}).
+              Note: reported value is approximate due to histogram bucket granularity.
+
+        - alert: VMIStorageFlushLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, name, disk, le) (
+              rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="flush"}[10m])
+            )) > 0.5
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High P99 flush latency for VM {{ $labels.namespace }}/{{ $labels.name }} disk {{ $labels.disk }}"
+            description: >-
+              P99 flush latency for disk {{ $labels.disk }} on VM
+              {{ $labels.namespace }}/{{ $labels.name }} has exceeded 500ms for
+              15 minutes. Durability-sensitive workloads (databases, journaling)
+              using this disk will see slow commits/fsyncs.
+
+        - alert: NodeVMStorageLatencyWidespread
+          expr: |
+            (
+              count by (node) (
+                histogram_quantile(0.99, sum by (namespace, name, node, le) (
+                  rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation=~"read|write"}[5m])
+                )) > 0.1
+              )
+            )
+            /
+            count by (node) (
+              sum by (namespace, name, node) (
+                rate(kubevirt_vmi_storage_io_latency_seconds_count{operation=~"read|write"}[5m])
+              ) > 0
+            ) > 0.5
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Widespread VM storage latency on node {{ $labels.node }}"
+            description: >-
+              More than 50% of active VMs on node {{ $labels.node }} have P99 storage
+              I/O latency exceeding 100ms, suggesting a node- or storage-infrastructure
+              problem rather than a single workload issue.
+
+        - alert: VMIDiskSaturated
+          expr: |
+            sum by (namespace, name, node, disk, persistentvolumeclaim, bus) (
+              kubevirt_vmi_storage_queue_inuse
+            )
+            /
+            (
+              sum by (namespace, name, node, disk, persistentvolumeclaim, bus) (
+                kubevirt_vmi_storage_queue_size
+              ) > 0
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Virtqueues saturated on {{ $labels.namespace }}/{{ $labels.name }} (bus={{ $labels.bus }}{{ if $labels.disk }}, disk={{ $labels.disk }}{{ end }})"
+            description: >-
+              Aggregate virtqueue occupancy (bus={{ $labels.bus }}{{ if $labels.disk }},
+              disk={{ $labels.disk }}, PVC={{ $labels.persistentvolumeclaim }}{{ end }}) on VM
+              {{ $labels.namespace }}/{{ $labels.name }} exceeds 90% across all
+              queues, indicating sustained storage backpressure.
+
+        - alert: VMIGuestStorageLatencyHigh
+          expr: |
+            kubevirt_vmi_storage_guest_latency_avg_seconds > 0.1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Guest-side storage latency high on {{ $labels.namespace }}/{{ $labels.name }}"
+            description: >-
+              Guest-observed average {{ $labels.operation }} latency for disk
+              {{ $labels.disk }} on VM {{ $labels.namespace }}/{{ $labels.name }}
+              has exceeded 100ms for 15 minutes.
+
+        - alert: PVCBlockLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, persistentvolumeclaim, pod, operation, le) (
+              rate(kme_block_io_latency_seconds_bucket{operation=~"read|write"}[5m])
+            )) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High block {{ $labels.operation }} latency for PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} (pod {{ $labels.pod }})"
+            description: >-
+              P99 block {{ $labels.operation }} latency for PVC
+              {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}
+              in pod {{ $labels.pod }} has exceeded 100ms for 10 minutes.
+
+        - alert: PVCNFSLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum by (namespace, persistentvolumeclaim, pod, operation, le) (
+              rate(kme_nfs_io_latency_seconds_bucket{operation=~"read|write"}[5m])
+            )) > 0.25
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High NFS {{ $labels.operation }} latency for PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} (pod {{ $labels.pod }})"
+            description: >-
+              P99 NFS {{ $labels.operation }} latency for PVC
+              {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}
+              in pod {{ $labels.pod }} has exceeded 250ms for 10 minutes.
+
+    - name: kubevirt-metrics-exporter-health
+      rules:
+        - alert: KMEQMPPollStale
+          expr: time() - kme_qmp_last_poll_timestamp_seconds > 150
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "QMP polling stale on {{ $labels.instance }}"
+            description: >-
+              The QMP subsystem has not completed a poll cycle in over 5 minutes.
+              VM storage metrics from this node may be stale.
+
+        - alert: KMEQGAPollStale
+          expr: time() - kme_qga_last_poll_timestamp_seconds > 150
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "QGA polling stale on {{ $labels.instance }}"
+            description: >-
+              The QGA subsystem has not completed a poll cycle in over 5 minutes.
+              Guest-side metrics from this node may be stale.
+
+        - alert: KMEQMPScrapeErrors
+          expr: |
+            rate(kme_qmp_scrape_errors_total[15m]) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Sustained QMP scrape errors on {{ $labels.instance }}"
+            description: >-
+              The exporter is logging persistent QMP scrape errors
+              (>0.1/s over 15 minutes). Some VMs may be missing storage metrics.
+
+        - alert: KMEQGAScrapeErrors
+          expr: |
+            rate(kme_qga_scrape_errors_total[15m]) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Sustained QGA scrape errors on {{ $labels.instance }}"
+            description: >-
+              The exporter is logging persistent QGA scrape errors
+              (>0.1/s over 15 minutes). Some VMs may be missing guest-side metrics.
+
+        - alert: KMEeBPFSubsystemDown
+          expr: kme_subsystem_active{subsystem="block"} == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "eBPF block subsystem down on {{ $labels.instance }}"
+            description: >-
+              The block eBPF subsystem failed to load or has stopped.
+              Node-side block I/O latency metrics are missing.
+
+        - alert: KMEAbsent
+          expr: absent(up{job="kubevirt-metrics-exporter"} == 1)
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "kubevirt-metrics-exporter is down"
+            description: >-
+              No kubevirt-metrics-exporter metrics are being scraped. The
+              DaemonSet may be down or the PodMonitor/scrape config broken.
