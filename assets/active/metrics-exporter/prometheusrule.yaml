@@ -195,6 +195,29 @@ spec:
               The exporter is logging persistent QGA scrape errors
               (>0.1/s over 15 minutes). Some VMs may be missing guest-side metrics.
 
+        - alert: KMEKVMPollStale
+          expr: time() - kme_kvm_last_poll_timestamp_seconds > 90
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "KVM polling stale on {{ $labels.instance }}"
+            description: >-
+              The KVM subsystem has not completed a poll cycle in over 90 seconds.
+              KVM exit/hypercall metrics from this node may be stale.
+
+        - alert: KMEKVMScrapeErrors
+          expr: |
+            rate(kme_kvm_scrape_errors_total[15m]) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Sustained KVM scrape errors on {{ $labels.instance }}"
+            description: >-
+              The exporter is logging persistent KVM debugfs scrape errors
+              (>0.1/s over 15 minutes). Some VMs may be missing KVM metrics.
+
         - alert: KMEeBPFSubsystemDown
           expr: kme_subsystem_active{subsystem="block"} == 0
           for: 10m
