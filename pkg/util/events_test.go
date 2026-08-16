@@ -18,6 +18,7 @@ package util
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -261,7 +262,8 @@ func TestEventRecorder_CRDDiscovered(t *testing.T) {
 	recorder := NewEventRecorder(fake)
 
 	obj := &unstructured.Unstructured{}
-	recorder.CRDDiscovered(obj, "MetalLB", "metallbs.metallb.io")
+
+	recorder.CRDDiscovered(obj, []string{"MetalLB"}, "metallbs.metallb.io")
 
 	event := fake.LastEvent()
 	if event == nil {
@@ -276,6 +278,81 @@ func TestEventRecorder_CRDDiscovered(t *testing.T) {
 	}
 	if expected := "CRDDiscovered metallbs.metallb.io"; event.Action != expected {
 		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
+
+	if expected := " MetalLB "; !strings.Contains(event.Message, expected) {
+		t.Errorf("Expected message to contain %q, got %q", expected, event.Message)
+	}
+}
+
+func TestEventRecorder_CRDDiscovered_TwoAssets(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+
+	recorder.CRDDiscovered(obj, []string{"aaa", "bbb"}, "metallbs.metallb.io")
+
+	event := fake.LastEvent()
+	if event == nil {
+		t.Fatal("Expected event to be recorded")
+	}
+
+	if event.EventType != EventTypeNormal {
+		t.Errorf("Expected normal event, got %s", event.EventType)
+	}
+	if event.Reason != EventReasonCRDDiscovered {
+		t.Errorf("Expected Reason=%s, got %s", EventReasonCRDDiscovered, event.Reason)
+	}
+	if expected := "CRDDiscovered metallbs.metallb.io"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
+
+	if expected := " aaa and bbb "; !strings.Contains(event.Message, expected) {
+		t.Errorf("Expected message to contain %q, got %q", expected, event.Message)
+	}
+}
+
+func TestEventRecorder_CRDDiscovered_multipleAssets(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+
+	recorder.CRDDiscovered(obj, []string{"aaa", "bbb", "ccc", "ddd"}, "metallbs.metallb.io")
+
+	event := fake.LastEvent()
+	if event == nil {
+		t.Fatal("Expected event to be recorded")
+	}
+
+	if event.EventType != EventTypeNormal {
+		t.Errorf("Expected normal event, got %s", event.EventType)
+	}
+	if event.Reason != EventReasonCRDDiscovered {
+		t.Errorf("Expected Reason=%s, got %s", EventReasonCRDDiscovered, event.Reason)
+	}
+	if expected := "CRDDiscovered metallbs.metallb.io"; event.Action != expected {
+		t.Errorf("Expected Action=%s, got %s", expected, event.Action)
+	}
+
+	if expected := " aaa, bbb, ccc and ddd "; !strings.Contains(event.Message, expected) {
+		t.Errorf("Expected message to contain %q, got %q", expected, event.Message)
+	}
+}
+
+func TestEventRecorder_CRDDiscovered_NoAsset(t *testing.T) {
+	// Note: not a real use-case
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	obj := &unstructured.Unstructured{}
+
+	recorder.CRDDiscovered(obj, nil, "metallbs.metallb.io")
+
+	event := fake.LastEvent()
+	if event != nil {
+		t.Fatal("Expected event to not be recorded")
 	}
 }
 
