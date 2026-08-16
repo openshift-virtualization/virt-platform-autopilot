@@ -107,7 +107,10 @@ rules:
     resources:
       - securitycontextconstraints
     verbs:
+      - get
+      - list
       - use
+      - watch
   # ========================================
   # Managed Resources (Dynamic - from assets/)
   # ========================================
