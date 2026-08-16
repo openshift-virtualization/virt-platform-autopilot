@@ -18,6 +18,7 @@ package util
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -161,9 +162,20 @@ func (e *EventRecorder) CRDMissing(object runtime.Object, component, crdName str
 }
 
 // CRDDiscovered records that a previously missing CRD was discovered
-func (e *EventRecorder) CRDDiscovered(object runtime.Object, component, crdName string) {
+func (e *EventRecorder) CRDDiscovered(object runtime.Object, components []string, crdName string) {
+	if len(components) == 0 {
+		return // should never get here
+	}
+
+	var componentStr string
+	if len(components) == 1 {
+		componentStr = components[0]
+	} else {
+		componentStr = strings.Join(components[:len(components)-1], ", ") + " and " + components[len(components)-1]
+	}
+
 	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonCRDDiscovered, assetNameAction(EventReasonCRDDiscovered, crdName),
-		"CRD %s discovered, %s assets can now be reconciled", crdName, component)
+		"CRD %s discovered, %s assets can now be reconciled", crdName, componentStr)
 }
 
 // ApplyFailed records that applying an asset failed

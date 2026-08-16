@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -181,15 +182,29 @@ func (r *Registry) IsManagedCRD(crdName string) bool {
 	if crdName == "" {
 		return false
 	}
-	for i := range r.catalog.Assets {
-		if r.catalog.Assets[i].RequiredCRD == crdName {
-			return true
-		}
-		if r.catalog.Assets[i].GateCRD != "" && r.catalog.Assets[i].GateCRD == crdName {
-			return true
-		}
+
+	return slices.ContainsFunc(r.catalog.Assets, func(asset AssetMetadata) bool {
+		return asset.RequiredCRD == crdName || asset.GateCRD == crdName
+	})
+}
+
+// GetAssetsByCRD return list of assets that requires a certain CRD
+func (r *Registry) GetAssetsByCRD(crdName string) []string {
+	if crdName == "" {
+		return nil
 	}
-	return false
+
+	return slices.Collect(func(yield func(assetName string) bool) {
+		for asset := range slices.Values(r.catalog.Assets) {
+			if asset.RequiredCRD != crdName && asset.GateCRD != crdName {
+				continue
+			}
+
+			if !yield(asset.Name) {
+				return
+			}
+		}
+	})
 }
 
 // extractRequiredCRD parses raw asset content and returns the CRD name

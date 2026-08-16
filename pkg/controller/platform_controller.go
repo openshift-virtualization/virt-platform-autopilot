@@ -135,10 +135,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	)
 
 	// Get the HyperConverged instance
-	hco := &unstructured.Unstructured{}
-	hco.SetGroupVersionKind(pkgcontext.HCOGVK)
-
-	err := r.Get(ctx, req.NamespacedName, hco)
+	hco, err := r.getHCO(ctx, req.NamespacedName)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logger.Info("HCO not found, skipping reconciliation")
@@ -207,6 +204,14 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	logger.Info("Successfully reconciled virt platform")
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+}
+
+func (r *PlatformReconciler) getHCO(ctx context.Context, name types.NamespacedName) (*unstructured.Unstructured, error) {
+	hco := &unstructured.Unstructured{}
+	hco.SetGroupVersionKind(pkgcontext.HCOGVK)
+
+	err := r.Get(ctx, name, hco)
+	return hco, err
 }
 
 // reconcileHCO applies the golden HCO configuration
@@ -386,6 +391,10 @@ func (r *PlatformReconciler) isManagedCRD(crdName string) bool {
 	return r.registry.IsManagedCRD(crdName)
 }
 
+func (r *PlatformReconciler) getAssetsByCRD(crdName string) []string {
+	return r.registry.GetAssetsByCRD(crdName)
+}
+
 // isWatchedCRD safely checks if a CRD is currently being watched
 func (r *PlatformReconciler) isWatchedCRD(crdName string) bool {
 	r.watchedCRDsMu.RLock()
@@ -415,6 +424,12 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 
 			// If this is a new managed CRD we aren't watching yet, restart to add watch
 			if r.isManagedCRD(crd.Name) && !r.isWatchedCRD(crd.Name) {
+				hco, err := r.getHCO(ctx, r.getHyperConvergedNamespacedName())
+				if err == nil {
+
+					r.eventRecorder.CRDDiscovered(hco, r.getAssetsByCRD(crd.Name), crd.Name)
+				}
+
 				logger.Info("New managed CRD created - restarting operator to configure watch for drift detection",
 					"crd", crd.Name)
 				// Trigger graceful shutdown so deployment restarts us with new watches
@@ -424,10 +439,7 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			// For non-managed CRDs, just invalidate cache and trigger reconciliation
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      pkgcontext.HCOName,
-					Namespace: r.Namespace,
-				},
+				NamespacedName: r.getHyperConvergedNamespacedName(),
 			})
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
@@ -447,10 +459,7 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			// For non-managed CRDs, just invalidate cache and trigger reconciliation
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      pkgcontext.HCOName,
-					Namespace: r.Namespace,
-				},
+				NamespacedName: r.getHyperConvergedNamespacedName(),
 			})
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
@@ -465,10 +474,7 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 			// Invalidate cache and trigger reconciliation
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      pkgcontext.HCOName,
-					Namespace: r.Namespace,
-				},
+				NamespacedName: r.getHyperConvergedNamespacedName(),
 			})
 		},
 	}
@@ -558,10 +564,7 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				// All managed resources trigger HCO reconciliation
 				return []reconcile.Request{
 					{
-						NamespacedName: types.NamespacedName{
-							Name:      pkgcontext.HCOName,
-							Namespace: r.Namespace,
-						},
+						NamespacedName: r.getHyperConvergedNamespacedName(),
 					},
 				}
 			}),
@@ -569,6 +572,13 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return builder.Complete(r)
+}
+
+func (r *PlatformReconciler) getHyperConvergedNamespacedName() types.NamespacedName {
+	return types.NamespacedName{
+		Name:      pkgcontext.HCOName,
+		Namespace: r.Namespace,
+	}
 }
 
 // Ensure PlatformReconciler implements reconcile.Reconciler
