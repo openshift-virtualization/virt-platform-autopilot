@@ -6,4 +6,8 @@ rules:
   - apiGroups: ["security.openshift.io"]
     resources: ["securitycontextconstraints"]
     resourceNames: ["kubevirt-metrics-exporter"]
-    verbs: ["use"]
+    verbs:
+      - use
+      - list
+      - watch
+      - get
