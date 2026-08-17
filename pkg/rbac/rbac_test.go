@@ -436,27 +436,29 @@ metadata:
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(rules) != 2 {
-		t.Fatalf("expected 2 rules (create + scoped), got %d", len(rules))
+		t.Fatalf("expected 2 rules (unscoped + scoped), got %d", len(rules))
 	}
-	// First rule: unscoped create
-	if rules[0].Verbs[0] != "create" || len(rules[0].Verbs) != 1 {
-		t.Errorf("expected first rule to be create-only, got %v", rules[0].Verbs)
+	// First rule: unscoped create/list/watch (collection-level verbs)
+	expectedUnscoped := map[string]bool{"create": true, "list": true, "watch": true}
+	if len(rules[0].Verbs) != len(expectedUnscoped) {
+		t.Errorf("expected unscoped rule to have %d verbs, got %v", len(expectedUnscoped), rules[0].Verbs)
+	}
+	for _, v := range rules[0].Verbs {
+		if !expectedUnscoped[v] {
+			t.Errorf("unexpected verb %q in unscoped rule, got %v", v, rules[0].Verbs)
+		}
 	}
 	if len(rules[0].ResourceNames) != 0 {
 		t.Errorf("expected first rule to have no resourceNames, got %v", rules[0].ResourceNames)
 	}
-	// Second rule: scoped management
+	// Second rule: scoped instance-level verbs
 	if len(rules[1].ResourceNames) != 1 || rules[1].ResourceNames[0] != "my-scc" {
 		t.Errorf("expected second rule to have resourceNames [my-scc], got %v", rules[1].ResourceNames)
 	}
-	hasCreate := false
 	for _, v := range rules[1].Verbs {
-		if v == "create" {
-			hasCreate = true
+		if v == "create" || v == "list" || v == "watch" {
+			t.Errorf("scoped rule should not contain collection-level verb %q, got %v", v, rules[1].Verbs)
 		}
-	}
-	if hasCreate {
-		t.Errorf("scoped rule should not contain create verb, got %v", rules[1].Verbs)
 	}
 }
 

@@ -499,7 +499,10 @@ func scopedSensitiveRules(group, resource string, info *sensitiveResourceInfo) [
 		}}
 	}
 
-	scopedVerbs := []string{"get", "list", "patch", "update", "watch"}
+	// list and watch are collection-level verbs: Kubernetes requires a
+	// metadata.name field selector when they are scoped to resourceNames,
+	// but informer-based watches never set one, so these must be unscoped.
+	scopedVerbs := []string{"get", "patch", "update"}
 	if info.needsDelete {
 		scopedVerbs = append(scopedVerbs, "delete")
 		sort.Strings(scopedVerbs)
@@ -508,7 +511,7 @@ func scopedSensitiveRules(group, resource string, info *sensitiveResourceInfo) [
 		{
 			APIGroups: []string{group},
 			Resources: []string{resource},
-			Verbs:     []string{"create"},
+			Verbs:     []string{"create", "list", "watch"},
 		},
 		{
 			APIGroups:     []string{group},
