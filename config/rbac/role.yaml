@@ -245,6 +245,8 @@ rules:
       - clusterrolebindings
     verbs:
       - create
+      - list
+      - watch
   - apiGroups:
       - rbac.authorization.k8s.io
     resourceNames:
@@ -254,16 +256,16 @@ rules:
       - clusterrolebindings
     verbs:
       - get
-      - list
       - patch
       - update
-      - watch
   - apiGroups:
       - rbac.authorization.k8s.io
     resources:
       - clusterroles
     verbs:
       - create
+      - list
+      - watch
   - apiGroups:
       - rbac.authorization.k8s.io
     resourceNames:
@@ -273,10 +275,8 @@ rules:
       - clusterroles
     verbs:
       - get
-      - list
       - patch
       - update
-      - watch
   # NodeHealthCheck (includes tombstone cleanup)
   - apiGroups:
       - remediation.medik8s.io
@@ -296,6 +296,8 @@ rules:
       - securitycontextconstraints
     verbs:
       - create
+      - list
+      - watch
   - apiGroups:
       - security.openshift.io
     resourceNames:
@@ -304,7 +306,5 @@ rules:
       - securitycontextconstraints
     verbs:
       - get
-      - list
       - patch
       - update
-      - watch
