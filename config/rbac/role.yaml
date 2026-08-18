@@ -107,6 +107,7 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - configmaps
       - namespaces
       - serviceaccounts
       - services
