@@ -372,6 +372,10 @@ func TestDefaultConditionEvaluator_EvaluateCondition(t *testing.T) {
 		testImageConditions(ctx, t)
 	})
 
+	t.Run("topology conditions", func(t *testing.T) {
+		testTopologyConditions(ctx, t)
+	})
+
 	t.Run("unknown condition type", func(t *testing.T) {
 		evaluator := &DefaultConditionEvaluator{}
 		condition := AssetCondition{Type: ConditionType("unknown-type")}
@@ -500,6 +504,44 @@ func testImageConditions(ctx context.Context, t *testing.T) {
 			evaluator := &DefaultConditionEvaluator{Images: tt.images}
 			condition := AssetCondition{Type: ConditionTypeImage, Key: tt.key}
 
+			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EvaluateCondition() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && satisfied != tt.wantSatisfied {
+				t.Errorf("EvaluateCondition() = %v, want %v", satisfied, tt.wantSatisfied)
+			}
+		})
+	}
+}
+
+func testTopologyConditions(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	evaluator := &DefaultConditionEvaluator{
+		TopologyContext: map[string]any{
+			"hasSchedulableMasters": true,
+			"isCompact":             false,
+		},
+	}
+
+	tests := []struct {
+		name          string
+		field         string
+		value         string
+		wantSatisfied bool
+		wantErr       bool
+	}{
+		{"hasSchedulableMasters true", "hasSchedulableMasters", "", true, false},
+		{"isCompact false", "isCompact", "", false, false},
+		{"unknown topology field", "nonExistent", "", false, false},
+		{"explicit false", "isCompact", "false", true, false},
+		{"empty field", "", "", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			condition := AssetCondition{Type: ConditionTypeTopology, Field: tt.field, Value: tt.value}
 			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EvaluateCondition() error = %v, wantErr %v", err, tt.wantErr)
