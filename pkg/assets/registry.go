@@ -44,6 +44,7 @@ const (
 	ConditionTypeFeatureGate       ConditionType = "feature-gate"
 	ConditionTypeAnnotation        ConditionType = "annotation"
 	ConditionTypeImage             ConditionType = "image"
+	ConditionTypeTopology          ConditionType = "topology"
 )
 
 // AssetCondition defines a condition that must be met for an asset to be applied
@@ -52,6 +53,7 @@ type AssetCondition struct {
 	Detector string        `json:"detector,omitempty"` // For hardware-detection
 	Key      string        `json:"key,omitempty"`      // For annotation
 	Value    string        `json:"value,omitempty"`    // For annotation/feature-gate
+	Field    string        `json:"field,omitempty"`    // For topology (TopologyContext.AsMap key)
 }
 
 // AssetMetadata defines the metadata for a managed asset
@@ -65,8 +67,9 @@ type AssetMetadata struct {
 	Component       string                     `json:"component"`
 	ReconcileOrder  int                        `json:"reconcile_order"`
 	Conditions      []AssetCondition           `json:"conditions,omitempty"`
-	RenderedContent *unstructured.Unstructured `json:"-"` // Cached rendered content
-	RequiredCRD     string                     `json:"-"` // Derived from template at load time; empty for core API types
+	TemplateParams  map[string]string          `json:"template_params,omitempty"` // Arbitrary per-asset render parameters
+	RenderedContent *unstructured.Unstructured `json:"-"`                         // Cached rendered content
+	RequiredCRD     string                     `json:"-"`                         // Derived from template at load time; empty for core API types
 }
 
 // AssetCatalog contains all asset metadata
@@ -295,6 +298,7 @@ type DefaultConditionEvaluator struct {
 	FeatureGates    map[string]bool   // Feature gate states
 	Annotations     map[string]string // Annotation values
 	Images          map[string]string // Container images from RELATED_IMAGE_* env vars
+	TopologyContext map[string]any    // Topology flags from TopologyContext.AsMap()
 }
 
 // EvaluateCondition evaluates a single condition
@@ -335,7 +339,31 @@ func (e *DefaultConditionEvaluator) EvaluateCondition(ctx context.Context, condi
 		img, ok := e.Images[condition.Key]
 		return ok && img != "", nil
 
+	case ConditionTypeTopology:
+		return e.evaluateTopology(condition)
+
 	default:
 		return false, fmt.Errorf("unknown condition type: %s", condition.Type)
 	}
+}
+
+func (e *DefaultConditionEvaluator) evaluateTopology(condition AssetCondition) (bool, error) {
+	if condition.Field == "" {
+		return false, fmt.Errorf("topology condition requires field")
+	}
+	if e.TopologyContext == nil {
+		return false, nil
+	}
+	val, ok := e.TopologyContext[condition.Field]
+	if !ok {
+		return false, nil
+	}
+	boolVal, ok := val.(bool)
+	if !ok {
+		return false, fmt.Errorf("topology field %q is not a boolean", condition.Field)
+	}
+	if condition.Value == "false" {
+		return !boolVal, nil
+	}
+	return boolVal, nil
 }

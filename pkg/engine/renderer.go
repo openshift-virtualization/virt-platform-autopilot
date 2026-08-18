@@ -55,6 +55,8 @@ func (r *Renderer) SetClient(c client.Reader) {
 // RenderAsset renders an asset template with the given context
 // Returns nil if template conditions evaluate to empty (e.g., hardware not present)
 func (r *Renderer) RenderAsset(assetMeta *assets.AssetMetadata, ctx *pkgcontext.RenderContext) (*unstructured.Unstructured, error) {
+	ctx.Params = assetMeta.TemplateParams
+
 	// Check if this is a template file
 	if !assets.IsTemplate(assetMeta.Path) {
 		// Load as static YAML
@@ -89,6 +91,8 @@ func (r *Renderer) RenderAsset(assetMeta *assets.AssetMetadata, ctx *pkgcontext.
 
 // RenderMultiAsset renders a template that may contain multiple YAML documents
 func (r *Renderer) RenderMultiAsset(assetMeta *assets.AssetMetadata, ctx *pkgcontext.RenderContext) ([]*unstructured.Unstructured, error) {
+	ctx.Params = assetMeta.TemplateParams
+
 	// Check if this is a template file
 	if !assets.IsTemplate(assetMeta.Path) {
 		// Load as static YAML (may be multi-doc)
@@ -129,6 +133,7 @@ func (r *Renderer) RenderMultiAsset(assetMeta *assets.AssetMetadata, ctx *pkgcon
 func (r *Renderer) renderTemplate(name, templateContent string, ctx *pkgcontext.RenderContext) ([]byte, error) {
 	// Create template with safe functions only (not all of Sprig)
 	tmpl, err := template.New(name).
+		Option("missingkey=error").
 		Funcs(safeFuncMap()).
 		Funcs(r.customFuncMap()).
 		Parse(templateContent)
