@@ -324,6 +324,10 @@ func pluralize(kind string) string {
 // preprocessTemplate strips Go template directives and replaces template expressions
 // with dummy values so the resulting bytes can be parsed as valid YAML.
 func preprocessTemplate(content []byte) []byte {
+	// Strip multi-line template comments ({{- /* ... */ -}}) that span multiple lines
+	commentRe := regexp.MustCompile(`(?s)\{\{-?\s*/\*.*?\*/\s*-?\}\}`)
+	content = commentRe.ReplaceAll(content, nil)
+
 	// Remove lines that are purely template control-flow directives (e.g. {{- if ... }})
 	lines := strings.Split(string(content), "\n")
 	var filtered []string
