@@ -368,6 +368,16 @@ func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstruct
 
 	// Pass through available container images
 	r.conditionEvaluator.Images = ctx.Images
+
+	// Expose the raw HCO object for field inspection conditions
+	r.conditionEvaluator.HCOObject = hco.Object
+
+	// Topology for schedulable-master and other topology-gated assets
+	if ctx.Topology != nil {
+		r.conditionEvaluator.TopologyContext = ctx.Topology.AsMap()
+	} else {
+		r.conditionEvaluator.TopologyContext = nil
+	}
 }
 
 // extractFeatureGates extracts feature gates from HCO v1 spec.

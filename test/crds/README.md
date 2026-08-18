@@ -40,7 +40,7 @@ test/crds/
 **KubeletConfig**
 - Repository: https://github.com/openshift/api
 - Branch: `master`
-- Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_kubeletconfigs.crd.yaml`
+- Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_kubeletconfigs-Default.crd.yaml`
 - Local: `openshift/kubeletconfig-crd.yaml`
 
 **Infrastructure**

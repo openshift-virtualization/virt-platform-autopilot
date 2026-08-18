@@ -288,3 +288,173 @@ devActualUtilizationProfile: {{ $devActualUtilizationProfile }}
 		}
 	})
 }
+
+func TestGetConfigMapData(t *testing.T) {
+	scheme := runtime.NewScheme()
+
+	t.Run("returns data key from existing ConfigMap", func(t *testing.T) {
+		cm := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]any{
+					"name":      "cluster-monitoring-config",
+					"namespace": "openshift-monitoring",
+				},
+				"data": map[string]any{
+					"config.yaml": "prometheusK8s:\n  retention: 24h\n",
+				},
+			},
+		}
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(cm).
+			Build()
+
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+		renderer.SetClient(fakeClient)
+
+		funcMap := renderer.customFuncMap()
+		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+
+		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		expected := "prometheusK8s:\n  retention: 24h\n"
+		if result != expected {
+			t.Errorf("Expected %q, got %q", expected, result)
+		}
+	})
+
+	t.Run("returns empty string when ConfigMap does not exist", func(t *testing.T) {
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			Build()
+
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+		renderer.SetClient(fakeClient)
+
+		funcMap := renderer.customFuncMap()
+		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+
+		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		if result != "" {
+			t.Errorf("Expected empty string, got %q", result)
+		}
+	})
+
+	t.Run("returns empty string when key does not exist", func(t *testing.T) {
+		cm := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]any{
+					"name":      "cluster-monitoring-config",
+					"namespace": "openshift-monitoring",
+				},
+				"data": map[string]any{
+					"other-key": "some-value",
+				},
+			},
+		}
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(cm).
+			Build()
+
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+		renderer.SetClient(fakeClient)
+
+		funcMap := renderer.customFuncMap()
+		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+
+		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		if result != "" {
+			t.Errorf("Expected empty string, got %q", result)
+		}
+	})
+
+	t.Run("returns empty string when client is nil", func(t *testing.T) {
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+
+		funcMap := renderer.customFuncMap()
+		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+
+		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		if result != "" {
+			t.Errorf("Expected empty string, got %q", result)
+		}
+	})
+
+	t.Run("template merges ksmd config into existing monitoring config", func(t *testing.T) {
+		cm := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "v1",
+				"kind":       "ConfigMap",
+				"metadata": map[string]any{
+					"name":      "cluster-monitoring-config",
+					"namespace": "openshift-monitoring",
+				},
+				"data": map[string]any{
+					"config.yaml": "prometheusK8s:\n  retention: 24h\nnodeExporter:\n  collectors:\n    textfile:\n      enabled: true\n",
+				},
+			},
+		}
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(cm).
+			Build()
+
+		loader := assets.NewLoader()
+		renderer := NewRenderer(loader)
+		renderer.SetClient(fakeClient)
+
+		tmpl := `{{- $liveYAML := getConfigMapData "openshift-monitoring" "cluster-monitoring-config" "config.yaml" -}}
+{{- $live := dict -}}
+{{- if $liveYAML -}}
+  {{- $live = fromYaml $liveYAML -}}
+{{- end -}}
+{{- $ksmdConfig := dict "nodeExporter" (dict "collectors" (dict "ksmd" (dict "enabled" true))) -}}
+{{- $merged := mergeOverwrite $live $ksmdConfig -}}
+{{ toYaml $merged }}`
+
+		ctx := &pkgcontext.RenderContext{
+			HCO: pkgcontext.NewMockHCO("kubevirt-hyperconverged", "openshift-cnv"),
+		}
+
+		rendered, err := renderer.renderTemplate("test-merge", tmpl, ctx)
+		if err != nil {
+			t.Fatalf("Failed to render template: %v", err)
+		}
+
+		result := string(rendered)
+		// Verify both admin config and our config are present
+		if !contains(result, "retention: 24h") {
+			t.Errorf("Expected admin config to be preserved, got:\n%s", result)
+		}
+		if !contains(result, "ksmd") {
+			t.Errorf("Expected ksmd config to be merged, got:\n%s", result)
+		}
+		if !contains(result, "prometheusK8s") {
+			t.Errorf("Expected prometheusK8s to be preserved, got:\n%s", result)
+		}
+	})
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
+}
+
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
