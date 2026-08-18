@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"strings"
 	"text/template"
 
 	sprig "github.com/Masterminds/sprig/v3"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	embeddedassets "github.com/kubevirt/virt-platform-autopilot/assets"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
@@ -180,7 +182,6 @@ func safeFuncMap() template.FuncMap {
 		// Type conversion
 		"toString", "toStrings", "toInt", "toInt64", "toFloat64",
 		"toBool", "toJson", "toPrettyJson", "toRawJson", "fromJson",
-		"toYaml", "fromYaml",
 
 		// Lists and collections
 		"list", "append", "prepend", "first", "rest", "last",
@@ -232,6 +233,11 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// Usage: {{ objectExists "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" }}
 		"objectExists": r.objectExistsFunc(),
 
+		// getConfigMapData reads a data key from a live ConfigMap
+		// Returns empty string if CM doesn't exist or key is missing
+		// Usage: {{ getConfigMapData "openshift-monitoring" "cluster-monitoring-config" "config.yaml" }}
+		"getConfigMapData": r.getConfigMapDataFunc(),
+
 		// prometheusRuleHasRecordingRule checks if a PrometheusRule contains a specific recording rule
 		// Usage: {{ prometheusRuleHasRecordingRule "openshift-kube-descheduler-operator" "descheduler-rules" "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m" }}
 		"prometheusRuleHasRecordingRule": r.prometheusRuleHasRecordingRuleFunc(),
@@ -248,6 +254,29 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 				return "", err
 			}
 			return buf.String(), nil
+		},
+
+		// fromYaml parses a YAML string into a map
+		// Usage: {{ $data := fromYaml $yamlString }}
+		"fromYaml": func(s string) map[string]any {
+			var m map[string]any
+			if err := yaml.Unmarshal([]byte(s), &m); err != nil {
+				return map[string]any{}
+			}
+			if m == nil {
+				return map[string]any{}
+			}
+			return m
+		},
+
+		// toYaml serializes a value to a YAML string
+		// Usage: {{ toYaml $data }}
+		"toYaml": func(v any) string {
+			out, err := yaml.Marshal(v)
+			if err != nil {
+				return ""
+			}
+			return strings.TrimSuffix(string(out), "\n")
 		},
 	}
 }
@@ -466,6 +495,37 @@ func (r *Renderer) objectExistsFunc() func(string, string, string) bool {
 		}, obj)
 
 		return err == nil
+	}
+}
+
+// getConfigMapDataFunc returns a function that reads a data key from a live ConfigMap
+func (r *Renderer) getConfigMapDataFunc() func(string, string, string) string {
+	return func(namespace, name, key string) string {
+		if r.client == nil {
+			return ""
+		}
+
+		obj := &unstructured.Unstructured{}
+		obj.SetKind("ConfigMap")
+		obj.SetAPIVersion("v1")
+
+		err := r.client.Get(context.Background(), types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		}, obj)
+		if err != nil {
+			return ""
+		}
+
+		data, ok := obj.Object["data"].(map[string]any)
+		if !ok {
+			return ""
+		}
+		val, ok := data[key].(string)
+		if !ok {
+			return ""
+		}
+		return val
 	}
 }
 
