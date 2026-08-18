@@ -101,7 +101,7 @@ func formatRulesWithComments(static, transitive, dynamic []rbac.Rule) string {
 		"Events (for observability - modern events.k8s.io/v1 API)",
 		"Leader Election",
 		"CRD Discovery (for soft dependency detection and template introspection)",
-		"OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)",
+		"OpenShift config CRs (topology detection: Infrastructure for HCP/compact/cloud provider, Scheduler for schedulable masters)",
 		"Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)",
 	}
 	for i, rule := range static {

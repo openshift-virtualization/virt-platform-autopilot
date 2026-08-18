@@ -59,11 +59,12 @@ rules:
       - get
       - list
       - watch
-  # OpenShift Infrastructure CR (for topology detection: HCP, compact, cloud provider)
+  # OpenShift config CRs (topology detection: Infrastructure for HCP/compact/cloud provider, Scheduler for schedulable masters)
   - apiGroups:
       - config.openshift.io
     resources:
       - infrastructures
+      - schedulers
     verbs:
       - get
       - list
