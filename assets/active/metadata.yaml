@@ -70,20 +70,27 @@ assets:
   - name: psi-enable
     group: descheduler-loadaware
     gate_crd: kubedeschedulers.operator.openshift.io
-    path: active/machine-config/04-psi-enable.yaml
+    path: active/machine-config/04-psi-enable.yaml.tpl
     phase: 1
     install: always
     component: MachineConfig
     reconcile_order: 1
+    template_params:
+      role: worker
 
   - name: psi-enable-master
     group: descheduler-loadaware
     gate_crd: kubedeschedulers.operator.openshift.io
-    path: active/machine-config/05-psi-enable-master.yaml.tpl
+    path: active/machine-config/04-psi-enable.yaml.tpl
     phase: 1
     install: always
     component: MachineConfig
     reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: topology
+        field: hasSchedulableMasters
 
   - name: ksm-zero-only
     group: ksm-zero-only
