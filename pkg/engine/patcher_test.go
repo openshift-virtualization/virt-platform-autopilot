@@ -71,11 +71,11 @@ func TestDriftDetectionFailureSetsComplianceToZero(t *testing.T) {
 	loader := pkgassets.NewLoader()
 	renderer := NewRenderer(loader)
 
-	// 04-psi-enable.yaml is a static (non-template) MachineConfig — no HCO fields needed.
 	assetMeta := &pkgassets.AssetMetadata{
-		Name:      "psi-enable",
-		Path:      "active/machine-config/04-psi-enable.yaml",
-		Component: "MachineConfig",
+		Name:           "psi-enable",
+		Path:           "active/machine-config/04-psi-enable.yaml.tpl",
+		Component:      "MachineConfig",
+		TemplateParams: map[string]string{"role": "worker"},
 	}
 
 	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
@@ -239,9 +239,10 @@ func TestThrashingEventEmittedOnlyOnce(t *testing.T) {
 	// psi-enable is cluster-scoped: Pre-Step 6 (namespace guard) is skipped,
 	// so every call reaches the anti-thrashing gate.
 	assetMeta := &pkgassets.AssetMetadata{
-		Name:      "psi-enable",
-		Path:      "active/machine-config/04-psi-enable.yaml",
-		Component: "MachineConfig",
+		Name:           "psi-enable",
+		Path:           "active/machine-config/04-psi-enable.yaml.tpl",
+		Component:      "MachineConfig",
+		TemplateParams: map[string]string{"role": "worker"},
 	}
 
 	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
@@ -294,9 +295,10 @@ func TestThrashingStateResetOnPauseAnnotationRemoval(t *testing.T) {
 	renderer := NewRenderer(loader)
 
 	assetMeta := &pkgassets.AssetMetadata{
-		Name:      "psi-enable",
-		Path:      "active/machine-config/04-psi-enable.yaml",
-		Component: "MachineConfig",
+		Name:           "psi-enable",
+		Path:           "active/machine-config/04-psi-enable.yaml.tpl",
+		Component:      "MachineConfig",
+		TemplateParams: map[string]string{"role": "worker"},
 	}
 
 	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
@@ -383,9 +385,10 @@ func TestInvalidIgnoreFieldsEmitsEvent(t *testing.T) {
 	renderer := NewRenderer(loader)
 
 	assetMeta := &pkgassets.AssetMetadata{
-		Name:      "psi-enable",
-		Path:      "active/machine-config/04-psi-enable.yaml",
-		Component: "MachineConfig",
+		Name:           "psi-enable",
+		Path:           "active/machine-config/04-psi-enable.yaml.tpl",
+		Component:      "MachineConfig",
+		TemplateParams: map[string]string{"role": "worker"},
 	}
 
 	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")
@@ -442,9 +445,10 @@ func TestCleanupExcludedAsset(t *testing.T) {
 	renderer := NewRenderer(loader)
 
 	assetMeta := &pkgassets.AssetMetadata{
-		Name:      "psi-enable",
-		Path:      "active/machine-config/04-psi-enable.yaml",
-		Component: "MachineConfig",
+		Name:           "psi-enable",
+		Path:           "active/machine-config/04-psi-enable.yaml.tpl",
+		Component:      "MachineConfig",
+		TemplateParams: map[string]string{"role": "worker"},
 	}
 
 	hco := pkgcontext.NewMockHCO("kubevirt-hyperconverged", "kubevirt-hyperconverged")

@@ -468,15 +468,18 @@ func TestTemplateParamsPassedToContext(t *testing.T) {
 
 	meta := &assets.AssetMetadata{
 		Name:           "psi-enable",
-		Path:           "active/machine-config/04-psi-enable.yaml",
+		Path:           "active/machine-config/04-psi-enable.yaml.tpl",
 		TemplateParams: map[string]string{"role": "worker"},
 	}
 
 	ctx := pkgcontext.NewRenderContext(&unstructured.Unstructured{Object: map[string]any{}})
 
-	_, err := renderer.RenderAsset(meta, ctx)
+	obj, err := renderer.RenderAsset(meta, ctx)
 	if err != nil {
 		t.Fatalf("RenderAsset() error = %v", err)
+	}
+	if obj == nil {
+		t.Fatal("RenderAsset() returned nil")
 	}
 
 	if ctx.Params == nil {
@@ -484,6 +487,9 @@ func TestTemplateParamsPassedToContext(t *testing.T) {
 	}
 	if got := ctx.Params["role"]; got != "worker" {
 		t.Errorf("ctx.Params[\"role\"] = %q, want %q", got, "worker")
+	}
+	if got := obj.GetName(); got != "99-openshift-machineconfig-worker-psi-karg" {
+		t.Errorf("name = %q, want %q", got, "99-openshift-machineconfig-worker-psi-karg")
 	}
 }
 
