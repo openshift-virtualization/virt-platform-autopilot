@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -101,11 +103,30 @@ func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unst
 		topology = &pkgcontext.TopologyContext{}
 	}
 
+	logger.Info("Reading KubeVirt featureGates", "hco", hco.GetName())
+	kvFG, err := b.getKubeVirtFGs(ctx, hco)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			logger.Error(err, "Can't get the KubeVirt CR",
+				"hco", hco.GetName())
+			return nil, fmt.Errorf("failed to get KubeVirt feature gate list: %w", err)
+		}
+
+		logger.Info("Can't find the KubeVirt CR", "hco", hco.GetName(), "not-found-message", err.Error())
+
+		kvFG = nil
+	}
+
+	if len(kvFG) == 0 {
+		logger.Info("Couldn't read KubeVirt featureGates", "hco", hco.GetName())
+	}
+
 	return &pkgcontext.RenderContext{
-		HCO:      hco,
-		Hardware: hardware,
-		Topology: topology,
-		Images:   loadImages(),
+		HCO:                  hco,
+		Hardware:             hardware,
+		Topology:             topology,
+		Images:               loadImages(),
+		KubeVirtFeatureGates: kvFG,
 	}, nil
 }
 
@@ -248,6 +269,40 @@ func (b *RenderContextBuilder) detectTopology(ctx context.Context, nodes []corev
 	}
 
 	return topology, nil
+}
+
+func (b *RenderContextBuilder) getKubeVirtFGs(ctx context.Context, hco *unstructured.Unstructured) ([]string, error) {
+	hcoRelatedObj, ok, err := unstructured.NestedSlice(hco.Object, "status", "relatedObjects")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	kvIdx := slices.IndexFunc(hcoRelatedObj, func(objRefAny any) bool {
+		objRef, ok := objRefAny.(map[string]any)
+		return ok && objRef["kind"] == pkgcontext.KVKind
+	})
+
+	if kvIdx == -1 {
+		return nil, nil
+	}
+
+	kvName, ok := hcoRelatedObj[kvIdx].(map[string]any)["name"].(string)
+	if !ok || kvName == "" {
+		return nil, nil
+	}
+
+	kv := &unstructured.Unstructured{}
+	kv.SetGroupVersionKind(pkgcontext.KVGVK)
+
+	err = b.client.Get(ctx, client.ObjectKey{Name: kvName, Namespace: hco.GetNamespace()}, kv)
+	if err != nil {
+		return nil, err
+	}
+
+	return resources.ExtractKVFeatureGate(kv), nil
 }
 
 // hasPCIDevices checks if node has PCI devices suitable for passthrough

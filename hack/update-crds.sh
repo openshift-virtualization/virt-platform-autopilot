@@ -99,6 +99,7 @@ fetch_github_file() {
 declare -a CRD_METADATA=(
     # KubeVirt Ecosystem
     "KubeVirt Ecosystem|HyperConverged|kubevirt/hyperconverged-cluster-operator|main|deploy/crds/hco00.crd.yaml|kubevirt/hyperconverged-crd.yaml"
+    "KubeVirt Ecosystem|HyperConverged|kubevirt/hyperconverged-cluster-operator|main|deploy/crds/kubevirt00.crd.yaml|kubevirt/kubevirt.yaml"
 
     # OpenShift Platform
     "OpenShift Platform|MachineConfig|openshift/api|master|machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_machineconfigs.crd.yaml|openshift/machineconfig-crd.yaml"

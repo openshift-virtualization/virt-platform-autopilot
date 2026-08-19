@@ -83,6 +83,14 @@ rules:
       - storageprofiles
     verbs:
       - list
+  - apiGroups:
+      - kubevirt.io
+    resources:
+      - kubevirts
+    verbs:
+      - get
+      - list
+      - watch
   # ========================================
   # Transitive RBAC (from managed ClusterRole/Role assets)
   # ========================================
