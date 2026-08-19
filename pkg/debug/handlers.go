@@ -34,6 +34,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	pkgrender "github.com/kubevirt/virt-platform-autopilot/pkg/render"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
 )
 
 // Server provides debug endpoints for the controller
@@ -365,12 +366,18 @@ func (s *Server) getConditionDetails(assetMeta *assets.AssetMetadata, renderCtx 
 			actual := renderCtx.HCO.GetAnnotations()[condition.Key]
 			details[condition.Key] = fmt.Sprintf("expected=%s, actual=%s", condition.Value, actual)
 		case assets.ConditionTypeFeatureGate:
-			featureGates := renderCtx.HCO.GetAnnotations()["platform.kubevirt.io/feature-gates"]
+			featureGates := fmt.Sprintf("%#v", resources.ExtractFeatureGates(renderCtx.HCO))
 			details["feature-gates"] = featureGates
 			details["required"] = condition.Value
 		case assets.ConditionTypeHardwareDetection:
 			details["detector"] = condition.Detector
 			details["status"] = "not checked (requires node access)"
+		case assets.ConditionTypeKubeVirtFeatureGate:
+			if len(renderCtx.KubeVirtFeatureGates) == 0 {
+				details["kubevirt-feature-gates"] = "None"
+			} else {
+				details["kubevirt-feature-gates"] = fmt.Sprintf("%#v", renderCtx.KubeVirtFeatureGates)
+			}
 		}
 	}
 
