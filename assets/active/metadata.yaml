@@ -843,6 +843,15 @@ assets:
     reconcile_order: 3
     conditions: *metrics-exporter-conditions
 
+  - name: metrics-exporter-datasource
+    group: metrics-exporter
+    path: active/metrics-exporter/datasource.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDatasource
+    reconcile_order: 3
+    conditions: *metrics-exporter-conditions
+
   - name: metrics-exporter-dashboard
     group: metrics-exporter
     path: active/metrics-exporter/dashboard.yaml
