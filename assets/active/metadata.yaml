@@ -70,20 +70,100 @@ assets:
   - name: psi-enable
     group: descheduler-loadaware
     gate_crd: kubedeschedulers.operator.openshift.io
-    path: active/machine-config/04-psi-enable.yaml
+    path: active/machine-config/04-psi-enable.yaml.tpl
     phase: 1
     install: always
     component: MachineConfig
     reconcile_order: 1
+    template_params:
+      role: worker
 
   - name: psi-enable-master
     group: descheduler-loadaware
     gate_crd: kubedeschedulers.operator.openshift.io
-    path: active/machine-config/05-psi-enable-master.yaml.tpl
+    path: active/machine-config/04-psi-enable.yaml.tpl
     phase: 1
     install: always
     component: MachineConfig
     reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: topology
+        field: hasSchedulableMasters
+
+  - name: ksm-zero-only
+    group: ksm-zero-only
+    path: active/machine-config/05-ksm-zero-only.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: worker
+    conditions: &ksm-zero-only-conditions
+      - type: annotation
+        key: platform.kubevirt.io/enable-ksm-zero-only
+        value: "true"
+      - type: hco-field-unconfigured
+        path: spec.virtualization.ksmConfiguration
+
+  - name: ksm-zero-only-master
+    group: ksm-zero-only
+    path: active/machine-config/05-ksm-zero-only.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-ksm-zero-only
+        value: "true"
+      - type: hco-field-unconfigured
+        path: spec.virtualization.ksmConfiguration
+      - type: topology
+        field: hasSchedulableMasters
+
+  - name: ksm-cluster-monitoring
+    group: ksm-zero-only
+    path: active/monitoring/cluster-monitoring-ksm.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: ConfigMap
+    reconcile_order: 2
+    conditions: *ksm-zero-only-conditions
+
+  - name: thp-tuning
+    group: thp-tuning
+    path: active/machine-config/06-thp-tuning.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: worker
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-thp-tuning
+        value: "true"
+
+  - name: thp-tuning-master
+    group: thp-tuning
+    path: active/machine-config/06-thp-tuning.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-thp-tuning
+        value: "true"
+      - type: topology
+        field: hasSchedulableMasters
 
   # Phase 1: OpenShift Kubelet (soft dependency on KubeletConfig CRD)
   - name: kubelet-perf-settings

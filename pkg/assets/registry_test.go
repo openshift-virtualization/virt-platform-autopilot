@@ -372,6 +372,14 @@ func TestDefaultConditionEvaluator_EvaluateCondition(t *testing.T) {
 		testImageConditions(ctx, t)
 	})
 
+	t.Run("hco-field-unconfigured conditions", func(t *testing.T) {
+		testHCOFieldUnconfiguredConditions(ctx, t)
+	})
+
+	t.Run("topology conditions", func(t *testing.T) {
+		testTopologyConditions(ctx, t)
+	})
+
 	t.Run("unknown condition type", func(t *testing.T) {
 		evaluator := &DefaultConditionEvaluator{}
 		condition := AssetCondition{Type: ConditionType("unknown-type")}
@@ -500,6 +508,116 @@ func testImageConditions(ctx context.Context, t *testing.T) {
 			evaluator := &DefaultConditionEvaluator{Images: tt.images}
 			condition := AssetCondition{Type: ConditionTypeImage, Key: tt.key}
 
+			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EvaluateCondition() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && satisfied != tt.wantSatisfied {
+				t.Errorf("EvaluateCondition() = %v, want %v", satisfied, tt.wantSatisfied)
+			}
+		})
+	}
+}
+
+func testHCOFieldUnconfiguredConditions(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	hcoWithKSM := map[string]any{
+		"spec": map[string]any{
+			"virtualization": map[string]any{
+				"ksmConfiguration": map[string]any{
+					"nodeLabelSelector": map[string]any{
+						"matchLabels": map[string]any{"kubevirt.io/ksm": "true"},
+					},
+				},
+			},
+		},
+	}
+
+	hcoWithoutKSM := map[string]any{
+		"spec": map[string]any{
+			"virtualization": map[string]any{
+				"certConfig": map[string]any{},
+			},
+		},
+	}
+
+	hcoWithNullKSM := map[string]any{
+		"spec": map[string]any{
+			"virtualization": map[string]any{
+				"ksmConfiguration": nil,
+			},
+		},
+	}
+
+	hcoWithEmptyKSM := map[string]any{
+		"spec": map[string]any{
+			"virtualization": map[string]any{
+				"ksmConfiguration": map[string]any{},
+			},
+		},
+	}
+
+	tests := []struct {
+		name          string
+		hcoObject     map[string]any
+		path          string
+		wantSatisfied bool
+		wantErr       bool
+	}{
+		{"field present", hcoWithKSM, "spec.virtualization.ksmConfiguration", false, false},
+		{"field absent", hcoWithoutKSM, "spec.virtualization.ksmConfiguration", true, false},
+		{"field null", hcoWithNullKSM, "spec.virtualization.ksmConfiguration", true, false},
+		{"field empty map (installer default)", hcoWithEmptyKSM, "spec.virtualization.ksmConfiguration", true, false},
+		{"nil HCO object", nil, "spec.virtualization.ksmConfiguration", false, false},
+		{"missing path", hcoWithKSM, "", false, true},
+		{"nested field present", hcoWithKSM, "spec.virtualization.ksmConfiguration.nodeLabelSelector", false, false},
+		{"nested field absent", hcoWithKSM, "spec.virtualization.ksmConfiguration.nonExistent", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := &DefaultConditionEvaluator{HCOObject: tt.hcoObject}
+			condition := AssetCondition{Type: ConditionTypeHCOFieldUnconfigured, Path: tt.path}
+
+			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EvaluateCondition() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && satisfied != tt.wantSatisfied {
+				t.Errorf("EvaluateCondition() = %v, want %v", satisfied, tt.wantSatisfied)
+			}
+		})
+	}
+}
+
+func testTopologyConditions(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	evaluator := &DefaultConditionEvaluator{
+		TopologyContext: map[string]any{
+			"hasSchedulableMasters": true,
+			"isCompact":             false,
+		},
+	}
+
+	tests := []struct {
+		name          string
+		field         string
+		value         string
+		wantSatisfied bool
+		wantErr       bool
+	}{
+		{"hasSchedulableMasters true", "hasSchedulableMasters", "", true, false},
+		{"isCompact false", "isCompact", "", false, false},
+		{"unknown topology field", "nonExistent", "", false, false},
+		{"explicit false", "isCompact", "false", true, false},
+		{"empty field", "", "", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			condition := AssetCondition{Type: ConditionTypeTopology, Field: tt.field, Value: tt.value}
 			satisfied, err := evaluator.EvaluateCondition(ctx, condition)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EvaluateCondition() error = %v, wantErr %v", err, tt.wantErr)

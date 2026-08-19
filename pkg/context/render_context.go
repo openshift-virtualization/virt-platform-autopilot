@@ -53,6 +53,7 @@ type RenderContext struct {
 	Hardware *HardwareContext           // Cluster-discovered hardware info
 	Topology *TopologyContext           // Cluster topology info (HCP, compact, node counts)
 	Images   map[string]string          // Container images from RELATED_IMAGE_* env vars
+	Params   map[string]string          // Per-asset parameters from metadata template_params
 }
 
 // HardwareContext contains cluster hardware detection results
