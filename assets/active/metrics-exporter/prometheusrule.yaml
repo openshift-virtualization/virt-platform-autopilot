@@ -132,6 +132,9 @@ spec:
               {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}
               in pod {{ $labels.pod }} has exceeded 100ms for 10 minutes.
 
+        # NFS P99 threshold is higher than block (250ms vs 100ms) because NFS baseline
+        # latency includes network round-trips; 100ms P99 can be normal on slow networks
+        # or spinning-disk NFS servers, making it a noise source in those environments.
         - alert: PVCNFSLatencyHigh
           expr: |
             histogram_quantile(0.99, sum by (namespace, persistentvolumeclaim, pod, operation, le) (
@@ -146,6 +149,36 @@ spec:
               P99 NFS {{ $labels.operation }} latency for PVC
               {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}
               in pod {{ $labels.pod }} has exceeded 250ms for 10 minutes.
+
+    - name: kubevirt-overhead
+      rules:
+        - alert: KSMDCPUHigh
+          expr: |
+            rate(kme_cgroup_ksmd_cpu_seconds_total[5m]) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ksmd consuming >50% CPU on node {{ $labels.node }}"
+            description: >-
+              The ksmd kernel thread on node {{ $labels.node }} has been using
+              more than 50% of a CPU core for over 10 minutes. This may indicate
+              overly aggressive KSM scan parameters (pages_to_scan / sleep_millisecs)
+              or a large volume of volatile pages causing excessive re-scanning.
+
+        - alert: KhugepagedCPUHigh
+          expr: |
+            rate(kme_cgroup_khugepaged_cpu_seconds_total[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "khugepaged consuming >10% CPU on node {{ $labels.node }}"
+            description: >-
+              The khugepaged kernel thread on node {{ $labels.node }} has been
+              using more than 10% of a CPU core for over 10 minutes. This may
+              indicate excessive transparent huge page collapse activity, possibly
+              due to a large number of VMs faulting memory simultaneously.
 
     - name: kubevirt-metrics-exporter-health
       rules:
@@ -217,6 +250,29 @@ spec:
             description: >-
               The exporter is logging persistent KVM debugfs scrape errors
               (>0.1/s over 15 minutes). Some VMs may be missing KVM metrics.
+
+        - alert: KMECgroupPollStale
+          expr: time() - kme_cgroup_last_poll_timestamp_seconds > 90
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Cgroup polling stale on {{ $labels.instance }}"
+            description: >-
+              The cgroup subsystem has not completed a poll cycle in over 90 seconds.
+              VMI memory and kernel thread CPU metrics from this node may be stale.
+
+        - alert: KMECgroupScrapeErrors
+          expr: |
+            rate(kme_cgroup_scrape_errors_total[15m]) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Sustained cgroup scrape errors on {{ $labels.instance }}"
+            description: >-
+              The exporter is logging persistent cgroup scrape errors
+              (>0.1/s over 15 minutes). Some VMIs may be missing memory metrics.
 
         - alert: KMEeBPFSubsystemDown
           expr: kme_subsystem_active{subsystem="block"} == 0
