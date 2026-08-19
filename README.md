@@ -36,7 +36,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | SWAP | GA | always | - | - | - |
 | In-Flight Operations | TP | opt-in | `platform.kubevirt.io/enable-in-flight-operations=true` | - | - |
 | Kubelet Performance | TP | opt-in | `platform.kubevirt.io/enable-kubelet-performance-settings=true` | - | - |
-| CPU Manager | DP | opt-in | `featureGate:CPUManager` | - | - |
+| CPU Manager | DP | opt-in | `kubevirtFeatureGate:CPUManager` | - | - |
 | Kernel Samepage Merging (KSM) zero pages only | DP | opt-in | `platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration` | - | - |
 | KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-kubevirt-metrics-exporter=true` | - | Cluster Observability Operator |
 | Logging | DP | opt-in | `platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true` | Loki Operator, Red Hat OpenShift Logging Operator | - |

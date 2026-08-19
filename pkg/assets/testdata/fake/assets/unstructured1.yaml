@@ -1,0 +1,15 @@
+apiVersion: ifo.kubevirt.io/v1alpha1
+kind: OperationRuleSet
+metadata:
+  name: volumesnapshot-rules
+spec:
+  component: csi
+  target:
+    group: snapshot.storage.k8s.io
+    version: v1
+    resource: volumesnapshots
+  rules:
+    - operation: Provisioning
+      expression: |
+        has(object.status) &&
+        (!has(object.status.readyToUse) || object.status.readyToUse == false)

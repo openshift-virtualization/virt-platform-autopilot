@@ -17,7 +17,13 @@ limitations under the License.
 package assets
 
 import (
+	"errors"
+	"io/fs"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/runtime"
+
+	fake "github.com/kubevirt/virt-platform-autopilot/pkg/assets/testdata/fake"
 )
 
 func TestNewLoader(t *testing.T) {
@@ -556,18 +562,51 @@ metadata:
 }
 
 func TestLoadAssetAsUnstructured_ValidFiles(t *testing.T) {
-	loader := NewLoader()
+	loader := NewLoaderFromFS(fake.EmbeddedFS)
 
-	t.Run("loads metadata.yaml successfully", func(t *testing.T) {
-		// metadata.yaml should exist in the assets directory
-		obj, err := loader.LoadAssetAsUnstructured("metadata.yaml")
+	t.Run("loads a valid unstructured file successfully", func(t *testing.T) {
+		obj, err := loader.LoadAssetAsUnstructured("assets/unstructured1.yaml")
 
 		if err != nil {
-			t.Skipf("metadata.yaml not found or invalid: %v", err)
+			t.Fatalf("file not found or invalid: %v", err)
 		}
 
 		if obj == nil {
 			t.Error("LoadAssetAsUnstructured() returned nil object for valid file")
+		}
+	})
+
+	t.Run("should fail to read non-existing file", func(t *testing.T) {
+		const path = "assets/non_existing.yaml"
+		_, err := loader.LoadAssetAsUnstructured(path)
+
+		if err == nil {
+			t.Fatalf("LoadAssetAsUnstructured() should reject non-existing file (%s)", path)
+		}
+
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("LoadAssetAsUnstructured() should reject non-existing file (%s)", path)
+		}
+	})
+
+	t.Run("should fail to read wrong unstructured file", func(t *testing.T) {
+		const path = "assets/unstructured_non_valid.yaml"
+		_, err := loader.LoadAssetAsUnstructured(path)
+
+		if err == nil {
+			t.Fatalf("LoadAssetAsUnstructured() should reject invalid YAML file (%s)", path)
+		}
+
+		for {
+			e := errors.Unwrap(err)
+			if e == nil {
+				break
+			}
+			err = e
+		}
+
+		if !runtime.IsMissingKind(err) {
+			t.Errorf("expected MissingKindError, %v", err)
 		}
 	})
 }
