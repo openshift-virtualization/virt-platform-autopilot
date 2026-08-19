@@ -243,3 +243,31 @@ make undeploy-local
 # Delete cluster
 make kind-delete
 ```
+
+## Sync KubeVirt Metrics Exporter Assets
+
+`sync-kme-assets.py` fetches deploy manifests from
+[kubevirt-metrics-exporter](https://github.com/openshift-virtualization/kubevirt-metrics-exporter)
+on GitHub and copies them into `assets/active/kubevirt-metrics-exporter/`, applying the
+autopilot-specific transforms (DaemonSet template and namespace monitoring label).
+
+**Usage:**
+```bash
+make sync-kme-assets
+make verify-kme-assets
+
+# Or directly:
+./hack/sync-kme-assets.py
+./hack/sync-kme-assets.py --verify
+KME_BRANCH=split-scc ./hack/sync-kme-assets.py
+```
+
+Most files are copied 1:1 from KME `deploy/`. Transformed outputs:
+
+| KME source | Autopilot destination |
+|---|---|
+| `deploy/base/daemonset.yaml` | `kubevirt-metrics-exporter.yaml.tpl` |
+| `deploy/base/namespace.yaml` | `namespace.yaml` (+ monitoring label) |
+| `deploy/openshift/datasource.yaml` | `datasource.yaml` |
+
+After changing KME `deploy/`, run `make sync-kme-assets` in autopilot and commit the result.
