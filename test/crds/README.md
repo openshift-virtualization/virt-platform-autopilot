@@ -28,6 +28,12 @@ test/crds/
 - Path: `deploy/crds/hco00.crd.yaml`
 - Local: `kubevirt/hyperconverged-crd.yaml`
 
+**HyperConverged**
+- Repository: https://github.com/kubevirt/hyperconverged-cluster-operator
+- Branch: `main`
+- Path: `deploy/crds/kubevirt00.crd.yaml`
+- Local: `kubevirt/kubevirt.yaml`
+
 
 ### OpenShift Platform
 

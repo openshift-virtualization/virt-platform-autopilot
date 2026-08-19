@@ -17,8 +17,8 @@ limitations under the License.
 package assets
 
 import (
-	"embed"
 	"fmt"
+	"io"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -41,19 +41,29 @@ const (
 
 // Loader handles loading and parsing assets from embedded filesystem
 type Loader struct {
-	fs embed.FS
+	fs fs.FS
 }
 
 // NewLoader creates a new asset loader
 func NewLoader() *Loader {
+	return NewLoaderFromFS(embeddedassets.EmbeddedFS)
+}
+
+func NewLoaderFromFS(files fs.FS) *Loader {
 	return &Loader{
-		fs: embeddedassets.EmbeddedFS,
+		fs: files,
 	}
 }
 
 // LoadAsset loads a single asset by path and returns its raw content
 func (l *Loader) LoadAsset(path string) ([]byte, error) {
-	data, err := l.fs.ReadFile(path)
+	file, err := l.fs.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read asset %s: %w", path, err)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read asset %s: %w", path, err)
 	}
