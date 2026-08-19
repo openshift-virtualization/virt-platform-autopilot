@@ -70,7 +70,7 @@ func (l *Loader) LoadTombstones() ([]TombstoneMetadata, error) {
 		}
 
 		// Load and parse tombstone file
-		data, err := l.fs.ReadFile(path)
+		data, err := l.LoadAsset(path)
 		if err != nil {
 			return fmt.Errorf("failed to read tombstone file %s: %w", path, err)
 		}

@@ -83,7 +83,7 @@ Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The
 | `psi-enable` | `descheduler-loadaware` | MachineConfig | Gate CRD: KubeDescheduler; grouped with `descheduler-loadaware` for allowlist matching |
 | `pci-passthrough` | | MachineConfig | Opt-in: hardware + annotation condition |
 | `kubelet-perf-settings` | | KubeletConfig | Always-on baseline |
-| `kubelet-cpu-manager` | | KubeletConfig | Opt-in: CPUManager feature gate |
+| `kubelet-cpu-manager` | | KubeletConfig | Always-on baseline |
 | `descheduler-loadaware` | | KubeDescheduler | Soft dependency on KubeDescheduler CRD |
 | `monitoring-ui-plugin` | | UIPlugin | Soft dependency on COO CRD; enables Perses dashboards in the OpenShift console |
 | `mtv-operator` | | ForkliftController | Opt-in: annotation condition |

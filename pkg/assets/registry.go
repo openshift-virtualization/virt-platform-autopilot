@@ -42,6 +42,7 @@ type ConditionType string
 const (
 	ConditionTypeHardwareDetection    ConditionType = "hardware-detection"
 	ConditionTypeFeatureGate          ConditionType = "feature-gate"
+	ConditionTypeKubeVirtFeatureGate  ConditionType = "kubevirt-feature-gate"
 	ConditionTypeAnnotation           ConditionType = "annotation"
 	ConditionTypeImage                ConditionType = "image"
 	ConditionTypeHCOFieldUnconfigured ConditionType = "hco-field-unconfigured"
@@ -72,6 +73,11 @@ func FormatCondition(c AssetCondition) string {
 			return ""
 		}
 		return "featureGate:" + c.Value
+	case ConditionTypeKubeVirtFeatureGate:
+		if c.Value == "" {
+			return ""
+		}
+		return "kubevirtFeatureGate:" + c.Value
 	case ConditionTypeHardwareDetection:
 		if c.Detector == "" {
 			return ""
@@ -372,8 +378,9 @@ type ConditionEvaluator interface {
 
 // DefaultConditionEvaluator provides default condition evaluation logic
 type DefaultConditionEvaluator struct {
-	HardwareContext map[string]bool   // Hardware detection results
-	FeatureGates    map[string]bool   // Feature gate states
+	HardwareContext map[string]bool // Hardware detection results
+	FeatureGates    map[string]bool // Feature gate states
+	KVFeatureGates  []string
 	Annotations     map[string]string // Annotation values
 	Images          map[string]string // Container images from RELATED_IMAGE_* env vars
 	HCOObject       map[string]any    // Raw HCO unstructured object for field inspection
@@ -396,6 +403,13 @@ func (e *DefaultConditionEvaluator) EvaluateCondition(ctx context.Context, condi
 		}
 		enabled, ok := e.FeatureGates[condition.Value]
 		return ok && enabled, nil
+
+	case ConditionTypeKubeVirtFeatureGate:
+		if condition.Value == "" {
+			return false, fmt.Errorf("kubevirt-feature-gate condition requires value field")
+		}
+
+		return slices.Contains(e.KVFeatureGates, condition.Value), nil
 
 	case ConditionTypeAnnotation:
 		if condition.Key == "" {

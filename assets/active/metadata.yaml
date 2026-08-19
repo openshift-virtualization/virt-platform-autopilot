@@ -358,7 +358,7 @@ assets:
     component: KubeletConfig
     reconcile_order: 1
     conditions:
-      - type: feature-gate
+      - type: kubevirt-feature-gate
         value: CPUManager
 
   # Phase 2: InflightOperations OperationRuleSet assets (opt-in, gated on IFO CRD)
