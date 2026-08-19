@@ -47,6 +47,14 @@ spec:
               value: {{ index $envOverrides "ENABLE_EBPF_NFS" | default "true" | quote }}
             - name: ENABLE_EBPF_NFS_KPROBE
               value: {{ index $envOverrides "ENABLE_EBPF_NFS_KPROBE" | default "false" | quote }}
+            - name: ENABLE_KVM
+              value: {{ index $envOverrides "ENABLE_KVM" | default "true" | quote }}
+            - name: KVM_POLL_INTERVAL
+              value: {{ index $envOverrides "KVM_POLL_INTERVAL" | default "30s" | quote }}
+            - name: ENABLE_CGROUP
+              value: {{ index $envOverrides "ENABLE_CGROUP" | default "true" | quote }}
+            - name: CGROUP_POLL_INTERVAL
+              value: {{ index $envOverrides "CGROUP_POLL_INTERVAL" | default "30s" | quote }}
             - name: QMP_POLL_INTERVAL
               value: {{ index $envOverrides "QMP_POLL_INTERVAL" | default "1m" | quote }}
             - name: EBPF_SCAN_INTERVAL
