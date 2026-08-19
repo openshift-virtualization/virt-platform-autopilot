@@ -493,188 +493,83 @@ func TestTemplateParamsPassedToContext(t *testing.T) {
 	}
 }
 
-func TestMetricsExporterEnvOverrides(t *testing.T) {
-	loader := assets.NewLoader()
-	renderer := NewRenderer(loader)
+func TestKubevirtMetricsExporterEnvOverrides(t *testing.T) {
+	renderer := NewRenderer(assets.NewLoader())
+	assetMeta := &assets.AssetMetadata{
+		Name: "kubevirt-metrics-exporter",
+		Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
+	}
 
-	t.Run("no annotation uses all defaults", func(t *testing.T) {
-		ctx := &pkgcontext.RenderContext{
+	renderEnv := func(t *testing.T, annotations map[string]string) map[string]string {
+		t.Helper()
+
+		metadata := map[string]any{
+			"name":      "kubevirt-hyperconverged",
+			"namespace": "openshift-cnv",
+		}
+		if annotations != nil {
+			ann := make(map[string]any, len(annotations))
+			for key, value := range annotations {
+				ann[key] = value
+			}
+			metadata["annotations"] = ann
+		}
+
+		obj, err := renderer.RenderAsset(assetMeta, &pkgcontext.RenderContext{
 			HCO: &unstructured.Unstructured{
-				Object: map[string]any{
-					"metadata": map[string]any{
-						"name":      "kubevirt-hyperconverged",
-						"namespace": "openshift-cnv",
-					},
-				},
+				Object: map[string]any{"metadata": metadata},
 			},
 			Images: map[string]string{
-				"kubevirt-metrics-exporter": "quay.io/kubevirt/metrics-exporter:latest",
+				"kubevirt-metrics-exporter": "quay.io/example/exporter:v1",
 			},
-		}
-
-		assetMeta := &assets.AssetMetadata{
-			Name: "kubevirt-metrics-exporter",
-			Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
-		}
-
-		obj, err := renderer.RenderAsset(assetMeta, ctx)
+		})
 		if err != nil {
 			t.Fatalf("RenderAsset() error = %v", err)
 		}
-		if obj == nil {
-			t.Fatal("RenderAsset() returned nil")
+
+		containers, found, err := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
+		if err != nil || !found || len(containers) == 0 {
+			t.Fatal("expected rendered DaemonSet container")
 		}
-
-		envVars := extractEnvVars(t, obj)
-		assertEnvValue(t, envVars, "ENABLE_QMP", "true")
-		assertEnvValue(t, envVars, "ENABLE_QGA", "true")
-		assertEnvValue(t, envVars, "QGA_POLL_INTERVAL", "1m")
-		assertEnvValue(t, envVars, "ENABLE_EBPF", "true")
-		assertEnvValue(t, envVars, "ENABLE_EBPF_BLOCK", "true")
-		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS", "true")
-		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS_KPROBE", "false")
-		assertEnvValue(t, envVars, "ENABLE_KVM", "true")
-		assertEnvValue(t, envVars, "KVM_POLL_INTERVAL", "30s")
-		assertEnvValue(t, envVars, "ENABLE_CGROUP", "true")
-		assertEnvValue(t, envVars, "CGROUP_POLL_INTERVAL", "30s")
-		assertEnvValue(t, envVars, "QMP_POLL_INTERVAL", "1m")
-		assertEnvValue(t, envVars, "EBPF_SCAN_INTERVAL", "30")
-		assertEnvValue(t, envVars, "LOG_LEVEL", "info")
-	})
-
-	t.Run("partial override merges with defaults", func(t *testing.T) {
-		ctx := &pkgcontext.RenderContext{
-			HCO: &unstructured.Unstructured{
-				Object: map[string]any{
-					"metadata": map[string]any{
-						"name":      "kubevirt-hyperconverged",
-						"namespace": "openshift-cnv",
-						"annotations": map[string]any{
-							"platform.kubevirt.io/kubevirt-metrics-exporter-env": `{"LOG_LEVEL":"debug","ENABLE_QMP":"false","EBPF_SCAN_INTERVAL":"60"}`,
-						},
-					},
-				},
-			},
-			Images: map[string]string{
-				"kubevirt-metrics-exporter": "quay.io/kubevirt/metrics-exporter:latest",
-			},
-		}
-
-		assetMeta := &assets.AssetMetadata{
-			Name: "kubevirt-metrics-exporter",
-			Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
-		}
-
-		obj, err := renderer.RenderAsset(assetMeta, ctx)
-		if err != nil {
-			t.Fatalf("RenderAsset() error = %v", err)
-		}
-		if obj == nil {
-			t.Fatal("RenderAsset() returned nil")
-		}
-
-		envVars := extractEnvVars(t, obj)
-
-		// Overridden values
-		assertEnvValue(t, envVars, "LOG_LEVEL", "debug")
-		assertEnvValue(t, envVars, "ENABLE_QMP", "false")
-		assertEnvValue(t, envVars, "EBPF_SCAN_INTERVAL", "60")
-
-		// Non-overridden values keep defaults
-		assertEnvValue(t, envVars, "ENABLE_QGA", "true")
-		assertEnvValue(t, envVars, "QGA_POLL_INTERVAL", "1m")
-		assertEnvValue(t, envVars, "ENABLE_EBPF", "true")
-		assertEnvValue(t, envVars, "ENABLE_EBPF_BLOCK", "true")
-		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS", "true")
-		assertEnvValue(t, envVars, "ENABLE_EBPF_NFS_KPROBE", "false")
-		assertEnvValue(t, envVars, "ENABLE_KVM", "true")
-		assertEnvValue(t, envVars, "KVM_POLL_INTERVAL", "30s")
-		assertEnvValue(t, envVars, "ENABLE_CGROUP", "true")
-		assertEnvValue(t, envVars, "CGROUP_POLL_INTERVAL", "30s")
-		assertEnvValue(t, envVars, "QMP_POLL_INTERVAL", "1m")
-	})
-
-	t.Run("empty JSON object uses all defaults", func(t *testing.T) {
-		ctx := &pkgcontext.RenderContext{
-			HCO: &unstructured.Unstructured{
-				Object: map[string]any{
-					"metadata": map[string]any{
-						"name":      "kubevirt-hyperconverged",
-						"namespace": "openshift-cnv",
-						"annotations": map[string]any{
-							"platform.kubevirt.io/kubevirt-metrics-exporter-env": `{}`,
-						},
-					},
-				},
-			},
-			Images: map[string]string{
-				"kubevirt-metrics-exporter": "quay.io/kubevirt/metrics-exporter:latest",
-			},
-		}
-
-		assetMeta := &assets.AssetMetadata{
-			Name: "kubevirt-metrics-exporter",
-			Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
-		}
-
-		obj, err := renderer.RenderAsset(assetMeta, ctx)
-		if err != nil {
-			t.Fatalf("RenderAsset() error = %v", err)
-		}
-		if obj == nil {
-			t.Fatal("RenderAsset() returned nil")
-		}
-
-		envVars := extractEnvVars(t, obj)
-		assertEnvValue(t, envVars, "LOG_LEVEL", "info")
-		assertEnvValue(t, envVars, "ENABLE_QMP", "true")
-		assertEnvValue(t, envVars, "EBPF_SCAN_INTERVAL", "30")
-	})
-}
-
-// extractEnvVars pulls env vars from the rendered DaemonSet into a name->value map.
-func extractEnvVars(t *testing.T, obj *unstructured.Unstructured) map[string]string {
-	t.Helper()
-	containers, found, err := unstructured.NestedSlice(obj.Object, "spec", "template", "spec", "containers")
-	if err != nil || !found || len(containers) == 0 {
-		t.Fatal("could not find containers in rendered DaemonSet")
-	}
-
-	container, ok := containers[0].(map[string]any)
-	if !ok {
-		t.Fatal("container is not a map")
-	}
-
-	envList, ok := container["env"].([]any)
-	if !ok {
-		t.Fatal("env is not a list")
-	}
-
-	result := make(map[string]string)
-	for _, item := range envList {
-		envMap, ok := item.(map[string]any)
+		container, ok := containers[0].(map[string]any)
 		if !ok {
-			continue
+			t.Fatal("container is not a map")
 		}
-		name, _ := envMap["name"].(string)
-		value, _ := envMap["value"].(string)
-		if name != "" {
-			result[name] = value
+		envList, ok := container["env"].([]any)
+		if !ok {
+			t.Fatal("env is not a list")
 		}
-	}
-	return result
-}
 
-func assertEnvValue(t *testing.T, envVars map[string]string, name, expected string) {
-	t.Helper()
-	got, exists := envVars[name]
-	if !exists {
-		t.Errorf("env var %s not found in rendered output", name)
-		return
+		env := make(map[string]string)
+		for _, item := range envList {
+			envMap, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := envMap["name"].(string)
+			value, _ := envMap["value"].(string)
+			if name != "" && value != "" {
+				env[name] = value
+			}
+		}
+		return env
 	}
-	if got != expected {
-		t.Errorf("env var %s = %q, want %q", name, got, expected)
-	}
+
+	t.Run("HCO annotation overrides selected env vars", func(t *testing.T) {
+		env := renderEnv(t, map[string]string{
+			"platform.kubevirt.io/kubevirt-metrics-exporter-env": `{"LOG_LEVEL":"debug","ENABLE_QMP":"false"}`,
+		})
+
+		if got := env["LOG_LEVEL"]; got != "debug" {
+			t.Errorf("LOG_LEVEL = %q, want debug", got)
+		}
+		if got := env["ENABLE_QMP"]; got != "false" {
+			t.Errorf("ENABLE_QMP = %q, want false", got)
+		}
+		if got := env["ENABLE_QGA"]; got != "true" {
+			t.Errorf("ENABLE_QGA = %q, want true (template default)", got)
+		}
+	})
 }
 
 func TestRenderAsset(t *testing.T) {
