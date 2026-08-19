@@ -889,6 +889,7 @@ assets:
     phase: 2
     install: opt-in
     component: MachineConfig
+    reconcile_order: 1
     conditions:
       - type: annotation
         key: platform.kubevirt.io/vm-drain-shutdown-inhibitor

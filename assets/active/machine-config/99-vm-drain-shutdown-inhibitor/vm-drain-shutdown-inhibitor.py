@@ -32,9 +32,8 @@ class VirtLauncherPod:
 
 
 class VMInfo:
-    def __init__(self, domain_name, state, pod):
+    def __init__(self, domain_name, pod):
         self.domain_name = domain_name
-        self.state = state
         self.pod = pod
 
 
@@ -192,8 +191,7 @@ def shutdown_vms():
         domain = get_vm_domain(pod)
         if domain is None:
             continue
-        state = get_domain_state(pod, domain)
-        vms.append(VMInfo(domain_name=domain, state=state, pod=pod))
+        vms.append(VMInfo(domain_name=domain, pod=pod))
 
     if not vms:
         log.info("No running VM domains found.")
@@ -284,7 +282,6 @@ def main():
 
     inhibitor = take_lock()
     monitor = start_monitor()
-    monitor_started_at = time.monotonic()
 
     # sys.exit raises SystemExit, which propagates out of the blocking
     # readline() and triggers the finally block for cleanup.
@@ -325,7 +322,6 @@ def main():
                             retries, delay)
                 time.sleep(delay)
                 monitor = start_monitor()
-                monitor_started_at = time.monotonic()
                 saw_signal_header = False
                 continue
 
