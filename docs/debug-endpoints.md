@@ -189,8 +189,8 @@ curl http://localhost:8081/debug/features?format=json | jq '.'
 ```json
 {
   "framework": {
-    "maturity": "TP",
-    "opt_in": "platform.kubevirt.io/autopilot=true"
+    "maturity": "GA",
+    "opt_in": null
   },
   "features": [
     {
