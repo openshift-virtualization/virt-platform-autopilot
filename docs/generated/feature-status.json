@@ -1,0 +1,134 @@
+{
+  "framework": {
+    "maturity": "TP",
+    "opt_in": "platform.kubevirt.io/autopilot=true"
+  },
+  "features": [
+    {
+      "name": "In-Flight Operations",
+      "description": "OperationRuleSet-based coordination for safe concurrent operations",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
+      "name": "Kubelet Performance",
+      "description": "Optimized kubelet settings for virtualization workloads",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
+      "name": "Load-Aware Descheduler",
+      "description": "Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null,
+      "requires": [
+        "Kube Descheduler Operator"
+      ]
+    },
+    {
+      "name": "Observability",
+      "description": "Prometheus metrics, alerting rules, and Perses dashboards in the OpenShift console",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null,
+      "requires": [
+        "Cluster Observability Operator"
+      ]
+    },
+    {
+      "name": "SWAP",
+      "description": "OpenShift worker node swap support",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
+      "name": "CPU Manager",
+      "description": "Dedicated CPU pinning for guaranteed QoS workloads",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "featureGate:CPUManager"
+    },
+    {
+      "name": "Kernel Samepage Merging (KSM) zero pages only",
+      "description": "Node-level KSM tuning that enables zero-pages-only deduplication with adaptive scan rate",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration"
+    },
+    {
+      "name": "KubeVirt Metrics Exporter",
+      "description": "Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-metrics-exporter=true",
+      "recommended": [
+        "Cluster Observability Operator"
+      ]
+    },
+    {
+      "name": "Logging",
+      "description": "Integrated logging stack with LokiStack and ClusterLogForwarder",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true",
+      "requires": [
+        "Loki Operator",
+        "Red Hat OpenShift Logging Operator"
+      ]
+    },
+    {
+      "name": "MTV Operator",
+      "description": "Migration Toolkit for Virtualization",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-mtv=true"
+    },
+    {
+      "name": "MetalLB Operator",
+      "description": "Bare-metal load balancer for services",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-metallb=true"
+    },
+    {
+      "name": "NHC with FAR remediator and SBR detection-mode config",
+      "description": "Node health checks with fence-agents remediation and storage-based remediation in detection-only mode",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-node-remediation=true",
+      "requires": [
+        "Node Health Check Operator",
+        "Fence Agents Remediation Operator",
+        "Storage Based Remediation Operator"
+      ]
+    },
+    {
+      "name": "PCI Passthrough",
+      "description": "GPU/PCI device passthrough via VFIO",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/openshift=true, platform.kubevirt.io/enable-pci-passthrough=true"
+    },
+    {
+      "name": "Transparent Huge Pages (THP) Tuning",
+      "description": "Node-level THP tuning that sets madvise mode and khugepaged scan rate for KVM guest memory",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-thp-tuning=true"
+    },
+    {
+      "name": "Troubleshooting Panel",
+      "description": "Korrel8r observability signal correlation in the console",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-korrel8r=true",
+      "requires": [
+        "Cluster Observability Operator"
+      ]
+    }
+  ]
+}
