@@ -1036,3 +1036,8 @@ features:
       - Node Health Check Operator
       - Fence Agents Remediation Operator
       - Storage Based Remediation Operator
+
+  - name: VM drain shutdown inhibitor
+    description: Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down
+    maturity: dp
+    assets: [vm-drain-shutdown-inhibitor]
