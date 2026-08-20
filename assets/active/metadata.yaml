@@ -66,6 +66,9 @@ assets:
         value: "true"
       - type: hardware-detection
         detector: pciDevicesPresent
+      - type: annotation
+        key: platform.kubevirt.io/enable-pci-passthrough
+        value: "true"
 
   - name: psi-enable
     group: descheduler-loadaware
@@ -738,3 +741,87 @@ assets:
   # - node-maintenance-operator (operators/node-maintenance.yaml.tpl)
   # - fence-agents-operator (operators/fence-agents.yaml.tpl)
   # - usb-passthrough (machine-config/05-usb-passthrough.yaml.tpl)
+
+# Framework-level maturity. Remove opt_in once the autopilot graduates to GA.
+framework:
+  maturity: dp
+  opt_in: platform.kubevirt.io/autopilot=true
+
+# Feature catalog: maps user-facing features to assets/groups.
+# - maturity is required only for opt-in features ("dp" or "tp")
+# - features whose assets are all install: always are auto-classified as GA
+# - opt-in conditions are derived from the referenced assets (no duplication)
+# - every asset must be covered by a feature entry or listed in excluded_assets
+
+# Assets intentionally excluded from feature tracking (e.g. internal-only,
+# not yet user-facing, or managed externally).
+excluded_assets:
+  - hco-golden-config
+
+features:
+  - name: SWAP
+    description: OpenShift worker node swap support
+    maturity: tp
+    assets: [swap-enable]
+
+  - name: Kubelet Performance
+    description: Optimized kubelet settings for virtualization workloads
+    maturity: tp
+    assets: [kubelet-perf-settings]
+
+  - name: Observability
+    description: Prometheus metrics, alerting rules, and Perses dashboards in the OpenShift console
+    maturity: tp
+    assets: [metrics-service, metrics-servicemonitor, prometheus-alerts, monitoring-ui-plugin, autopilot-dashboard]
+    requires:
+      - Cluster Observability Operator
+
+  - name: Load-Aware Descheduler
+    description: Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics
+    maturity: tp
+    assets: [descheduler-loadaware, psi-enable, psi-enable-master]
+    requires:
+      - Kube Descheduler Operator
+
+  - name: PCI Passthrough
+    description: GPU/PCI device passthrough via VFIO
+    maturity: dp
+    assets: [pci-passthrough]
+
+  - name: CPU Manager
+    description: Dedicated CPU pinning for guaranteed QoS workloads
+    maturity: dp
+    assets: [kubelet-cpu-manager]
+
+  - name: MTV Operator
+    description: Migration Toolkit for Virtualization
+    maturity: dp
+    assets: [mtv-operator]
+
+  - name: MetalLB Operator
+    description: Bare-metal load balancer for services
+    maturity: dp
+    assets: [metallb-operator]
+
+  - name: KubeVirt Metrics Exporter
+    description: Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics
+    maturity: dp
+    groups: [metrics-exporter]
+    recommended:
+      - Cluster Observability Operator
+
+  - name: In-Flight Operations
+    description: OperationRuleSet-based coordination for safe concurrent operations
+    maturity: tp
+    groups: [inflightoperations]
+
+  - name: Kernel Samepage Merging (KSM) zero pages only
+    description: Node-level KSM tuning that enables zero-pages-only deduplication with adaptive scan rate
+    maturity: dp
+    groups: [ksm-zero-only]
+
+  - name: Transparent Huge Pages (THP) Tuning
+    description: Node-level THP tuning that sets madvise mode and khugepaged scan rate for KVM guest memory
+    maturity: dp
+    groups: [thp-tuning]
+

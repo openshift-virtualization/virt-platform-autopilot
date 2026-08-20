@@ -130,7 +130,7 @@ func newRunCommand() *cobra.Command {
 	cmd.Flags().DurationVar(&crdValidationTimeout, "crd-validation-timeout", 10*time.Second,
 		"Timeout for validating that required CRDs exist at startup.")
 	cmd.Flags().BoolVar(&enableDebugServer, "enable-debug-server", true,
-		"Enable debug HTTP server with /debug/render and /debug/exclusions endpoints.")
+		"Enable debug HTTP server with /debug/render, /debug/exclusions, and /debug/features endpoints.")
 	cmd.Flags().BoolVar(&development, "development", true,
 		"Enable development mode logging.")
 

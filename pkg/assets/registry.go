@@ -58,6 +58,48 @@ type AssetCondition struct {
 	Field    string        `json:"field,omitempty"`    // For topology (TopologyContext.AsMap key)
 }
 
+// FormatCondition returns a stable, human-readable representation of an asset
+// condition for documentation and feature-status output.
+func FormatCondition(c AssetCondition) string {
+	switch c.Type {
+	case ConditionTypeAnnotation:
+		if c.Key == "" {
+			return ""
+		}
+		return c.Key + "=" + c.Value
+	case ConditionTypeFeatureGate:
+		if c.Value == "" {
+			return ""
+		}
+		return "featureGate:" + c.Value
+	case ConditionTypeHardwareDetection:
+		if c.Detector == "" {
+			return ""
+		}
+		return "hardware:" + c.Detector
+	case ConditionTypeImage:
+		if c.Key == "" {
+			return ""
+		}
+		return "image:" + c.Key
+	case ConditionTypeHCOFieldUnconfigured:
+		if c.Path == "" {
+			return ""
+		}
+		return "hcoUnconfigured:" + c.Path
+	case ConditionTypeTopology:
+		if c.Field == "" {
+			return ""
+		}
+		if c.Value != "" && c.Value != "true" {
+			return "topology:" + c.Field + "=" + c.Value
+		}
+		return "topology:" + c.Field
+	default:
+		return ""
+	}
+}
+
 // AssetMetadata defines the metadata for a managed asset
 type AssetMetadata struct {
 	Name            string                     `json:"name"`
@@ -74,9 +116,29 @@ type AssetMetadata struct {
 	RequiredCRD     string                     `json:"-"`                         // Derived from template at load time; empty for core API types
 }
 
+// FeatureMetadata defines a user-facing feature composed of one or more assets
+type FeatureMetadata struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Maturity    string   `json:"maturity,omitempty"`    // "dp" or "tp"; empty = auto-derive from install mode
+	Assets      []string `json:"assets,omitempty"`      // individual asset names
+	Groups      []string `json:"groups,omitempty"`      // asset group names
+	Requires    []string `json:"requires,omitempty"`    // hard dependencies (feature can't function without them)
+	Recommended []string `json:"recommended,omitempty"` // optional integrations that improve UX/visibility
+}
+
+// FrameworkMetadata defines the maturity of the autopilot framework itself
+type FrameworkMetadata struct {
+	Maturity string `json:"maturity,omitempty"` // "dp", "tp", or empty (GA)
+	OptIn    string `json:"opt_in,omitempty"`   // global opt-in annotation; empty when GA
+}
+
 // AssetCatalog contains all asset metadata
 type AssetCatalog struct {
-	Assets []AssetMetadata `json:"assets"`
+	Assets         []AssetMetadata   `json:"assets"`
+	Framework      FrameworkMetadata `json:"framework"`
+	ExcludedAssets []string          `json:"excluded_assets,omitempty"`
+	Features       []FeatureMetadata `json:"features"`
 }
 
 // Registry manages the asset catalog and provides querying capabilities

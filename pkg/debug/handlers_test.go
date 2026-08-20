@@ -248,6 +248,66 @@ func TestHandleExclusions(t *testing.T) {
 	}
 }
 
+func TestHandleFeatures(t *testing.T) {
+	loader := assets.NewLoader()
+	registry, err := assets.NewRegistry(loader)
+	require.NoError(t, err)
+
+	server := NewServer(nil, loader, registry)
+
+	tests := []struct {
+		name           string
+		queryParams    string
+		expectedStatus int
+		checkResponse  func(t *testing.T, body string)
+	}{
+		{
+			name:           "yaml format",
+			queryParams:    "",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body string) {
+				var catalog assets.FeatureCatalog
+				err := yaml.Unmarshal([]byte(body), &catalog)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, catalog.Features)
+				assert.NotEmpty(t, catalog.Framework.Maturity)
+			},
+		},
+		{
+			name:           "json format",
+			queryParams:    "?format=json",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, body string) {
+				var catalog assets.FeatureCatalog
+				err := json.Unmarshal([]byte(body), &catalog)
+				assert.NoError(t, err)
+				assert.NotEmpty(t, catalog.Features)
+
+				names := make([]string, 0, len(catalog.Features))
+				for _, feature := range catalog.Features {
+					names = append(names, feature.Name)
+				}
+				assert.Contains(t, names, "Observability")
+				assert.Contains(t, names, "SWAP")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/debug/features"+tt.queryParams, nil)
+			w := httptest.NewRecorder()
+
+			server.handleFeatures(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestHandleTombstones(t *testing.T) {
 	loader := assets.NewLoader()
 	registry, err := assets.NewRegistry(loader)
@@ -325,6 +385,7 @@ func TestMethodNotAllowed(t *testing.T) {
 	endpoints := []string{
 		"/debug/render",
 		"/debug/exclusions",
+		"/debug/features",
 		"/debug/tombstones",
 	}
 

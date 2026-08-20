@@ -26,6 +26,27 @@ The autopilot applies opinionated best practices and manages your platform autom
 
 **Install once. Run VMs. Customize via GitOps when needed.**
 
+## Features
+
+<!-- BEGIN FEATURE STATUS -->
+> **Note:** The autopilot framework is currently **DP** and requires `platform.kubevirt.io/autopilot=true` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.
+
+| Feature | Maturity | Install | Opt-in | Requires | Recommended |
+|---------|----------|---------|--------|----------|-------------|
+| In-Flight Operations | TP | always | - | - | - |
+| Kubelet Performance | TP | always | - | - | - |
+| Load-Aware Descheduler | TP | always | - | Kube Descheduler Operator | - |
+| Observability | TP | always | - | Cluster Observability Operator | - |
+| SWAP | TP | always | - | - | - |
+| CPU Manager | DP | opt-in | `featureGate:CPUManager` | - | - |
+| Kernel Samepage Merging (KSM) zero pages only | DP | opt-in | `platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration` | - | - |
+| KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-metrics-exporter=true` | - | Cluster Observability Operator |
+| MTV Operator | DP | opt-in | `platform.kubevirt.io/enable-mtv=true` | - | - |
+| MetalLB Operator | DP | opt-in | `platform.kubevirt.io/enable-metallb=true` | - | - |
+| PCI Passthrough | DP | opt-in | `platform.kubevirt.io/openshift=true, platform.kubevirt.io/enable-pci-passthrough=true` | - | - |
+| Transparent Huge Pages (THP) Tuning | DP | opt-in | `platform.kubevirt.io/enable-thp-tuning=true` | - | - |
+<!-- END FEATURE STATUS -->
+
 ## Quick Start
 
 ### Prerequisites

@@ -59,6 +59,7 @@ func (s *Server) InstallHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/debug/render", s.handleRender)
 	mux.HandleFunc("/debug/render/", s.handleRenderAsset) // Trailing slash for path params
 	mux.HandleFunc("/debug/exclusions", s.handleExclusions)
+	mux.HandleFunc("/debug/features", s.handleFeatures)
 	mux.HandleFunc("/debug/tombstones", s.handleTombstones)
 	mux.HandleFunc("/debug/health", s.handleHealth)
 }
@@ -269,6 +270,27 @@ func (s *Server) handleExclusions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeResponse(w, exclusions, format)
+}
+
+// handleFeatures returns the derived feature catalog (maturity, install mode, opt-in conditions).
+func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = "yaml"
+	}
+
+	catalog, err := s.registry.FeatureCatalog()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to derive feature catalog: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	s.writeResponse(w, catalog, format)
 }
 
 // TombstoneInfo represents information about tombstones

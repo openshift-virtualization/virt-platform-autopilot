@@ -28,6 +28,9 @@ jobs:
       - name: Verify RBAC is up-to-date
         run: make verify-rbac
 
+      - name: Verify feature status is up-to-date
+        run: make verify-feature-status
+
       # Save PR number so the comment workflow (running with write access in the
       # base-repo context) can look it up — artifact is the only safe channel
       # across the pull_request / workflow_run boundary for fork PRs.
