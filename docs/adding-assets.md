@@ -332,7 +332,7 @@ Example:
 - name: KubeVirt Metrics Exporter
   description: Per-node VM storage I/O latency collection
   maturity: dp
-  groups: [metrics-exporter]
+  groups: [kubevirt-metrics-exporter]
   recommended:
     - Cluster Observability Operator
 ```
