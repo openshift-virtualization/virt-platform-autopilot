@@ -59,7 +59,7 @@ func TestDeriveFeatureOptInSkipsInternalConditionTypes(t *testing.T) {
 			},
 		},
 		{
-			Name: "metrics-exporter",
+			Name: "kubevirt-metrics-exporter",
 			Conditions: []AssetCondition{
 				{Type: ConditionTypeImage, Key: "kubevirt-metrics-exporter"},
 			},
@@ -92,14 +92,14 @@ func TestSortFeatureStatuses(t *testing.T) {
 func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 	catalog := &AssetCatalog{
 		Assets: []AssetMetadata{
-			{Name: "metrics-exporter", Install: InstallModeOptIn},
+			{Name: "kubevirt-metrics-exporter", Install: InstallModeOptIn},
 		},
 		Features: []FeatureMetadata{
 			{
 				Name:        "KubeVirt Metrics Exporter",
 				Description: "Per-node metrics exporter",
 				Groups:      []string{},
-				Assets:      []string{"metrics-exporter"},
+				Assets:      []string{"kubevirt-metrics-exporter"},
 				Recommended: []string{"Cluster Observability Operator"},
 			},
 		},

@@ -40,7 +40,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | SWAP | GA | always | - | - | - |
 | CPU Manager | DP | opt-in | `featureGate:CPUManager` | - | - |
 | Kernel Samepage Merging (KSM) zero pages only | DP | opt-in | `platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration` | - | - |
-| KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-metrics-exporter=true` | - | Cluster Observability Operator |
+| KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-kubevirt-metrics-exporter=true` | - | Cluster Observability Operator |
 | Logging | DP | opt-in | `platform.kubevirt.io/enable-logging=true, platform.kubevirt.io/enable-audit-logging=true` | Loki Operator, Red Hat OpenShift Logging Operator | - |
 | MTV Operator | DP | opt-in | `platform.kubevirt.io/enable-mtv=true` | - | - |
 | MetalLB Operator | DP | opt-in | `platform.kubevirt.io/enable-metallb=true` | - | - |

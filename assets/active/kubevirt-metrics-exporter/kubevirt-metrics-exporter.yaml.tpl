@@ -1,4 +1,4 @@
-{{- $envOverrides := dig "metadata" "annotations" "platform.kubevirt.io/metrics-exporter-env" "{}" .HCO.Object | fromJson }}
+{{- $envOverrides := dig "metadata" "annotations" "platform.kubevirt.io/kubevirt-metrics-exporter-env" "{}" .HCO.Object | fromJson }}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
