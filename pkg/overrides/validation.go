@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	// AnnotationAutopilotEnabled is the opt-in annotation on the HCO CR to activate the autopilot.
-	// In the current early phase, the autopilot is inactive unless this annotation is set to "true".
-	// This behavior will be inverted in a future release once the project matures.
+	// AnnotationAutopilotEnabled is the annotation on the HCO CR that controls the autopilot.
+	// Now that the autopilot is GA, it is active by default and only disabled when this
+	// annotation is explicitly set to "false".
 	AnnotationAutopilotEnabled = "platform.kubevirt.io/autopilot"
 
 	// AnnotationMode is the annotation key for management mode (managed/unmanaged)
@@ -173,62 +173,22 @@ func IsPaused(obj *unstructured.Unstructured) bool {
 	return exists && val == "true"
 }
 
-// ParseAutopilotScope parses the autopilot annotation and returns the asset allowlist
-// and whether autopilot is enabled at all.
+// IsAutopilotEnabled reports whether the autopilot is enabled for the given HCO CR.
 //
-// Three states are possible:
-//   - annotation absent or empty → (nil, false): autopilot disabled
-//   - annotation == "true"       → (nil, true):  autopilot enabled for all assets
-//   - annotation == "a,b,c"      → (set, true):  autopilot enabled for named assets only
-//
-// When an allowlist is returned, only assets whose name appears in the set are
-// considered for reconciliation. All other opt-in logic (conditions, hardware
-// detection, feature gates) still applies on top of this filter.
-func ParseAutopilotScope(hco *unstructured.Unstructured) (allowlist map[string]bool, enabled bool) {
+// The autopilot is GA and enabled by default (opt-out): it is inactive only when the
+// platform.kubevirt.io/autopilot annotation is explicitly set to "false". Any other
+// value (including absent, empty, or "true") leaves the autopilot enabled for all assets.
+func IsAutopilotEnabled(hco *unstructured.Unstructured) bool {
 	if hco == nil {
-		return nil, false
+		return true
 	}
 
 	annotations := hco.GetAnnotations()
 	if annotations == nil {
-		return nil, false
+		return true
 	}
 
-	val := strings.TrimSpace(annotations[AnnotationAutopilotEnabled])
-	if val == "" {
-		return nil, false
-	}
-
-	if val == "true" {
-		return nil, true // all assets
-	}
-
-	if val == "false" {
-		return nil, false
-	}
-
-	// Parse comma-separated asset name list.
-	names := strings.Split(val, ",")
-	allowlist = make(map[string]bool, len(names))
-	for _, name := range names {
-		name = strings.TrimSpace(name)
-		if name != "" {
-			allowlist[name] = true
-		}
-	}
-	if len(allowlist) == 0 {
-		return nil, false
-	}
-	return allowlist, true
-}
-
-// IsAutopilotEnabled checks if the autopilot is opted in via the HCO CR annotation.
-// In the current early phase, the autopilot is inactive unless this annotation is
-// explicitly set to "true" or a comma-separated list of asset names.
-// This behavior will be inverted in a future release.
-func IsAutopilotEnabled(hco *unstructured.Unstructured) bool {
-	_, enabled := ParseAutopilotScope(hco)
-	return enabled
+	return strings.TrimSpace(annotations[AnnotationAutopilotEnabled]) != "false"
 }
 
 // ValidateAnnotations validates all override annotations on an object

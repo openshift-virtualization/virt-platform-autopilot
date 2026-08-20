@@ -33,17 +33,15 @@ The **virt-platform-autopilot** embraces a **"Zero API Surface"** philosophy:
    - Flexible when customization is needed
    - No configuration required for common use cases
 
-## Activation Gate (Opt-In)
+## Activation Gate (Opt-Out)
 
-> **Early-phase behaviour** — this gate will be removed (behaviour inverted to opt-out) once the project reaches production maturity.
+The autopilot is **GA** and **enabled by default**. Once the operator is deployed it reconciles all eligible assets (existing `install` mode and condition logic still applies) without any additional opt-in on the HCO CR.
 
-In the current early phase the autopilot is **inactive by default**. It will not reconcile any resources — not even the HCO golden config — unless the `platform.kubevirt.io/autopilot` annotation is explicitly set on the HCO CR.
+The `platform.kubevirt.io/autopilot` annotation is now purely an **opt-out** switch:
 
-The annotation accepts two forms:
+### Disabling the autopilot
 
-### Full activation
-
-All eligible assets are reconciled (existing `install` mode and condition logic still applies):
+Set the annotation to `"false"` to make the autopilot go idle. It will not reconcile any resources — not even the HCO golden config — while disabled:
 
 ```yaml
 apiVersion: hco.kubevirt.io/v1beta1
@@ -52,64 +50,33 @@ metadata:
   name: kubevirt-hyperconverged
   namespace: openshift-cnv
   annotations:
-    platform.kubevirt.io/autopilot: "true"
+    platform.kubevirt.io/autopilot: "false"
 ```
 
 ```bash
 kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
-  platform.kubevirt.io/autopilot=true
+  platform.kubevirt.io/autopilot=false
 ```
 
-### Selective activation (asset allowlist)
+### Re-enabling the autopilot
 
-Only the named assets are considered for reconciliation. All other assets — including `hco-golden-config` if omitted — are skipped entirely. The normal opt-in logic (conditions, hardware detection, feature gates, CRD presence) still applies on top of this filter, so listing an asset name is a necessary but not always sufficient condition for it to be applied.
-
-```yaml
-annotations:
-  platform.kubevirt.io/autopilot: "swap-enable,descheduler-loadaware"
-```
+Removing the annotation (or setting any value other than `"false"`, e.g. `"true"`) re-enables management:
 
 ```bash
-kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
-  "platform.kubevirt.io/autopilot=swap-enable,descheduler-loadaware"
+kubectl annotate --overwrite hyperconverged kubevirt-hyperconverged -n openshift-cnv \
+  platform.kubevirt.io/autopilot-
 ```
 
-Asset names correspond to the `name` field in `assets/active/metadata.yaml`. The current set includes:
-
-| Asset name | Group | Component | Notes |
-|---|---|---|---|
-| `prometheus-alerts` | | PrometheusRule | Soft dependency on Prometheus Operator CRD |
-| `swap-enable` | | MachineConfig | Always-on baseline |
-| `psi-enable` | `descheduler-loadaware` | MachineConfig | Gate CRD: KubeDescheduler; grouped with `descheduler-loadaware` for allowlist matching |
-| `pci-passthrough` | | MachineConfig | Opt-in: hardware + annotation condition |
-| `kubelet-perf-settings` | | KubeletConfig | Always-on baseline |
-| `kubelet-cpu-manager` | | KubeletConfig | Opt-in: CPUManager feature gate |
-| `descheduler-loadaware` | | KubeDescheduler | Soft dependency on KubeDescheduler CRD |
-| `monitoring-ui-plugin` | | UIPlugin | Soft dependency on COO CRD; enables Perses dashboards in the OpenShift console |
-| `mtv-operator` | | ForkliftController | Opt-in: annotation condition |
-| `metallb-operator` | | MetalLB | Opt-in: annotation condition |
-
-The `group` field enables **allowlist grouping**: listing `descheduler-loadaware` in the annotation activates both the `KubeDescheduler` asset (by name) and the `psi-enable` MachineConfig (by group). For example:
-
-```bash
-kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
-  "platform.kubevirt.io/autopilot=hco-golden-config,descheduler-loadaware"
-```
-
-This deploys the HCO golden config, the KubeDescheduler, **and** the PSI MachineConfig (via its group membership), but nothing else.
-
-**When the annotation is absent or empty** the reconciler logs a message and returns immediately, re-queuing after the standard 5-minute interval:
+**When the autopilot is disabled** the reconciler logs a message and returns immediately, re-queuing after the standard 5-minute interval:
 
 ```
-Autopilot not enabled, keeping idle. Set annotation to opt in.
-  annotation=platform.kubevirt.io/autopilot value=true or comma-separated asset names
+Autopilot disabled via annotation, keeping idle.
+  annotation=platform.kubevirt.io/autopilot value=false
 ```
 
-**Rationale:** The opt-in gate lets cluster administrators install the operator and evaluate it safely before committing to automated management. The selective form lets administrators adopt the autopilot incrementally, one component at a time, without enabling everything at once.
+**Rationale:** Now that the project is GA, the autopilot manages the platform out of the box. The opt-out switch lets administrators disable automated management on specific clusters when needed.
 
-**Future plan:** As the project matures the gate will be inverted — the autopilot will be active by default, and a separate opt-out annotation will allow administrators to disable it on specific clusters.
-
-**Implementation:** The annotation is parsed at the very start of `PlatformReconciler.Reconcile()` in `pkg/controller/platform_controller.go` via `overrides.ParseAutopilotScope()` from `pkg/overrides/validation.go`. `IsAutopilotEnabled()` is a convenience wrapper over `ParseAutopilotScope` for callers that only need the boolean.
+**Implementation:** The annotation is evaluated at the very start of `PlatformReconciler.Reconcile()` in `pkg/controller/platform_controller.go` via `overrides.IsAutopilotEnabled()` from `pkg/overrides/validation.go`.
 
 ## Three-Tier Management Model
 
@@ -299,12 +266,11 @@ This is useful for:
 
 ## User Control Mechanisms
 
-Users control the autopilot at four levels, from broadest to narrowest:
+Users control the autopilot at several levels, from broadest to narrowest:
 
 | Level | Scope | Mechanism |
 |-------|-------|-----------|
-| **Full activation** | All eligible assets | `platform.kubevirt.io/autopilot: "true"` on HCO (see [Activation Gate](#activation-gate-opt-in)) |
-| **Selective activation** | Named asset subset | `platform.kubevirt.io/autopilot: "asset-a,asset-b"` on HCO — only listed assets are considered |
+| **Global opt-out** | All eligible assets | `platform.kubevirt.io/autopilot: "false"` on HCO disables the autopilot entirely (enabled by default — see [Activation Gate](#activation-gate-opt-out)) |
 | **Resource exclusion** | One or more rendered resources | `platform.kubevirt.io/disabled-resources` on HCO |
 | **Field masking** | Specific fields | `platform.kubevirt.io/ignore-fields` on the resource |
 | **Full opt-out** | Single resource | `platform.kubevirt.io/mode: unmanaged` on the resource |
