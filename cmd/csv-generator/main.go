@@ -308,7 +308,7 @@ rules based on the cluster's hardware capabilities and the desired virtualizatio
 The operator has zero API surface: it introduces no new CRDs and is fully controlled
 through the existing HyperConverged resource.`,
 			Keywords: []string{"kubevirt", "virtualization", "platform", "performance", "openshift"},
-			Maturity: "alpha",
+			Maturity: "stable",
 			Version:  operatorVersion,
 			Provider: NamedEntity{Name: "Red Hat"},
 			Links: []Link{

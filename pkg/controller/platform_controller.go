@@ -144,16 +144,13 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	// Opt-in gate: the autopilot is inactive in this early phase unless explicitly enabled.
-	// To activate, set annotation platform.kubevirt.io/autopilot on the HCO CR to either:
-	//   "true"              – enable all assets
-	//   "asset-a,asset-b"  – enable only the named assets
-	// This guard will be removed (behavior inverted to opt-out) once the project matures.
-	allowlist, enabled := overrides.ParseAutopilotScope(hco)
-	if !enabled {
-		logger.Info("Autopilot not enabled, keeping idle. Set annotation to opt in.",
+	// Opt-out gate: the autopilot is GA and enabled by default. It stays idle only when
+	// the annotation platform.kubevirt.io/autopilot on the HCO CR is explicitly set to
+	// "false".
+	if !overrides.IsAutopilotEnabled(hco) {
+		logger.Info("Autopilot disabled via annotation, keeping idle.",
 			"annotation", overrides.AnnotationAutopilotEnabled,
-			"value", "true or comma-separated asset names",
+			"value", "false",
 		)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
@@ -168,15 +165,11 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("Tombstone processing completed", "deleted", deletedCount)
 	}
 
-	// Step 1: Apply HCO golden config FIRST (reconcile_order: 0), unless explicitly excluded.
-	if allowlist == nil || allowlist["hco-golden-config"] {
-		logger.Info("Applying HCO golden configuration")
-		if err := r.reconcileHCO(ctx, hco); err != nil {
-			logger.Error(err, "Failed to reconcile HCO golden config")
-			return ctrl.Result{}, err
-		}
-	} else {
-		logger.V(1).Info("Skipping HCO golden configuration (not in asset allowlist)")
+	// Step 1: Apply HCO golden config FIRST (reconcile_order: 0).
+	logger.Info("Applying HCO golden configuration")
+	if err := r.reconcileHCO(ctx, hco); err != nil {
+		logger.Error(err, "Failed to reconcile HCO golden config")
+		return ctrl.Result{}, err
 	}
 
 	// Re-fetch HCO to get effective state (after potential golden config application)
@@ -197,7 +190,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Step 3: Reconcile all other assets in reconcile_order
 	logger.Info("Reconciling platform assets")
-	if err := r.reconcileAssets(ctx, renderCtx, allowlist); err != nil {
+	if err := r.reconcileAssets(ctx, renderCtx); err != nil {
 		logger.Error(err, "Failed to reconcile assets")
 		return ctrl.Result{}, err
 	}
@@ -245,18 +238,6 @@ func (r *PlatformReconciler) reconcileHCO(ctx context.Context, currentHCO *unstr
 	return nil
 }
 
-// isInAllowlist reports whether the asset passes the allowlist filter.
-// An asset is included if allowlist is nil (all assets), or if its name or group appears in the allowlist.
-func isInAllowlist(asset *assets.AssetMetadata, allowlist map[string]bool) bool {
-	if allowlist == nil {
-		return true
-	}
-	if allowlist[asset.Name] {
-		return true
-	}
-	return asset.Group != "" && allowlist[asset.Group]
-}
-
 // assetCRDsAvailable checks both the auto-detected RequiredCRD and the explicit GateCRD.
 // Returns false (skip) if either CRD is absent or cannot be checked.
 func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
@@ -292,9 +273,7 @@ func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *asse
 }
 
 // reconcileAssets reconciles all non-HCO assets.
-// allowlist is nil when all assets are enabled, or a set of asset names to restrict reconciliation.
-// The allowlist is an additional filter on top of the existing opt-in/conditions logic.
-func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkgcontext.RenderContext, allowlist map[string]bool) error {
+func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkgcontext.RenderContext) error {
 	logger := log.FromContext(ctx)
 
 	// Get all assets sorted by reconcile_order (HCO should be 0, others 1+)
@@ -307,11 +286,6 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 
 		// Skip HCO (already reconciled in step 1)
 		if asset.ReconcileOrder == 0 {
-			continue
-		}
-
-		if !isInAllowlist(asset, allowlist) {
-			r.patcher.CleanupExcludedAsset(asset, renderCtx)
 			continue
 		}
 
