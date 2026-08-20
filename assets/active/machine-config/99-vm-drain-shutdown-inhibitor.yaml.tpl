@@ -2,9 +2,9 @@ apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
   labels:
-    machineconfiguration.openshift.io/role: worker
+    machineconfiguration.openshift.io/role: {{ .Params.role }}
     platform.kubevirt.io/managed-by: virt-platform-autopilot
-  name: 99-vm-drain-shutdown-inhibitor
+  name: 99-{{ .Params.role }}-vm-drain-shutdown-inhibitor
 spec:
   config:
     ignition:

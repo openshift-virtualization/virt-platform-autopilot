@@ -885,14 +885,16 @@ assets:
     conditions: *kubevirt-metrics-exporter-conditions
   
   - name: vm-drain-shutdown-inhibitor
-    path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml
+    path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml.tpl
     phase: 2
     install: opt-in
     component: MachineConfig
     reconcile_order: 1
+    template_params:
+      role: worker
     conditions:
       - type: annotation
-        key: platform.kubevirt.io/vm-drain-shutdown-inhibitor
+        key: platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor
         value: "true"
 
   # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
