@@ -129,6 +129,13 @@
       "requires": [
         "Cluster Observability Operator"
       ]
+    },
+    {
+      "name": "VM drain shutdown inhibitor",
+      "description": "Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/vm-drain-shutdown-inhibitor=true"
     }
   ]
 }
