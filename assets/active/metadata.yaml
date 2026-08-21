@@ -744,125 +744,125 @@ assets:
 
   # Phase 1: KubeVirt Metrics Exporter - per-node DaemonSet collecting VM storage
   # I/O latency via QMP, QGA and eBPF.
-  # Opt-in via: platform.kubevirt.io/enable-metrics-exporter=true
+  # Opt-in via: platform.kubevirt.io/enable-kubevirt-metrics-exporter=true
   # Assets are split by CRD dependency so soft dependencies work correctly:
   # core resources (always available), SCC (security.openshift.io), PodMonitor +
   # PrometheusRule (monitoring.coreos.com), and Perses dashboard (perses.dev).
   #
   # Reconcile order: namespace (1) -> RBAC -> SCC prerequisites (2) -> DaemonSet (3)
 
-  - name: metrics-exporter-namespace
-    group: metrics-exporter
-    path: active/metrics-exporter/namespace.yaml
+  - name: kubevirt-metrics-exporter-namespace
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/namespace.yaml
     phase: 1
     install: opt-in
     component: Namespace
     reconcile_order: 1
-    conditions: &metrics-exporter-conditions
+    conditions: &kubevirt-metrics-exporter-conditions
       - type: annotation
-        key: platform.kubevirt.io/enable-metrics-exporter
+        key: platform.kubevirt.io/enable-kubevirt-metrics-exporter
         value: "true"
       - type: image
         key: kubevirt-metrics-exporter
 
-  - name: metrics-exporter-serviceaccount
-    group: metrics-exporter
-    path: active/metrics-exporter/serviceaccount.yaml
+  - name: kubevirt-metrics-exporter-serviceaccount
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/serviceaccount.yaml
     phase: 1
     install: opt-in
     component: ServiceAccount
     reconcile_order: 2
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-clusterrole
-    group: metrics-exporter
-    path: active/metrics-exporter/clusterrole.yaml
+  - name: kubevirt-metrics-exporter-clusterrole
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/clusterrole.yaml
     phase: 1
     install: opt-in
     component: ClusterRole
     reconcile_order: 2
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-clusterrolebinding
-    group: metrics-exporter
-    path: active/metrics-exporter/clusterrolebinding.yaml
+  - name: kubevirt-metrics-exporter-clusterrolebinding
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/clusterrolebinding.yaml
     phase: 1
     install: opt-in
     component: ClusterRoleBinding
     reconcile_order: 2
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-scc
-    group: metrics-exporter
-    path: active/metrics-exporter/scc.yaml
+  - name: kubevirt-metrics-exporter-scc
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/scc.yaml
     phase: 1
     install: opt-in
     component: SecurityContextConstraints
     reconcile_order: 2
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-scc-clusterrole
-    group: metrics-exporter
-    path: active/metrics-exporter/scc-clusterrole.yaml
+  - name: kubevirt-metrics-exporter-scc-clusterrole
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/scc-clusterrole.yaml
     phase: 1
     install: opt-in
     component: ClusterRole
     reconcile_order: 2
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-scc-clusterrolebinding
-    group: metrics-exporter
-    path: active/metrics-exporter/scc-clusterrolebinding.yaml
+  - name: kubevirt-metrics-exporter-scc-clusterrolebinding
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/scc-clusterrolebinding.yaml
     phase: 1
     install: opt-in
     component: ClusterRoleBinding
     reconcile_order: 2
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter
-    group: metrics-exporter
-    path: active/metrics-exporter/metrics-exporter.yaml.tpl
+  - name: kubevirt-metrics-exporter
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl
     phase: 1
     install: opt-in
     component: DaemonSet
     reconcile_order: 3
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-podmonitor
-    group: metrics-exporter
-    path: active/metrics-exporter/podmonitor.yaml
+  - name: kubevirt-metrics-exporter-podmonitor
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/podmonitor.yaml
     phase: 1
     install: opt-in
     component: PodMonitor
     reconcile_order: 3
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-prometheusrule
-    group: metrics-exporter
-    path: active/metrics-exporter/prometheusrule.yaml
+  - name: kubevirt-metrics-exporter-prometheusrule
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/prometheusrule.yaml
     phase: 1
     install: opt-in
     component: PrometheusRule
     reconcile_order: 3
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-datasource
-    group: metrics-exporter
-    path: active/metrics-exporter/datasource.yaml
+  - name: kubevirt-metrics-exporter-datasource
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/datasource.yaml
     phase: 1
     install: opt-in
     component: PersesDatasource
     reconcile_order: 3
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: metrics-exporter-dashboard
-    group: metrics-exporter
-    path: active/metrics-exporter/dashboard.yaml
+  - name: kubevirt-metrics-exporter-dashboard
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/dashboard.yaml
     phase: 1
     install: opt-in
     component: PersesDashboard
     reconcile_order: 3
-    conditions: *metrics-exporter-conditions
+    conditions: *kubevirt-metrics-exporter-conditions
 
   # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
   # (picks alphabetically first RWX Filesystem class). Omits field when none found.
@@ -977,7 +977,7 @@ features:
   - name: KubeVirt Metrics Exporter
     description: Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics
     maturity: dp
-    groups: [metrics-exporter]
+    groups: [kubevirt-metrics-exporter]
     recommended:
       - Cluster Observability Operator
 

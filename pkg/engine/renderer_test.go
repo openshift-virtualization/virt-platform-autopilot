@@ -513,8 +513,8 @@ func TestMetricsExporterEnvOverrides(t *testing.T) {
 		}
 
 		assetMeta := &assets.AssetMetadata{
-			Name: "metrics-exporter",
-			Path: "active/metrics-exporter/metrics-exporter.yaml.tpl",
+			Name: "kubevirt-metrics-exporter",
+			Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
 		}
 
 		obj, err := renderer.RenderAsset(assetMeta, ctx)
@@ -550,7 +550,7 @@ func TestMetricsExporterEnvOverrides(t *testing.T) {
 						"name":      "kubevirt-hyperconverged",
 						"namespace": "openshift-cnv",
 						"annotations": map[string]any{
-							"platform.kubevirt.io/metrics-exporter-env": `{"LOG_LEVEL":"debug","ENABLE_QMP":"false","EBPF_SCAN_INTERVAL":"60"}`,
+							"platform.kubevirt.io/kubevirt-metrics-exporter-env": `{"LOG_LEVEL":"debug","ENABLE_QMP":"false","EBPF_SCAN_INTERVAL":"60"}`,
 						},
 					},
 				},
@@ -561,8 +561,8 @@ func TestMetricsExporterEnvOverrides(t *testing.T) {
 		}
 
 		assetMeta := &assets.AssetMetadata{
-			Name: "metrics-exporter",
-			Path: "active/metrics-exporter/metrics-exporter.yaml.tpl",
+			Name: "kubevirt-metrics-exporter",
+			Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
 		}
 
 		obj, err := renderer.RenderAsset(assetMeta, ctx)
@@ -602,7 +602,7 @@ func TestMetricsExporterEnvOverrides(t *testing.T) {
 						"name":      "kubevirt-hyperconverged",
 						"namespace": "openshift-cnv",
 						"annotations": map[string]any{
-							"platform.kubevirt.io/metrics-exporter-env": `{}`,
+							"platform.kubevirt.io/kubevirt-metrics-exporter-env": `{}`,
 						},
 					},
 				},
@@ -613,8 +613,8 @@ func TestMetricsExporterEnvOverrides(t *testing.T) {
 		}
 
 		assetMeta := &assets.AssetMetadata{
-			Name: "metrics-exporter",
-			Path: "active/metrics-exporter/metrics-exporter.yaml.tpl",
+			Name: "kubevirt-metrics-exporter",
+			Path: "active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl",
 		}
 
 		obj, err := renderer.RenderAsset(assetMeta, ctx)

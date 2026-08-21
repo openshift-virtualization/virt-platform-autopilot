@@ -216,7 +216,7 @@ curl http://localhost:8081/debug/features?format=json | jq '.'
       "description": "Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics",
       "maturity": "DP",
       "install": "opt-in",
-      "opt_in": "platform.kubevirt.io/enable-metrics-exporter=true",
+      "opt_in": "platform.kubevirt.io/enable-kubevirt-metrics-exporter=true",
       "recommended": [
         "Cluster Observability Operator"
       ]
