@@ -31,6 +31,10 @@ const (
 	// HCOKind is the kind for HyperConverged
 	HCOKind = "HyperConverged"
 
+	KVGroup   = "kubevirt.io"
+	KVVersion = "v1"
+	KVKind    = "KubeVirt"
+
 	// HCOName is the expected name of the HCO instance
 	HCOName = "kubevirt-hyperconverged"
 
@@ -45,15 +49,23 @@ var (
 		Version: HCOVersion,
 		Kind:    HCOKind,
 	}
+
+	// KVGVK is the GroupVersionKind for KubeVirt
+	KVGVK = schema.GroupVersionKind{
+		Group:   KVGroup,
+		Version: KVVersion,
+		Kind:    KVKind,
+	}
 )
 
 // RenderContext contains all data needed for rendering asset templates
 type RenderContext struct {
-	HCO      *unstructured.Unstructured // Full HCO object, templates access directly
-	Hardware *HardwareContext           // Cluster-discovered hardware info
-	Topology *TopologyContext           // Cluster topology info (HCP, compact, node counts)
-	Images   map[string]string          // Container images from RELATED_IMAGE_* env vars
-	Params   map[string]string          // Per-asset parameters from metadata template_params
+	HCO                  *unstructured.Unstructured // Full HCO object, templates access directly
+	Hardware             *HardwareContext           // Cluster-discovered hardware info
+	Topology             *TopologyContext           // Cluster topology info (HCP, compact, node counts)
+	Images               map[string]string          // Container images from RELATED_IMAGE_* env vars
+	Params               map[string]string          // Per-asset parameters from metadata template_params
+	KubeVirtFeatureGates []string                   // Full KubeVirt object, templates access directly
 }
 
 // HardwareContext contains cluster hardware detection results

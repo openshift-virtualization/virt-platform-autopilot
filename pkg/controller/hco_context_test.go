@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -696,7 +697,7 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 			},
 		}
 
-		renderCtx, err := builder.Build(ctx, hco)
+		renderCtx, err := builder.Build(ctx, hco, []string{"aaa", "bbb", "ccc"})
 
 		if err != nil {
 			t.Fatalf("Build() error = %v", err)
@@ -725,6 +726,10 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 		if renderCtx.Topology == nil {
 			t.Error("Build() did not set topology context")
 		}
+
+		if !slices.Equal(renderCtx.KubeVirtFeatureGates, []string{"aaa", "bbb", "ccc"}) {
+			t.Error("Build() did not set KubeVirtFeatureGates correctly")
+		}
 	})
 
 	t.Run("returns error when HCO is nil", func(t *testing.T) {
@@ -734,7 +739,7 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 
 		builder := NewRenderContextBuilder(fakeClient)
 
-		_, err := builder.Build(ctx, nil)
+		_, err := builder.Build(ctx, nil, []string{"aaa", "bbb", "ccc"})
 
 		if err == nil {
 			t.Error("Build() should return error when HCO is nil")

@@ -71,7 +71,7 @@ func (b *RenderContextBuilder) SetEventRecorder(recorder *util.EventRecorder) {
 }
 
 // Build constructs a RenderContext from the current HCO state
-func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unstructured) (*pkgcontext.RenderContext, error) {
+func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unstructured, kvFG []string) (*pkgcontext.RenderContext, error) {
 	logger := log.FromContext(ctx)
 
 	if hco == nil {
@@ -102,10 +102,11 @@ func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unst
 	}
 
 	return &pkgcontext.RenderContext{
-		HCO:      hco,
-		Hardware: hardware,
-		Topology: topology,
-		Images:   loadImages(),
+		HCO:                  hco,
+		Hardware:             hardware,
+		Topology:             topology,
+		Images:               loadImages(),
+		KubeVirtFeatureGates: kvFG,
 	}, nil
 }
 

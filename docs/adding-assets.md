@@ -372,17 +372,27 @@ Available detectors:
 - `gpuPresent`: GPU devices detected
 - `sriovCapable`: SR-IOV network interfaces detected
 
-#### Feature Gate Condition
+#### HyperConverged Feature Gate Condition
 
-Asset is applied if feature gate is enabled:
+Asset is applied if HyperConverged feature gate is enabled:
 
 ```yaml
 conditions:
   - type: feature-gate
-    value: CPUManager
+    value: objectGraph
 ```
 
-Feature gates are typically set in HCO spec or platform configuration.
+Feature gates are typically set in HyperConverged spec or platform configuration.
+
+#### KubeVirt Feature Gate Condition
+
+Asset is applied if KubeVirt feature gate is enabled:
+
+```yaml
+conditions:
+  - type: kubevirt-feature-gate
+    value: CPUManager
+```
 
 #### Multiple Conditions (AND Logic)
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -168,10 +170,16 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("Tombstone processing completed", "deleted", deletedCount)
 	}
 
+	kvFGs, err := r.getKubeVirtFGs(ctx, hco)
+	if err != nil {
+		logger.Info("Failed to get KubeVirt resource", "error", err)
+		kvFGs = nil
+	}
+
 	// Step 1: Apply HCO golden config FIRST (reconcile_order: 0), unless explicitly excluded.
 	if allowlist == nil || allowlist["hco-golden-config"] {
 		logger.Info("Applying HCO golden configuration")
-		if err := r.reconcileHCO(ctx, hco); err != nil {
+		if err := r.reconcileHCO(ctx, hco, kvFGs); err != nil {
 			logger.Error(err, "Failed to reconcile HCO golden config")
 			return ctrl.Result{}, err
 		}
@@ -186,14 +194,14 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Step 2: Build RenderContext from effective HCO state
 	logger.Info("Building render context from HCO state")
-	renderCtx, err := r.contextBuilder.Build(ctx, hco)
+	renderCtx, err := r.contextBuilder.Build(ctx, hco, kvFGs)
 	if err != nil {
 		logger.Error(err, "Failed to build render context")
 		return ctrl.Result{}, err
 	}
 
 	// Update condition evaluator with current context
-	r.updateConditionEvaluator(hco, renderCtx)
+	r.updateConditionEvaluator(hco, kvFGs, renderCtx)
 
 	// Step 3: Reconcile all other assets in reconcile_order
 	logger.Info("Reconciling platform assets")
@@ -214,8 +222,42 @@ func (r *PlatformReconciler) getHCO(ctx context.Context, name types.NamespacedNa
 	return hco, err
 }
 
+func (r *PlatformReconciler) getKubeVirtFGs(ctx context.Context, hco *unstructured.Unstructured) ([]string, error) {
+	hcoRelatedObj, ok, err := unstructured.NestedSlice(hco.Object, "status", "relatedObjects")
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+
+	kvIdx := slices.IndexFunc(hcoRelatedObj, func(objRefAny any) bool {
+		objRef, ok := objRefAny.(map[string]any)
+		return ok && objRef["kind"] == pkgcontext.KVKind
+	})
+
+	if kvIdx == -1 {
+		return nil, nil
+	}
+
+	kvName, ok := hcoRelatedObj[kvIdx].(map[string]any)["name"].(string)
+	if !ok || kvName == "" {
+		return nil, nil
+	}
+
+	kv := &unstructured.Unstructured{}
+	kv.SetGroupVersionKind(pkgcontext.KVGVK)
+
+	err = r.Get(ctx, client.ObjectKey{Name: kvName, Namespace: hco.GetNamespace()}, kv)
+	if err != nil {
+		return nil, err
+	}
+
+	return resources.ExtractKVFeatureGate(kv), nil
+}
+
 // reconcileHCO applies the golden HCO configuration
-func (r *PlatformReconciler) reconcileHCO(ctx context.Context, currentHCO *unstructured.Unstructured) error {
+func (r *PlatformReconciler) reconcileHCO(ctx context.Context, currentHCO *unstructured.Unstructured, kvFGs []string) error {
 	logger := log.FromContext(ctx)
 
 	// Get HCO asset from registry
@@ -225,7 +267,7 @@ func (r *PlatformReconciler) reconcileHCO(ctx context.Context, currentHCO *unstr
 	}
 
 	// Build minimal context for HCO rendering (use current HCO state)
-	minimalCtx, err := r.contextBuilder.Build(ctx, currentHCO)
+	minimalCtx, err := r.contextBuilder.Build(ctx, currentHCO, kvFGs)
 	if err != nil {
 		return fmt.Errorf("failed to build context for HCO: %w", err)
 	}
@@ -356,12 +398,12 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 }
 
 // updateConditionEvaluator updates the condition evaluator with current context
-func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstructured, ctx *pkgcontext.RenderContext) {
+func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstructured, kvFGs []string, ctx *pkgcontext.RenderContext) {
 	// Update hardware context
 	r.conditionEvaluator.HardwareContext = ctx.Hardware.AsMap()
 
 	// Extract feature gates from HCO
-	r.conditionEvaluator.FeatureGates = extractFeatureGates(hco)
+	r.conditionEvaluator.FeatureGates = resources.ExtractFeatureGates(hco)
 
 	// Extract annotations from HCO
 	r.conditionEvaluator.Annotations = hco.GetAnnotations()
@@ -372,37 +414,14 @@ func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstruct
 	// Expose the raw HCO object for field inspection conditions
 	r.conditionEvaluator.HCOObject = hco.Object
 
+	r.conditionEvaluator.KVFeatureGates = kvFGs
+
 	// Topology for schedulable-master and other topology-gated assets
 	if ctx.Topology != nil {
 		r.conditionEvaluator.TopologyContext = ctx.Topology.AsMap()
 	} else {
 		r.conditionEvaluator.TopologyContext = nil
 	}
-}
-
-// extractFeatureGates extracts feature gates from HCO v1 spec.
-// In v1 the field is an array of {name: string, state: "Enabled"|"Disabled"} objects.
-func extractFeatureGates(hco *unstructured.Unstructured) map[string]bool {
-	gates := make(map[string]bool)
-
-	featureGates, found, err := unstructured.NestedSlice(hco.Object, "spec", "featureGates")
-	if err != nil || !found {
-		return gates
-	}
-
-	for _, item := range featureGates {
-		gate, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		name, _ := gate["name"].(string)
-		state, _ := gate["state"].(string)
-		if name != "" {
-			gates[name] = (state != "Disabled")
-		}
-	}
-
-	return gates
 }
 
 // isManagedCRD checks if a CRD is required by at least one declared asset.
@@ -507,6 +526,10 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	hco := &unstructured.Unstructured{}
 	hco.SetGroupVersionKind(pkgcontext.HCOGVK)
 
+	// Create unstructured object for KubeVirt
+	kv := &unstructured.Unstructured{}
+	kv.SetGroupVersionKind(pkgcontext.KVGVK)
+
 	// Build controller with HCO watch
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(hco).
@@ -514,6 +537,9 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&apiextensionsv1.CustomResourceDefinition{},
 			r.crdEventHandler(ctx),
 		).
+		Watches(kv, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
+			return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
+		})).
 		Named("platform")
 
 	// Dynamically add watches for every CRD required by a declared asset.
