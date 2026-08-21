@@ -48,7 +48,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | PCI Passthrough | DP | opt-in | `platform.kubevirt.io/openshift=true, platform.kubevirt.io/enable-pci-passthrough=true` | - | - |
 | Transparent Huge Pages (THP) Tuning | DP | opt-in | `platform.kubevirt.io/enable-thp-tuning=true` | - | - |
 | Troubleshooting Panel | DP | opt-in | `platform.kubevirt.io/enable-korrel8r=true` | Cluster Observability Operator | - |
-| VM drain shutdown inhibitor | DP | opt-in | `platform.kubevirt.io/vm-drain-shutdown-inhibitor=true` | - | - |
+| VM drain shutdown inhibitor | DP | opt-in | `platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor=true` | - | - |
 <!-- END FEATURE STATUS -->
 
 ## Quick Start
