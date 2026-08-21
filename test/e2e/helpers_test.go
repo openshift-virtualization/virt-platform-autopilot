@@ -412,6 +412,64 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 		fmt.Sprintf("%s/%s should be fully deleted", gvk.Kind, name))
 }
 
+// gateAnnotationKeys returns the distinct opt-in annotation keys required by the
+// given assets, skipping assets whose gate CRD is not installed (matching the
+// per-asset GateCRD skip used throughout the suites).
+func gateAnnotationKeys(assets []testAsset) []string {
+	seen := map[string]bool{}
+	var keys []string
+	for _, a := range assets {
+		if a.GateAnnotation == "" {
+			continue
+		}
+		if a.GateCRD != "" && !crdInstalled(a.GateCRD) {
+			continue
+		}
+		if !seen[a.GateAnnotation] {
+			seen[a.GateAnnotation] = true
+			keys = append(keys, a.GateAnnotation)
+		}
+	}
+	return keys
+}
+
+// enableAssetGates sets the opt-in HCO annotations required to install
+// annotation-gated assets (Tech Preview / opt-in features such as Kubelet
+// Performance) so the suites that exercise them find the resources present.
+// It is a no-op when no gated asset applies (e.g. gate CRD absent on Kind).
+func enableAssetGates(assets []testAsset) {
+	keys := gateAnnotationKeys(assets)
+	if len(keys) == 0 {
+		return
+	}
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%q:\"true\"", k))
+	}
+	By("enabling opt-in asset gates on HCO: " + strings.Join(keys, ", "))
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%s}}}`, strings.Join(parts, ",")))
+	EventuallyWithOffset(1, func() error {
+		return k8sClient.Patch(ctx, hcoRef(), client.RawPatch(types.MergePatchType, patch))
+	}, timeout, interval).Should(Succeed(), "opt-in gate annotations should be set on HCO")
+}
+
+// disableAssetGates removes the opt-in HCO annotations set by enableAssetGates.
+func disableAssetGates(assets []testAsset) {
+	keys := gateAnnotationKeys(assets)
+	if len(keys) == 0 {
+		return
+	}
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%q:null", k))
+	}
+	By("removing opt-in asset gates from HCO: " + strings.Join(keys, ", "))
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%s}}}`, strings.Join(parts, ",")))
+	EventuallyWithOffset(1, func() error {
+		return k8sClient.Patch(ctx, hcoRef(), client.RawPatch(types.MergePatchType, patch))
+	}, timeout, interval).Should(Succeed(), "opt-in gate annotations should be removed from HCO")
+}
+
 // ensureHCOExists fails the test if the HCO instance does not exist on the cluster.
 func ensureHCOExists() {
 	By("ensuring HCO instance exists")

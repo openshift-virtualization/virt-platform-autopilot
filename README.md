@@ -33,11 +33,11 @@ The autopilot applies opinionated best practices and manages your platform autom
 
 | Feature | Maturity | Install | Opt-in | Requires | Recommended |
 |---------|----------|---------|--------|----------|-------------|
-| In-Flight Operations | GA | always | - | - | - |
-| Kubelet Performance | GA | always | - | - | - |
 | Load-Aware Descheduler | GA | always | - | Kube Descheduler Operator | - |
 | Observability | GA | always | - | Cluster Observability Operator | - |
 | SWAP | GA | always | - | - | - |
+| In-Flight Operations | TP | opt-in | `platform.kubevirt.io/enable-in-flight-operations=true` | - | - |
+| Kubelet Performance | TP | opt-in | `platform.kubevirt.io/enable-kubelet-performance-settings=true` | - | - |
 | CPU Manager | DP | opt-in | `featureGate:CPUManager` | - | - |
 | Kernel Samepage Merging (KSM) zero pages only | DP | opt-in | `platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration` | - | - |
 | KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-kubevirt-metrics-exporter=true` | - | Cluster Observability Operator |

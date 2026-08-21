@@ -60,14 +60,18 @@ func (o UserOverrideFieldSpec) PatchDoc() string {
 }
 
 type testAsset struct {
-	GVK           schema.GroupVersionKind
-	Plural        string
-	Name          string
-	Namespace     string
-	GateCRD       string
-	ClusterScoped bool
-	Sensitive     bool
-	Override      UserOverrideFieldSpec
+	GVK       schema.GroupVersionKind
+	Plural    string
+	Name      string
+	Namespace string
+	GateCRD   string
+	// GateAnnotation is the opt-in HCO annotation key required to install this
+	// asset (Tech Preview / opt-in features). Empty for always-installed assets.
+	// enableAssetGates sets it on the HCO so the resource is present for tests.
+	GateAnnotation string
+	ClusterScoped  bool
+	Sensitive      bool
+	Override       UserOverrideFieldSpec
 }
 
 func (a testAsset) webhookName() string {
@@ -113,11 +117,12 @@ var assetsUnderTest = initAssets([]testAsset{
 	},
 	{
 		// No Override: any field change on KubeletConfig triggers an MCP rollout.
-		GVK:           schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "KubeletConfig"},
-		Plural:        "kubeletconfigs",
-		Name:          "virt-perf-settings",
-		GateCRD:       "kubeletconfigs.machineconfiguration.openshift.io",
-		ClusterScoped: true,
+		GVK:            schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "KubeletConfig"},
+		Plural:         "kubeletconfigs",
+		Name:           "virt-perf-settings",
+		GateCRD:        "kubeletconfigs.machineconfiguration.openshift.io",
+		GateAnnotation: "platform.kubevirt.io/enable-kubelet-performance-settings",
+		ClusterScoped:  true,
 	},
 	{
 		GVK:           schema.GroupVersionKind{Group: "", Version: "v1", Kind: "Service"},

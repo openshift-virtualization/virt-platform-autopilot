@@ -54,8 +54,18 @@ var _ = BeforeSuite(func() {
 	Eventually(func() error {
 		return k8sClient.List(ctx, &corev1.NamespaceList{})
 	}, 30*time.Second, 1*time.Second).Should(Succeed())
+
+	// Enable opt-in asset gates (e.g. Kubelet Performance) once for the whole
+	// run so suites that exercise these assets find them installed. Guarded on
+	// HCO presence so this is a no-op on clusters without the operator bundle.
+	if hco := hcoRef(); k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco) == nil {
+		enableAssetGates(assetsUnderTest)
+	}
 })
 
 var _ = AfterSuite(func() {
+	if hco := hcoRef(); k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco) == nil {
+		disableAssetGates(assetsUnderTest)
+	}
 	cancel()
 })
