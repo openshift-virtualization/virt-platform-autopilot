@@ -956,7 +956,7 @@ features:
 
   - name: Load-Aware Descheduler
     description: Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics
-    assets: [descheduler-loadaware, psi-enable, psi-enable-master]
+    assets: [descheduler-loadaware, psi-enable, psi-enable-master, descheduler-dashboard]
     requires:
       - Kube Descheduler Operator
 
