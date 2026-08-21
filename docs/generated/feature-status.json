@@ -5,20 +5,6 @@
   },
   "features": [
     {
-      "name": "In-Flight Operations",
-      "description": "OperationRuleSet-based coordination for safe concurrent operations",
-      "maturity": "GA",
-      "install": "always",
-      "opt_in": null
-    },
-    {
-      "name": "Kubelet Performance",
-      "description": "Optimized kubelet settings for virtualization workloads",
-      "maturity": "GA",
-      "install": "always",
-      "opt_in": null
-    },
-    {
       "name": "Load-Aware Descheduler",
       "description": "Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics",
       "maturity": "GA",
@@ -44,6 +30,20 @@
       "maturity": "GA",
       "install": "always",
       "opt_in": null
+    },
+    {
+      "name": "In-Flight Operations",
+      "description": "OperationRuleSet-based coordination for safe concurrent operations",
+      "maturity": "TP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-in-flight-operations=true"
+    },
+    {
+      "name": "Kubelet Performance",
+      "description": "Optimized kubelet settings for virtualization workloads",
+      "maturity": "TP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-kubelet-performance-settings=true"
     },
     {
       "name": "CPU Manager",
