@@ -883,6 +883,19 @@ assets:
     component: PersesDashboard
     reconcile_order: 3
     conditions: *kubevirt-metrics-exporter-conditions
+  
+  - name: vm-drain-shutdown-inhibitor
+    path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml.tpl
+    phase: 2
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: worker
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor
+        value: "true"
 
   # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
   # (picks alphabetically first RWX Filesystem class). Omits field when none found.
@@ -1025,3 +1038,8 @@ features:
       - Node Health Check Operator
       - Fence Agents Remediation Operator
       - Storage Based Remediation Operator
+
+  - name: VM drain shutdown inhibitor
+    description: Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down
+    maturity: dp
+    assets: [vm-drain-shutdown-inhibitor]
