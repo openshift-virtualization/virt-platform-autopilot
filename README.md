@@ -33,8 +33,8 @@ The autopilot applies opinionated best practices and manages your platform autom
 
 | Feature | Maturity | Install | Opt-in | Requires | Recommended |
 |---------|----------|---------|--------|----------|-------------|
-| In-Flight Operations | TP | always | - | - | - |
-| Kubelet Performance | TP | always | - | - | - |
+| In-Flight Operations | TP | opt-in | `platform.kubevirt.io/enable-in-flight-operations=true` | - | - |
+| Kubelet Performance | TP | opt-in | `platform.kubevirt.io/enable-kubelet-performance-settings=true` | - | - |
 | Load-Aware Descheduler | TP | always | - | Kube Descheduler Operator | - |
 | Observability | TP | always | - | Cluster Observability Operator | - |
 | SWAP | TP | always | - | - | - |

@@ -8,15 +8,15 @@
       "name": "In-Flight Operations",
       "description": "OperationRuleSet-based coordination for safe concurrent operations",
       "maturity": "TP",
-      "install": "always",
-      "opt_in": null
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-in-flight-operations=true"
     },
     {
       "name": "Kubelet Performance",
       "description": "Optimized kubelet settings for virtualization workloads",
       "maturity": "TP",
-      "install": "always",
-      "opt_in": null
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-kubelet-performance-settings=true"
     },
     {
       "name": "Load-Aware Descheduler",
