@@ -555,10 +555,10 @@ features:
     maturity: tp
     groups: [logging, audit-logging]
 
-  - name: Metrics Exporter
+  - name: KubeVirt Metrics Exporter
     description: Per-node VM storage I/O latency collection
     maturity: dp
-    groups: [metrics-exporter]
+    groups: [kubevirt-metrics-exporter]
 ```
 
 **Feature fields:**
