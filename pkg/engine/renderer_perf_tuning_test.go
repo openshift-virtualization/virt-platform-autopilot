@@ -378,13 +378,26 @@ func TestAssetMetadata(t *testing.T) {
 		t.Fatalf("Failed to create registry: %v", err)
 	}
 
-	// Test kubelet-perf-settings
+	// Test kubelet-perf-settings (Tech Preview, opt-in via annotation)
 	asset, err := registry.GetAsset("kubelet-perf-settings")
 	if err != nil {
 		t.Fatalf("Failed to get kubelet-perf-settings: %v", err)
 	}
-	if asset.Install != "always" {
-		t.Errorf("kubelet-perf-settings Install = %s, want always", asset.Install)
+	if asset.Install != "opt-in" {
+		t.Errorf("kubelet-perf-settings Install = %s, want opt-in", asset.Install)
+	}
+
+	hasPerfAnnotation := false
+	for _, condition := range asset.Conditions {
+		if condition.Type == "annotation" &&
+			condition.Key == "platform.kubevirt.io/enable-kubelet-performance-settings" &&
+			condition.Value == "true" {
+			hasPerfAnnotation = true
+			break
+		}
+	}
+	if !hasPerfAnnotation {
+		t.Error("kubelet-perf-settings should require the platform.kubevirt.io/enable-kubelet-performance-settings annotation")
 	}
 
 	// Test kubelet-cpu-manager
