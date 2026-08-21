@@ -18,7 +18,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gomegatypes "github.com/onsi/gomega/types"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -430,18 +429,14 @@ func removeManagedByLabel(labelKey string) {
 	}, timeout, interval).Should(Succeed(), "managed-by label should be removed from HCO")
 }
 
-// hasLabel checks if an unstructured object has a specific label key-value pair.
-func hasLabel(obj *unstructured.Unstructured, key, value string) bool { //nolint:unparam
-	labels := obj.GetLabels()
-	return labels != nil && labels[key] == value
-}
-
 // patchAutopilotAndWait patches the autopilot annotation on the HCO and waits for
 // the triggered reconciliation to complete before returning.
 // If the annotation already has the desired value,
 // it returns immediately (no-op).
-// For disable, it waits a short period since
-// no ReconcileSucceeded event is emitted when the operator goes idle.
+// The autopilot is GA and enabled by default: only "false" disables it. Removing the
+// annotation (value "" or "null") keeps the autopilot enabled, so that path waits for a
+// ReconcileSucceeded event just like the explicit enable paths. For disable, it waits a
+// short period since no ReconcileSucceeded event is emitted when the operator goes idle.
 func patchAutopilotAndWait(value string) {
 	ref := hcoRef()
 
@@ -459,27 +454,19 @@ func patchAutopilotAndWait(value string) {
 		}
 	}
 
-	if value == "" || value == "null" || value == "false" {
+	if value == "false" {
 		EventuallyWithOffset(1, func() error {
 			return k8sClient.Patch(ctx, ref, client.RawPatch(types.MergePatchType, autopilotPatch(value)))
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
-		var matcher gomegatypes.GomegaMatcher
-		var desc string
-		if value == "false" {
-			matcher = Equal("false")
-			desc = "Autopilot annotation should be set to false on HCO"
-		} else {
-			matcher = BeEmpty()
-			desc = "Autopilot annotation should be removed from HCO"
-		}
 		EventuallyWithOffset(1, func() string {
 			obj := unstructuredRef(hcoGVK, hcoName, operatorNamespace)
 			if err := k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, obj); err != nil {
 				return "error"
 			}
 			return obj.GetAnnotations()[autopilotAnnotation]
-		}, timeout, interval).Should(matcher, desc)
+		}, timeout, interval).Should(Equal("false"),
+			"Autopilot annotation should be set to false on HCO")
 
 		var prev AutopilotEvents
 		EventuallyWithOffset(1, func() bool {
