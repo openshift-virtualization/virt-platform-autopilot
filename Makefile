@@ -163,6 +163,14 @@ verify-crds: ## Verify CRDs match upstream (for CI)
 	@echo "Verifying CRDs match upstream..."
 	@hack/update-crds.sh --verify
 
+.PHONY: sync-kme-assets
+sync-kme-assets: ## Sync kubevirt-metrics-exporter assets from kubevirt-metrics-exporter
+	@python3 hack/sync-kme-assets.py
+
+.PHONY: verify-kme-assets
+verify-kme-assets: ## Verify kubevirt-metrics-exporter assets match kubevirt-metrics-exporter (for CI)
+	@python3 hack/sync-kme-assets.py --verify
+
 .PHONY: validate-crds
 validate-crds: ## Validate CRDs can be loaded (parser check)
 	@echo "Validating CRDs can be parsed..."
