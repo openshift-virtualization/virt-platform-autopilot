@@ -935,10 +935,10 @@ assets:
   # - fence-agents-operator (operators/fence-agents.yaml.tpl)
   # - usb-passthrough (machine-config/05-usb-passthrough.yaml.tpl)
 
-# Framework-level maturity. Remove opt_in once the autopilot graduates to GA.
+# Framework-level maturity. The autopilot is GA: enabled by default (opt-out via
+# platform.kubevirt.io/autopilot=false), so no opt_in gate is declared.
 framework:
-  maturity: tp
-  opt_in: platform.kubevirt.io/autopilot=true
+  maturity: ga
 
 # Feature catalog: maps user-facing features to assets/groups.
 # - maturity is required only for opt-in features ("dp" or "tp")

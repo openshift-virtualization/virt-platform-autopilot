@@ -29,8 +29,6 @@ The autopilot applies opinionated best practices and manages your platform autom
 ## Features
 
 <!-- BEGIN FEATURE STATUS -->
-> **Note:** The autopilot framework is currently **TP** and requires `platform.kubevirt.io/autopilot=true` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.
-
 | Feature | Maturity | Install | Opt-in | Requires | Recommended |
 |---------|----------|---------|--------|----------|-------------|
 | Load-Aware Descheduler | GA | always | - | Kube Descheduler Operator | - |
@@ -71,14 +69,19 @@ make docker-build docker-push
 make deploy
 ```
 
-3. **Enable the autopilot** (opt-in required in this early phase):
+3. **(Optional) Disable the autopilot:**
+
+   The autopilot is GA and **enabled by default**, once deployed it starts managing the
+   platform without any additional opt-in. To disable it, set the annotation to `false`:
 
    ```bash
    kubectl annotate hyperconverged kubevirt-hyperconverged -n openshift-cnv \
-     platform.kubevirt.io/autopilot=true
+     platform.kubevirt.io/autopilot=false
    ```
 
-   > **Note:** The autopilot is currently **disabled by default**. It will not manage any resources until the opt-in annotation `platform.kubevirt.io/autopilot: "true"` is present on the HCO CR. This allows safe evaluation before committing to automated management. Once the project matures, the default will be inverted to opt-out.
+   > **Note:** The autopilot manages resources by default. It goes idle only while
+   > `platform.kubevirt.io/autopilot: "false"` is present on the HCO CR; removing the
+   > annotation (or setting it to `"true"`) re-enables management.
 
 4. Verify installation:
 ```bash
