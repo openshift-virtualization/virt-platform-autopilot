@@ -116,6 +116,12 @@ func StaticRules() []Rule {
 			Resources: []string{"storageprofiles"},
 			Verbs:     []string{"list"},
 		},
+		// Rule 8: KubeVirt (for the kubevirt-feature-gate condition type)
+		{
+			APIGroups: []string{"kubevirt.io"},
+			Resources: []string{"kubevirts"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
 	}
 }
 

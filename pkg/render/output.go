@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
@@ -30,6 +30,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
 )
 
 // RenderOutput represents the rendering result for a single asset.
@@ -57,14 +58,21 @@ func CheckConditions(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.Rend
 			if renderCtx.HCO.GetAnnotations()[condition.Key] != condition.Value {
 				return false
 			}
+
 		case assets.ConditionTypeFeatureGate:
-			featureGates := renderCtx.HCO.GetAnnotations()["platform.kubevirt.io/feature-gates"]
-			if !strings.Contains(featureGates, condition.Value) {
+			featureGates := resources.ExtractFeatureGates(renderCtx.HCO)
+			if !featureGates[condition.Value] {
 				return false
 			}
+
 		case assets.ConditionTypeHardwareDetection:
 			// Hardware detection requires node access which is not available here.
 			return false
+
+		case assets.ConditionTypeKubeVirtFeatureGate:
+			if !slices.Contains(renderCtx.KubeVirtFeatureGates, condition.Value) {
+				return false
+			}
 		}
 	}
 

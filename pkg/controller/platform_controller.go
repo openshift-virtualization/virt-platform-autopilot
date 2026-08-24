@@ -40,6 +40,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -335,7 +336,7 @@ func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstruct
 	r.conditionEvaluator.HardwareContext = ctx.Hardware.AsMap()
 
 	// Extract feature gates from HCO
-	r.conditionEvaluator.FeatureGates = extractFeatureGates(hco)
+	r.conditionEvaluator.FeatureGates = resources.ExtractFeatureGates(hco)
 
 	// Extract annotations from HCO
 	r.conditionEvaluator.Annotations = hco.GetAnnotations()
@@ -346,37 +347,14 @@ func (r *PlatformReconciler) updateConditionEvaluator(hco *unstructured.Unstruct
 	// Expose the raw HCO object for field inspection conditions
 	r.conditionEvaluator.HCOObject = hco.Object
 
+	r.conditionEvaluator.KVFeatureGates = ctx.KubeVirtFeatureGates
+
 	// Topology for schedulable-master and other topology-gated assets
 	if ctx.Topology != nil {
 		r.conditionEvaluator.TopologyContext = ctx.Topology.AsMap()
 	} else {
 		r.conditionEvaluator.TopologyContext = nil
 	}
-}
-
-// extractFeatureGates extracts feature gates from HCO v1 spec.
-// In v1 the field is an array of {name: string, state: "Enabled"|"Disabled"} objects.
-func extractFeatureGates(hco *unstructured.Unstructured) map[string]bool {
-	gates := make(map[string]bool)
-
-	featureGates, found, err := unstructured.NestedSlice(hco.Object, "spec", "featureGates")
-	if err != nil || !found {
-		return gates
-	}
-
-	for _, item := range featureGates {
-		gate, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		name, _ := gate["name"].(string)
-		state, _ := gate["state"].(string)
-		if name != "" {
-			gates[name] = (state != "Disabled")
-		}
-	}
-
-	return gates
 }
 
 // isManagedCRD checks if a CRD is required by at least one declared asset.
@@ -481,6 +459,10 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	hco := &unstructured.Unstructured{}
 	hco.SetGroupVersionKind(pkgcontext.HCOGVK)
 
+	// Create unstructured object for KubeVirt
+	kv := &unstructured.Unstructured{}
+	kv.SetGroupVersionKind(pkgcontext.KVGVK)
+
 	// Build controller with HCO watch
 	builder := ctrl.NewControllerManagedBy(mgr).
 		For(hco).
@@ -488,6 +470,9 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&apiextensionsv1.CustomResourceDefinition{},
 			r.crdEventHandler(ctx),
 		).
+		Watches(kv, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
+			return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
+		})).
 		Named("platform")
 
 	// Dynamically add watches for every CRD required by a declared asset.

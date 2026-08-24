@@ -167,6 +167,7 @@ wait_for_operator() {
         --context "kind-$CLUSTER_NAME" || {
         log_warn "Operator did not become ready in time"
         log_info "Check logs with: make logs-local"
+        make logs-local
         return 1
     }
 

@@ -172,6 +172,10 @@ func runController(
 	hcoForCache := &unstructured.Unstructured{}
 	hcoForCache.SetGroupVersionKind(pkgcontext.HCOGVK)
 
+	// Create unstructured object for KubeVirt cache configuration
+	kvForCache := &unstructured.Unstructured{}
+	kvForCache.SetGroupVersionKind(pkgcontext.KVGVK)
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -188,6 +192,10 @@ func runController(
 			ByObject: map[client.Object]cache.ByObject{
 				// Watch all HCOs (labeled or not) to adopt pre-existing ones
 				hcoForCache: {
+					Label: labels.Everything(),
+				},
+				// Watch all KubeVirt (labeled or not) to adopt pre-existing ones
+				kvForCache: {
 					Label: labels.Everything(),
 				},
 				// Watch all CRDs for soft dependency detection
