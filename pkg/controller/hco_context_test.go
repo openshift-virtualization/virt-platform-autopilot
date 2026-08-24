@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -724,6 +725,91 @@ func TestRenderContextBuilder_Build(t *testing.T) {
 
 		if renderCtx.Topology == nil {
 			t.Error("Build() did not set topology context")
+		}
+	})
+
+	t.Run("builds context successfully with KubeVirt enabled feature gates", func(t *testing.T) {
+		scheme := runtime.NewScheme()
+		_ = corev1.AddToScheme(scheme)
+
+		//node := &corev1.Node{
+		//	ObjectMeta: metav1.ObjectMeta{
+		//		Name: "test-node",
+		//		Labels: map[string]string{
+		//			"feature.node.kubernetes.io/pci-present": "true",
+		//		},
+		//	},
+		//	Status: corev1.NodeStatus{
+		//		Capacity: corev1.ResourceList{
+		//			"nvidia.com/gpu": resource.MustParse("1"),
+		//		},
+		//	},
+		//}
+
+		kv := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "kubevirt.io/v1",
+				"kind":       "KubeVirt",
+				"metadata": map[string]any{
+					"name":      "kubevirt-kubevirt-hyperconverged",
+					"namespace": "test-namespace",
+				},
+				"spec": map[string]any{
+					"configuration": map[string]any{
+						"developerConfiguration": map[string]any{
+							"featureGates": []any{"aaa", "bbb", "ccc"},
+						},
+					},
+				},
+			},
+		}
+
+		fakeClient := fake.NewClientBuilder().
+			WithScheme(scheme).
+			WithObjects(kv).
+			Build()
+
+		builder := NewRenderContextBuilder(fakeClient)
+
+		hco := &unstructured.Unstructured{
+			Object: map[string]any{
+				"apiVersion": "hco.kubevirt.io/v1",
+				"kind":       "HyperConverged",
+				"metadata": map[string]any{
+					"name":      "test-hco",
+					"namespace": "test-namespace",
+				},
+				"status": map[string]any{
+					"relatedObjects": []any{
+						map[string]any{
+							"apiVersion":      "kubevirt.io/v1",
+							"kind":            "KubeVirt",
+							"name":            "kubevirt-kubevirt-hyperconverged",
+							"namespace":       "test-namespace",
+							"resourceVersion": "296035",
+							"uid":             "b5b9e7b9-5e0a-4f68-9ac9-0d29923cd131",
+						},
+					},
+				},
+			},
+		}
+
+		renderCtx, err := builder.Build(ctx, hco)
+
+		if err != nil {
+			t.Fatalf("Build() error = %v", err)
+		}
+
+		if renderCtx == nil {
+			t.Fatal("Build() returned nil context")
+		}
+
+		if renderCtx.HCO != hco {
+			t.Error("Build() did not set HCO correctly")
+		}
+
+		if !slices.Equal(renderCtx.KubeVirtFeatureGates, []string{"aaa", "bbb", "ccc"}) {
+			t.Error("Build() did not set KubeVirtFeatureGates correctly")
 		}
 	})
 

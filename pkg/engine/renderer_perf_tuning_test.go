@@ -411,7 +411,7 @@ func TestAssetMetadata(t *testing.T) {
 
 	hasFeatureGate := false
 	for _, condition := range asset.Conditions {
-		if condition.Type == "feature-gate" && condition.Value == "CPUManager" {
+		if condition.Type == "kubevirt-feature-gate" && condition.Value == "CPUManager" {
 			hasFeatureGate = true
 			break
 		}
