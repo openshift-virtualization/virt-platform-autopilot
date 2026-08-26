@@ -287,8 +287,8 @@ func TestHandleFeatures(t *testing.T) {
 				for _, feature := range catalog.Features {
 					names = append(names, feature.Name)
 				}
-				assert.Contains(t, names, "Observability")
-				assert.Contains(t, names, "SWAP")
+				assert.Contains(t, names, "Observability Enhancements")
+				assert.Contains(t, names, "Swap Enablement")
 			},
 		},
 	}
