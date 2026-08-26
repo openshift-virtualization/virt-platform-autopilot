@@ -112,7 +112,6 @@ var assetsUnderTest = initAssets([]testAsset{
 		GVK:           schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
 		Plural:        "machineconfigs",
 		Name:          "99-openshift-machineconfig-worker-psi-karg",
-		GateCRD:       "kubedeschedulers.operator.openshift.io",
 		ClusterScoped: true,
 	},
 	{
