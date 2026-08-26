@@ -92,6 +92,17 @@ spec:
                   in the agent DaemonSet for cross-node coordination, slot assignment, and shared configuration data.
                   The StorageClass must support ReadWriteMany (RWX) access mode.
                 type: string
+              sharedStorageVolumeMode:
+                description: |-
+                  SharedStorageVolumeMode selects the PVC volume mode for shared storage.
+                  "Filesystem" (default) mounts a filesystem-backed RWX volume.
+                  "Block" uses a raw block device RWX volume.
+                  Requires SharedStorageClass to be set when "Block" is specified.
+                  This field is immutable after creation.
+                enum:
+                - Filesystem
+                - Block
+                type: string
               watchdogPath:
                 default: /dev/watchdog
                 description: |-
