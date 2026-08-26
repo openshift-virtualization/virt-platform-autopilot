@@ -160,23 +160,39 @@ func renderTable(fw assets.FrameworkStatus, statuses []assets.FeatureStatus) str
 		fmt.Fprintf(&b, "> **Note:** The autopilot framework is currently **%s** and requires `%s` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.\n\n", fw.Maturity, *fw.OptIn)
 	}
 
-	b.WriteString("| Feature | Maturity | Install | Opt-in | Requires | Recommended |\n")
-	b.WriteString("|---------|----------|---------|--------|----------|-------------|\n")
+	b.WriteString("| Feature | Description | Maturity | Install | Dependencies |\n")
+	b.WriteString("|---------|-------------|----------|---------|--------------|\n")
 
 	for _, s := range statuses {
-		optIn := "-"
+		// The opt-in gate string is folded into the Install cell behind a
+		// disclosure so the (often long) gate expression doesn't widen the
+		// whole table. The row must stay on one physical line for the pipe
+		// table to parse, so gates are joined with <br> rather than newlines.
+		install := s.Install
 		if s.OptIn != nil {
-			optIn = "`" + *s.OptIn + "`"
+			gates := strings.Split(*s.OptIn, ", ")
+			for i, g := range gates {
+				gates[i] = "<code>" + g + "</code>"
+			}
+			install = "<details><summary>" + s.Install + "</summary>" + strings.Join(gates, "<br>") + "</details>"
 		}
-		requires := "-"
-		if len(s.Requires) > 0 {
-			requires = strings.Join(s.Requires, ", ")
+		// Required and recommended operators share one Dependencies column;
+		// recommended (but not strictly required) ones are marked so the
+		// distinction survives the merge.
+		deps := make([]string, 0, len(s.Requires)+len(s.Recommended))
+		deps = append(deps, s.Requires...)
+		for _, r := range s.Recommended {
+			deps = append(deps, r+" _(recommended)_")
 		}
-		recommended := "-"
-		if len(s.Recommended) > 0 {
-			recommended = strings.Join(s.Recommended, ", ")
+		dependencies := "-"
+		if len(deps) > 0 {
+			dependencies = strings.Join(deps, ", ")
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", s.Name, s.Maturity, s.Install, optIn, requires, recommended)
+		description := s.Description
+		if description == "" {
+			description = "-"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", s.Name, description, s.Maturity, install, dependencies)
 	}
 
 	return b.String()
