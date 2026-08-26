@@ -39,7 +39,7 @@ spec:
     {{- end }}
   {{- end }}
   evictionLimits:
-    {{- $migTotal := dig "spec" "virtualization" "liveMigrationConfig" "parallelMigrationsPerCluster" 5 .HCO.Object }}
-    total: {{ $migTotal }}
     {{- $migNode := dig "spec" "virtualization" "liveMigrationConfig" "parallelOutboundMigrationsPerNode" 2 .HCO.Object }}
     node: {{ $migNode }}
+    {{- $migTotal := dig "spec" "virtualization" "liveMigrationConfig" "parallelMigrationsPerCluster" 5 .HCO.Object }}
+    total: {{ $migTotal }}
