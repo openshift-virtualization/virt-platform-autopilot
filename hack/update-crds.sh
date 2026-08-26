@@ -24,6 +24,28 @@ if [ "$1" = "--verify" ]; then
     echo "Running in VERIFY mode - will check if CRDs match upstream"
 fi
 
+# Optional filter (verify mode only): when CRD_VERIFY_PATHS is set to a
+# whitespace/newline-separated list of local paths (as they appear in git,
+# e.g. "test/crds/openshift/foo.yaml"), only those files are verified.
+# Used by the PR pre-submit lane to gate solely on CRDs changed in the PR,
+# so unrelated upstream drift (handled by the daily sync job) never blocks a PR.
+VERIFY_ONLY_PATHS="${CRD_VERIFY_PATHS:-}"
+if $VERIFY_MODE && [ -n "$VERIFY_ONLY_PATHS" ]; then
+    echo "Restricting verification to changed paths:"
+    for _p in $VERIFY_ONLY_PATHS; do echo "  - $_p"; done
+fi
+
+# Returns success if the given output path should be verified given the filter.
+should_verify_path() {
+    local path=$1
+    [ -z "$VERIFY_ONLY_PATHS" ] && return 0
+    local p
+    for p in $VERIFY_ONLY_PATHS; do
+        [ "$p" = "$path" ] && return 0
+    done
+    return 1
+}
+
 # Track verification results
 OUTDATED_COUNT=0
 MISSING_COUNT=0
@@ -40,6 +62,11 @@ fetch_github_file() {
     local branch=$2
     local file_path=$3
     local output_path=$4
+
+    # In verify mode, skip files excluded by the changed-paths filter.
+    if $VERIFY_MODE && ! should_verify_path "$output_path"; then
+        return 0
+    fi
 
     local url="https://raw.githubusercontent.com/${repo}/${branch}/${file_path}"
     local temp_file
