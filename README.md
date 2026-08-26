@@ -31,20 +31,20 @@ The autopilot applies opinionated best practices and manages your platform autom
 <!-- BEGIN FEATURE STATUS -->
 > **Note:** The autopilot framework is currently **DP** and requires `platform.kubevirt.io/autopilot=true` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.
 
-| Feature | Maturity | Install | Opt-in | Requires | Recommended |
-|---------|----------|---------|--------|----------|-------------|
-| In-Flight Operations | TP | opt-in | `platform.kubevirt.io/enable-in-flight-operations=true` | - | - |
-| Kubelet Performance | TP | opt-in | `platform.kubevirt.io/enable-kubelet-performance-settings=true` | - | - |
-| Load-Aware Descheduler | TP | always | - | Kube Descheduler Operator | - |
-| Observability | TP | always | - | Cluster Observability Operator | - |
-| SWAP | TP | always | - | - | - |
-| CPU Manager | DP | opt-in | `featureGate:CPUManager` | - | - |
-| Kernel Samepage Merging (KSM) zero pages only | DP | opt-in | `platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration` | - | - |
-| KubeVirt Metrics Exporter | DP | opt-in | `platform.kubevirt.io/enable-kubevirt-metrics-exporter=true` | - | Cluster Observability Operator |
-| MTV Operator | DP | opt-in | `platform.kubevirt.io/enable-mtv=true` | - | - |
-| MetalLB Operator | DP | opt-in | `platform.kubevirt.io/enable-metallb=true` | - | - |
-| PCI Passthrough | DP | opt-in | `platform.kubevirt.io/openshift=true, platform.kubevirt.io/enable-pci-passthrough=true` | - | - |
-| Transparent Huge Pages (THP) Tuning | DP | opt-in | `platform.kubevirt.io/enable-thp-tuning=true` | - | - |
+| Feature | Description | Maturity | Install | Dependencies |
+|---------|-------------|----------|---------|--------------|
+| In-Flight Operations | OperationRuleSet-based coordination for safe concurrent operations | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-in-flight-operations=true</code></details> | - |
+| Kubelet Performance | Optimized kubelet settings for virtualization workloads | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubelet-performance-settings=true</code></details> | - |
+| Load-Aware Descheduler | Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics | TP | always | Kube Descheduler Operator |
+| Observability Enhancements | Enhanced observability with additional Prometheus alerting rules and advanced Perses dashboards in the OpenShift console | TP | always | Cluster Observability Operator |
+| Swap Enablement | Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available | TP | always | - |
+| CPU Manager | Dedicated CPU pinning for guaranteed QoS workloads | DP | <details><summary>opt-in</summary><code>featureGate:CPUManager</code></details> | - |
+| Kernel Samepage Merging (KSM) zero pages only | Node-level KSM tuning that enables zero-pages-only deduplication with adaptive scan rate | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-ksm-zero-only=true</code><br><code>hcoUnconfigured:spec.virtualization.ksmConfiguration</code></details> | - |
+| KubeVirt Metrics Exporter | Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubevirt-metrics-exporter=true</code></details> | Cluster Observability Operator _(recommended)_ |
+| MTV Operator | Migration Toolkit for Virtualization | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-mtv=true</code></details> | - |
+| MetalLB Operator | Bare-metal load balancer for services | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-metallb=true</code></details> | - |
+| PCI Passthrough | GPU/PCI device passthrough via VFIO | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/openshift=true</code><br><code>platform.kubevirt.io/enable-pci-passthrough=true</code></details> | - |
+| Transparent Huge Pages (THP) Tuning | Node-level THP tuning that sets madvise mode and khugepaged scan rate for KVM guest memory | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-thp-tuning=true</code></details> | - |
 <!-- END FEATURE STATUS -->
 
 ## Quick Start
