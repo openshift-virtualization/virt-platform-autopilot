@@ -29,8 +29,8 @@
       ]
     },
     {
-      "name": "Observability",
-      "description": "Prometheus metrics, alerting rules, and Perses dashboards in the OpenShift console",
+      "name": "Observability Enhancements",
+      "description": "Enhanced observability with additional Prometheus alerting rules and advanced Perses dashboards in the OpenShift console",
       "maturity": "TP",
       "install": "always",
       "opt_in": null,
@@ -39,8 +39,8 @@
       ]
     },
     {
-      "name": "SWAP",
-      "description": "OpenShift worker node swap support",
+      "name": "Swap Enablement",
+      "description": "Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available",
       "maturity": "TP",
       "install": "always",
       "opt_in": null
