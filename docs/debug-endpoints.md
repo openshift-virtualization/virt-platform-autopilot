@@ -194,8 +194,8 @@ curl http://localhost:8081/debug/features?format=json | jq '.'
   },
   "features": [
     {
-      "name": "SWAP",
-      "description": "OpenShift worker node swap support",
+      "name": "Swap Enablement",
+      "description": "Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available",
       "maturity": "GA",
       "install": "always",
       "opt_in": null
