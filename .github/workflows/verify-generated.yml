@@ -15,15 +15,39 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # Full history so the PR base is available for the changed-files diff.
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
+      # On push (e.g. to main) verify every CRD against upstream. On a PR, gate
+      # only on CRDs the PR actually changed — unrelated upstream drift is the
+      # daily "Update CRDs" workflow's job, not a reason to block an unrelated PR.
       - name: Verify CRDs are up-to-date
         if: github.event_name != 'pull_request' || github.base_ref == 'main'
-        run: make verify-crds
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            make verify-crds
+            exit $?
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD -- 'test/crds/' | grep -E '\.ya?ml$' || true)
+          if [ -z "$changed" ]; then
+            echo "No CRD files changed in this PR; skipping upstream CRD verification."
+            exit 0
+          fi
+
+          echo "CRD files changed in this PR:"
+          echo "$changed" | sed 's/^/  - /'
+          export CRD_VERIFY_PATHS="$changed"
+          make verify-crds
 
       - name: Verify RBAC is up-to-date
         run: make verify-rbac
