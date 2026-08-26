@@ -1,0 +1,146 @@
+name: Update KME Assets
+
+on:
+  schedule:
+    # 07:15 CET (UTC+1) = 06:15 UTC
+    - cron: '15 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  update-kme-assets:
+    name: Check and sync kubevirt-metrics-exporter assets from upstream
+    runs-on: ubuntu-latest
+    if: github.repository == 'openshift-virtualization/virt-platform-autopilot'
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Verify KME assets are up-to-date
+        id: verify
+        run: |
+          if make verify-kme-assets; then
+            echo "up_to_date=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "up_to_date=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Sync KME assets from upstream
+        if: steps.verify.outputs.up_to_date == 'false'
+        run: make sync-kme-assets
+
+      - name: Detect changed KME assets
+        if: steps.verify.outputs.up_to_date == 'false'
+        id: changes
+        run: |
+          changed_files=$(git diff --name-only -- 'assets/active/kubevirt-metrics-exporter/' | sort)
+          if [ -z "$changed_files" ]; then
+            echo "has_changes=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_changes=true" >> "${GITHUB_OUTPUT}"
+            # Build a markdown list of changed files for the PR body
+            changed_list=$(echo "$changed_files" | sed 's/^/- /')
+            # Store multi-line output safely
+            {
+              echo "changed_list<<EOF"
+              echo "$changed_list"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check for existing open KME update PR
+        if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true'
+        id: existing_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing_branch=$(gh pr list --label "automated,kme" --state open --json headRefName --jq '.[0].headRefName // ""')
+          if [ -n "$existing_branch" ]; then
+            echo "branch=$existing_branch" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Update existing PR branch
+        if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true' && steps.existing_pr.outputs.branch != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # The synced assets are in the working tree but not committed.
+          # Copy them aside, reset the working tree, switch to the existing PR
+          # branch, then restore so we can commit the freshest upstream state.
+          tmpdir=$(mktemp -d)
+          cp -r assets/active/kubevirt-metrics-exporter/. "$tmpdir/"
+          git checkout -- assets/active/kubevirt-metrics-exporter/
+
+          git fetch origin "${{ steps.existing_pr.outputs.branch }}"
+          git checkout "${{ steps.existing_pr.outputs.branch }}"
+
+          cp -r "$tmpdir/." assets/active/kubevirt-metrics-exporter/
+          rm -rf "$tmpdir"
+
+          changed_files=$(git diff --name-only -- 'assets/active/kubevirt-metrics-exporter/' | sort)
+          if [ -z "$changed_files" ]; then
+            echo "Existing PR already contains all current KME asset changes, nothing to add."
+            exit 0
+          fi
+          commit_body=$(echo "$changed_files" | sed 's/^/- /')
+
+          git add assets/active/kubevirt-metrics-exporter/
+          printf 'chore: sync kubevirt-metrics-exporter assets from upstream\n\nUpdated files:\n%s\n' "$commit_body" | git commit -F -
+          git push origin "${{ steps.existing_pr.outputs.branch }}"
+
+      - name: Create branch and open PR
+        if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true' && steps.existing_pr.outputs.branch == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGED_LIST: ${{ steps.changes.outputs.changed_list }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          branch="auto/update-kme-assets-$(date -u +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+
+          # Build commit message with list of updated files
+          changed_files=$(git diff --name-only -- 'assets/active/kubevirt-metrics-exporter/' | sort)
+          commit_body=$(echo "$changed_files" | sed 's/^/- /')
+
+          git add assets/active/kubevirt-metrics-exporter/
+          printf 'chore: sync kubevirt-metrics-exporter assets from upstream\n\nUpdated files:\n%s\n' "$commit_body" | git commit -F -
+
+          git push origin "$branch"
+
+          # Write PR body to a temp file to avoid shell quoting / YAML issues
+          pr_body_file=$(mktemp)
+          cat > "$pr_body_file" << 'PRBODY_EOF'
+          ## Automated KME Asset Sync
+
+          This PR was opened automatically by the daily kubevirt-metrics-exporter asset sync workflow.
+
+          The following assets were found to be out of sync with their upstream sources and have been updated:
+          PRBODY_EOF
+          printf '\n%s\n' "$CHANGED_LIST" >> "$pr_body_file"
+          cat >> "$pr_body_file" << 'PRBODY_EOF'
+
+          ### How to verify
+
+          ```bash
+          make verify-kme-assets
+          ```
+
+          ---
+          PRBODY_EOF
+          printf '*Generated by the [Update KME Assets](%s) workflow.*\n' "$RUN_URL" >> "$pr_body_file"
+
+          gh pr create \
+            --title "chore: sync kubevirt-metrics-exporter assets from upstream ($(date -u +%Y-%m-%d))" \
+            --body-file "$pr_body_file" \
+            --base main \
+            --head "$branch" \
+            --label "automated,kme"
+          rm -f "$pr_body_file"
