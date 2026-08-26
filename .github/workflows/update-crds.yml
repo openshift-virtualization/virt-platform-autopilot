@@ -16,8 +16,29 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Generate a token for the automation GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # Push/PR must be attributed to the App, not GITHUB_TOKEN, so the PR's
+          # pull_request events can trigger the presubmit lanes. GitHub bars a
+          # GITHUB_TOKEN-authored PR from triggering further workflow runs.
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Resolve GitHub App bot identity
+        id: app-user
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          user_id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)
+          echo "user-id=${user_id}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify CRDs are up-to-date
         id: verify
@@ -55,7 +76,7 @@ jobs:
         if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true'
         id: existing_pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           existing_branch=$(gh pr list --label "automated,crds" --state open --json headRefName --jq '.[0].headRefName // ""')
           if [ -n "$existing_branch" ]; then
@@ -65,10 +86,12 @@ jobs:
       - name: Update existing PR branch
         if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true' && steps.existing_pr.outputs.branch != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          APP_USER_ID: ${{ steps.app-user.outputs.user-id }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
 
           # The updated CRDs are in the working tree but not committed.
           # Copy them aside, reset the working tree, switch to the existing PR
@@ -97,13 +120,15 @@ jobs:
       - name: Create branch and open PR
         if: steps.verify.outputs.up_to_date == 'false' && steps.changes.outputs.has_changes == 'true' && steps.existing_pr.outputs.branch == ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          APP_USER_ID: ${{ steps.app-user.outputs.user-id }}
           CHANGED_LIST: ${{ steps.changes.outputs.changed_list }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           branch="auto/update-crds-$(date -u +%Y%m%d)"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
           git checkout -b "$branch"
 
           # Build commit message with list of updated CRDs
