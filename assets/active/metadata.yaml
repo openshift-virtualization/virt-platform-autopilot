@@ -897,6 +897,21 @@ assets:
         key: platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor
         value: "true"
 
+  - name: vm-drain-shutdown-inhibitor-master
+    path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml.tpl
+    phase: 2
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor
+        value: "true"
+      - type: topology
+        field: hasSchedulableMasters
+
   # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
   # (picks alphabetically first RWX Filesystem class). Omits field when none found.
   # Admin should set platform.kubevirt.io/sbr-storage-class on HCO if multiple RWX classes exist.
@@ -1042,4 +1057,4 @@ features:
   - name: VM drain shutdown inhibitor
     description: Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down
     maturity: dp
-    assets: [vm-drain-shutdown-inhibitor]
+    assets: [vm-drain-shutdown-inhibitor, vm-drain-shutdown-inhibitor-master]
