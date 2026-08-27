@@ -215,8 +215,8 @@ func TestKubeletPerfSettingsDocumentation(t *testing.T) {
 	}
 
 	contentStr := string(content)
-	if !strings.Contains(contentStr, "RFE-8045") {
-		t.Error("Template should reference RFE-8045 for autoSizingReserved")
+	if !strings.Contains(contentStr, "OCPNODE-3719") {
+		t.Error("Template should reference OCPNODE-3719 for autoSizingReserved")
 	}
 	if !strings.Contains(contentStr, "BZ#1984442") {
 		t.Error("Template should reference BZ#1984442 for nodeStatusMaxImages")
@@ -264,45 +264,30 @@ func TestCPUManagerTopologyPolicy(t *testing.T) {
 func TestCPUManagerMemoryPolicy(t *testing.T) {
 	rendered, _, _ := renderHCOAsset(t, "kubelet-cpu-manager")
 
-	memPolicy, found, err := unstructured.NestedString(rendered.Object, "spec", "kubeletConfig", "memoryManagerPolicy")
+	// memoryManagerPolicy: Static must NOT be set: it requires reservedMemory to
+	// exactly match the node's total reservation, which OCP's default auto-node-size
+	// (autoSizingReserved) computes dynamically per node. A hardcoded value can never
+	// match and crash-loops the kubelet (CNV-96059).
+	_, found, err := unstructured.NestedString(rendered.Object, "spec", "kubeletConfig", "memoryManagerPolicy")
 	if err != nil {
 		t.Fatalf("Error accessing memoryManagerPolicy: %v", err)
 	}
-	if !found {
-		t.Error("memoryManagerPolicy should be present for VM pinning")
-	}
-	if memPolicy != "Static" {
-		t.Errorf("memoryManagerPolicy = %s, want Static", memPolicy)
+	if found {
+		t.Error("memoryManagerPolicy must not be set: Static is incompatible with auto-node-size (CNV-96059)")
 	}
 }
 
 func TestCPUManagerReservedMemory(t *testing.T) {
 	rendered, _, _ := renderHCOAsset(t, "kubelet-cpu-manager")
 
-	reservedMem, found, err := unstructured.NestedSlice(rendered.Object, "spec", "kubeletConfig", "reservedMemory")
+	// reservedMemory must NOT be set: it is only meaningful with the static Memory
+	// Manager, which we intentionally do not enable (see TestCPUManagerMemoryPolicy).
+	_, found, err := unstructured.NestedSlice(rendered.Object, "spec", "kubeletConfig", "reservedMemory")
 	if err != nil {
 		t.Fatalf("Error accessing reservedMemory: %v", err)
 	}
-	if !found {
-		t.Error("reservedMemory should be present")
-	}
-	if len(reservedMem) != 1 {
-		t.Errorf("reservedMemory length = %d, want 1", len(reservedMem))
-	}
-
-	node0, ok := reservedMem[0].(map[string]any)
-	if !ok {
-		t.Fatal("reservedMemory[0] is not a map")
-	}
-	if numa, ok := node0["numaNode"].(int64); !ok || numa != 0 {
-		t.Errorf("numaNode = %v, want 0", node0["numaNode"])
-	}
-	limits, ok := node0["limits"].(map[string]any)
-	if !ok {
-		t.Fatal("limits is not a map")
-	}
-	if memory, ok := limits["memory"].(string); !ok || memory != "1124Mi" {
-		t.Errorf("memory = %v, want 1124Mi", limits["memory"])
+	if found {
+		t.Error("reservedMemory must not be set without the static Memory Manager (CNV-96059)")
 	}
 }
 
@@ -410,14 +395,22 @@ func TestAssetMetadata(t *testing.T) {
 	}
 
 	hasFeatureGate := false
+	hasCPUManagerAnnotation := false
 	for _, condition := range asset.Conditions {
 		if condition.Type == "kubevirt-feature-gate" && condition.Value == "CPUManager" {
 			hasFeatureGate = true
-			break
+		}
+		if condition.Type == "annotation" &&
+			condition.Key == "platform.kubevirt.io/enable-cpu-manager-perf-tunings" &&
+			condition.Value == "true" {
+			hasCPUManagerAnnotation = true
 		}
 	}
 	if !hasFeatureGate {
 		t.Error("kubelet-cpu-manager should require CPUManager feature gate")
+	}
+	if !hasCPUManagerAnnotation {
+		t.Error("kubelet-cpu-manager should require the platform.kubevirt.io/enable-cpu-manager-perf-tunings annotation")
 	}
 
 	// Test hco-golden-config

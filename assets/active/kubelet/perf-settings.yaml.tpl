@@ -9,7 +9,8 @@ spec:
     nodeStatusMaxImages: -1
     {{- $maxPods := dig "spec" "deployment" "nodePlacements" "infra" "maxPods" 500 .HCO.Object }}
     maxPods: {{ $maxPods }}
-    # Auto-size kubelet reserved resources (will be OCP default per RFE-8045)
+    # Auto-size kubelet reserved resources. Default-enabled on worker nodes since
+    # OCP 4.21 (OCPNODE-3719, machine-config-operator#5390).
     autoSizingReserved: true
   machineConfigPoolSelector:
     matchLabels:

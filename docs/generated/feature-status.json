@@ -50,7 +50,7 @@
       "description": "Dedicated CPU pinning for guaranteed QoS workloads",
       "maturity": "DP",
       "install": "opt-in",
-      "opt_in": "kubevirtFeatureGate:CPUManager"
+      "opt_in": "kubevirtFeatureGate:CPUManager, platform.kubevirt.io/enable-cpu-manager-perf-tunings=true"
     },
     {
       "name": "Kernel Samepage Merging (KSM) zero pages only",
