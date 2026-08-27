@@ -18,14 +18,15 @@ spec:
       cpu: "1"
     # Topology Manager for NUMA awareness (required for VM pinning)
     topologyManagerPolicy: best-effort
-    # Memory Manager for static memory allocation (required for VM pinning)
-    memoryManagerPolicy: Static
-    # Reserved memory for NUMA node 0 (adjust based on host size)
-    # according to https://access.redhat.com/articles/6994974
-    reservedMemory:
-      - numaNode: 0
-        limits:
-          memory: "1124Mi"
+    # Memory Manager: memoryManagerPolicy Static is intentionally NOT set here.
+    # The static Memory Manager requires reservedMemory to exactly equal the node's
+    # total memory reservation (kubeReserved + systemReserved + eviction thresholds).
+    # That total is computed dynamically per node by OCP's default auto-node-size
+    # (kubelet-auto-node-size.service / autoSizingReserved), enabled by default on
+    # worker nodes since OCP 4.21 (OCPNODE-3719, machine-config-operator#5390), so
+    # no cluster-wide hardcoded reservedMemory can ever match it. A mismatch is fatal
+    # and crash-loops the kubelet (CNV-96059). CPU pinning (cpuManagerPolicy: static
+    # above) does not depend on the Memory Manager policy.
   machineConfigPoolSelector:
     matchLabels:
       pools.operator.machineconfiguration.openshift.io/worker: ""

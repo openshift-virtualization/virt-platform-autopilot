@@ -238,6 +238,9 @@ assets:
     conditions: []
 
   # Phase 1: Opt-in - CPU Manager
+  # Gated on BOTH the KubeVirt CPUManager feature gate (VM CPU pinning) AND an
+  # explicit opt-in annotation: these kubelet perf tunings change node-level
+  # reserved resources and require deliberate opt-in (see CNV-96059).
   - name: kubelet-cpu-manager
     path: active/kubelet/cpu-manager.yaml.tpl
     phase: 1
@@ -247,6 +250,9 @@ assets:
     conditions:
       - type: feature-gate
         value: CPUManager
+      - type: annotation
+        key: platform.kubevirt.io/enable-cpu-manager-perf-tunings
+        value: "true"
 
   # Phase 2: InflightOperations OperationRuleSet assets (opt-in, gated on IFO CRD)
   - name: ifo-datavolume-rules
