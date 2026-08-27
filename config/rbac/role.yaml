@@ -83,10 +83,20 @@ rules:
       - storageprofiles
     verbs:
       - list
+  # KubeVirt (for the kubevirt-feature-gate condition type)
   - apiGroups:
       - kubevirt.io
     resources:
       - kubevirts
+    verbs:
+      - get
+      - list
+      - watch
+  # SR-IOV Network Operator config (read by HCO golden config to disable HCO's network-resources-injector)
+  - apiGroups:
+      - sriovnetwork.openshift.io
+    resources:
+      - sriovoperatorconfigs
     verbs:
       - get
       - list

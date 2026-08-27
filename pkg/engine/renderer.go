@@ -235,6 +235,12 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// Usage: {{ objectExists "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" }}
 		"objectExists": r.objectExistsFunc(),
 
+		// objectFieldBool reads a boolean field from a live object.
+		// Returns false when the client is unavailable, the object doesn't exist
+		// (e.g. the CRD isn't installed), the field is missing, or it isn't a bool.
+		// Usage: {{ objectFieldBool "sriovnetwork.openshift.io/v1" "SriovOperatorConfig" "sriov-network-operator" "default" "spec.enableInjector" }}
+		"objectFieldBool": r.objectFieldBoolFunc(),
+
 		// getConfigMapData reads a data key from a live ConfigMap
 		// Returns empty string if CM doesn't exist or key is missing
 		// Usage: {{ getConfigMapData "openshift-monitoring" "cluster-monitoring-config" "config.yaml" }}
@@ -528,6 +534,35 @@ func (r *Renderer) objectExistsFunc() func(string, string, string) bool {
 		}, obj)
 
 		return err == nil
+	}
+}
+
+// objectFieldBoolFunc returns a function that reads a boolean field from a live object.
+// The field path is dot-separated (e.g. "spec.enableInjector"). It returns false on any
+// failure — no client, object/CRD absent, missing field, or non-boolean value — so callers
+// get graceful soft-dependency behaviour identical to objectExists.
+func (r *Renderer) objectFieldBoolFunc() func(string, string, string, string, string) bool {
+	return func(apiVersion, kind, namespace, name, fieldPath string) bool {
+		if r.client == nil {
+			return false
+		}
+
+		obj := &unstructured.Unstructured{}
+		obj.SetKind(kind)
+		obj.SetAPIVersion(apiVersion)
+
+		if err := r.client.Get(context.Background(), types.NamespacedName{
+			Namespace: namespace,
+			Name:      name,
+		}, obj); err != nil {
+			return false
+		}
+
+		val, found, err := unstructured.NestedBool(obj.Object, strings.Split(fieldPath, ".")...)
+		if err != nil || !found {
+			return false
+		}
+		return val
 	}
 }
 
