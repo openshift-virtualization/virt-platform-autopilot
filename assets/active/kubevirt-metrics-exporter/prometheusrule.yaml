@@ -180,6 +180,7 @@ spec:
               indicate excessive transparent huge page collapse activity, possibly
               due to a large number of VMs faulting memory simultaneously.
 
+    # The job label must match the PodMonitor name in deploy/podmonitor/podmonitor.yaml.
     - name: kubevirt-metrics-exporter-health
       rules:
         - alert: KMEQMPPollStale
@@ -287,6 +288,7 @@ spec:
 
         - alert: KMEAbsent
           expr: absent(up{job="kubevirt-metrics-exporter"} == 1)
+          # job label is set via jobLabel: app in the PodMonitor
           for: 10m
           labels:
             severity: critical
