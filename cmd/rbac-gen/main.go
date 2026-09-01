@@ -102,6 +102,8 @@ func formatRulesWithComments(static, transitive, dynamic []rbac.Rule) string {
 		"Leader Election",
 		"CRD Discovery (for soft dependency detection and template introspection)",
 		"OpenShift config CRs (topology detection: Infrastructure for HCP/compact/cloud provider, Scheduler for schedulable masters)",
+		"Metrics client CA read (name-scoped get of the extension-apiserver-authentication ConfigMap: the metrics mTLS trust anchor)",
+		"Metrics client CA watch (cluster-scope list/watch for the client-CA informer; RBAC cannot name-scope list/watch)",
 		"Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)",
 		"CDI StorageProfiles (for RWX StorageClass auto-detection in templates)",
 	}

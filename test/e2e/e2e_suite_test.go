@@ -67,5 +67,7 @@ var _ = AfterSuite(func() {
 	if hco := hcoRef(); k8sClient.Get(ctx, client.ObjectKey{Name: hcoName, Namespace: operatorNamespace}, hco) == nil {
 		disableAssetGates(assetsUnderTest)
 	}
+	// Tear down the cached metrics port-forward, if any test opened one.
+	resetMetricsPortForward()
 	cancel()
 })
