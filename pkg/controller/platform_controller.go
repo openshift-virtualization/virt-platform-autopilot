@@ -41,6 +41,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/tlsprofile"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -143,6 +144,15 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	// Track any HCO-level metrics TLS security profile override
+	// (spec.security.tlsSecurityProfile). The metrics server reads the resolved
+	// profile per new connection, so no restart or requeue is needed here.
+	if changed, err := tlsprofile.SetHyperConvergedProfileFromUnstructured(hco); err != nil {
+		logger.Error(err, "Failed to read spec.security.tlsSecurityProfile from HCO")
+	} else if changed {
+		logger.Info("Updated metrics TLS security profile override from HCO")
 	}
 
 	// Opt-out gate: the autopilot is GA and enabled by default. It stays idle only when

@@ -43,6 +43,16 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/rbac"
 )
 
+// Metrics endpoint TLS wiring. These mirror the constants in pkg/metricstls and
+// the metrics Service asset; kept as literals here to keep the generator's
+// dependency tree small.
+const (
+	metricsPort           = 8443
+	metricsCertVolumeName = "metrics-serving-cert"
+	metricsCertMountPath  = "/etc/tls/private"
+	metricsCertSecretName = "virt-platform-autopilot-metrics-tls"
+)
+
 // ─── OLM ClusterServiceVersion types ─────────────────────────────────────────
 // Minimal type definitions matching operators.coreos.com/v1alpha1.
 // We avoid importing operator-framework/api to keep the dependency tree small.
@@ -96,10 +106,27 @@ type PodMetadata struct {
 
 type PodSpec struct {
 	Containers                    []Container         `json:"containers"`
+	Volumes                       []Volume            `json:"volumes,omitempty"`
 	ServiceAccountName            string              `json:"serviceAccountName,omitempty"`
 	SecurityContext               *PodSecurityContext `json:"securityContext,omitempty"`
 	TerminationGracePeriodSeconds *int64              `json:"terminationGracePeriodSeconds,omitempty"`
 	PriorityClassName             string              `json:"priorityClassName,omitempty"`
+}
+
+type Volume struct {
+	Name   string              `json:"name"`
+	Secret *SecretVolumeSource `json:"secret,omitempty"`
+}
+
+type SecretVolumeSource struct {
+	SecretName string `json:"secretName"`
+	Optional   *bool  `json:"optional,omitempty"`
+}
+
+type VolumeMount struct {
+	Name      string `json:"name"`
+	MountPath string `json:"mountPath"`
+	ReadOnly  bool   `json:"readOnly,omitempty"`
 }
 
 type SeccompProfile struct {
@@ -122,6 +149,7 @@ type Container struct {
 	SecurityContext *SecurityContext     `json:"securityContext,omitempty"`
 	LivenessProbe   *Probe               `json:"livenessProbe,omitempty"`
 	ReadinessProbe  *Probe               `json:"readinessProbe,omitempty"`
+	VolumeMounts    []VolumeMount        `json:"volumeMounts,omitempty"`
 }
 
 type ResourceRequirements struct {
@@ -366,6 +394,7 @@ through the existing HyperConverged resource.`,
 												Args: []string{
 													"--leader-elect",
 													fmt.Sprintf("--namespace=%s", namespace),
+													fmt.Sprintf("--metrics-bind-address=:%d", metricsPort),
 												},
 												Env: additionalImageEnvVars,
 												SecurityContext: &SecurityContext{
@@ -386,6 +415,25 @@ through the existing HyperConverged resource.`,
 													HTTPGet:             &HTTPGetAction{Path: "/readyz", Port: 8082},
 													InitialDelaySeconds: 5,
 													PeriodSeconds:       10,
+												},
+												VolumeMounts: []VolumeMount{
+													{
+														Name:      metricsCertVolumeName,
+														MountPath: metricsCertMountPath,
+														ReadOnly:  true,
+													},
+												},
+											},
+										},
+										// The service-ca serving-cert secret is created by the
+										// OpenShift service-ca operator after the metrics Service is
+										// reconciled; optional lets the pod start before it exists.
+										Volumes: []Volume{
+											{
+												Name: metricsCertVolumeName,
+												Secret: &SecretVolumeSource{
+													SecretName: metricsCertSecretName,
+													Optional:   &trueVal,
 												},
 											},
 										},

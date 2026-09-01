@@ -315,20 +315,6 @@ type AssetMetrics struct {
 	TombstoneStatus        float64 // 1=exists, 0=deleted, -1=error, -2=skipped, or -1=not found
 }
 
-// fetchMetricsBody returns the raw metrics output from the operator's /metrics endpoint.
-func fetchMetricsBody() string {
-	pod := getOperatorPod()
-	clientset, err := kubernetes.NewForConfig(cfg)
-	ExpectWithOffset(2, err).NotTo(HaveOccurred())
-
-	body, err := clientset.CoreV1().Pods(operatorNamespace).
-		ProxyGet("http", pod.Name, "8080", "/metrics", nil).
-		DoRaw(context.Background())
-	ExpectWithOffset(2, err).NotTo(HaveOccurred())
-
-	return string(body)
-}
-
 // captureAssetMetrics fetches all metrics for a specific asset from the operator's /metrics endpoint.
 // Labels are matched by kind/name/namespace. For missing_dependency the labels are group/version/kind
 // so it uses the kind parameter only.
@@ -774,6 +760,39 @@ func queryPrometheus(promQL string) *prometheusQueryResponse {
 	}
 
 	return &resp
+}
+
+// queryPrometheusScalar runs an instant query and returns the sample value of
+// the first result. It returns an error (rather than failing) so it composes
+// with Eventually while a target is still being scraped for the first time.
+func queryPrometheusScalar(promQL string) (float64, error) {
+	resp := queryPrometheus(promQL)
+	if resp == nil {
+		return 0, fmt.Errorf("no response from Prometheus for %q", promQL)
+	}
+	if resp.Status != "success" {
+		return 0, fmt.Errorf("query %q returned status %q", promQL, resp.Status)
+	}
+	if len(resp.Data.Result) == 0 {
+		return 0, fmt.Errorf("query %q returned no results", promQL)
+	}
+	resultMap, ok := resp.Data.Result[0].(map[string]any)
+	if !ok {
+		return 0, fmt.Errorf("query %q: unexpected result format", promQL)
+	}
+	value, ok := resultMap["value"].([]any)
+	if !ok || len(value) != 2 {
+		return 0, fmt.Errorf("query %q: missing instant-vector value", promQL)
+	}
+	valStr, ok := value[1].(string)
+	if !ok {
+		return 0, fmt.Errorf("query %q: value is not a string", promQL)
+	}
+	f, err := strconv.ParseFloat(valStr, 64)
+	if err != nil {
+		return 0, fmt.Errorf("query %q: cannot parse value %q: %w", promQL, valStr, err)
+	}
+	return f, nil
 }
 
 func queryFiringAlert(alertName string, attempt, maxAttempts int, labelFilters ...string) map[string]string {

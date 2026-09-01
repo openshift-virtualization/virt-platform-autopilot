@@ -17,6 +17,8 @@ limitations under the License.
 package rbac
 
 import (
+	"sort"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -25,18 +27,77 @@ import (
 
 func TestStaticRules_Count(t *testing.T) {
 	rules := StaticRules()
-	if len(rules) != 9 {
-		t.Errorf("expected 9 static rules, got %d", len(rules))
+	if len(rules) != 11 {
+		t.Errorf("expected 11 static rules, got %d", len(rules))
+	}
+}
+
+func TestStaticRules_MetricsClientCA(t *testing.T) {
+	var nameScopedGet, clusterWatch bool
+	for _, r := range StaticRules() {
+		if len(r.APIGroups) != 1 || r.APIGroups[0] != "" || len(r.Resources) != 1 || r.Resources[0] != "configmaps" {
+			continue
+		}
+		switch {
+		case len(r.ResourceNames) == 1 && r.ResourceNames[0] == "extension-apiserver-authentication":
+			if len(r.Verbs) == 1 && r.Verbs[0] == "get" {
+				nameScopedGet = true
+			}
+		case len(r.ResourceNames) == 0:
+			hasList, hasWatch := false, false
+			for _, v := range r.Verbs {
+				switch v {
+				case "list":
+					hasList = true
+				case "watch":
+					hasWatch = true
+				}
+			}
+			// The client-CA informer LISTs then WATCHes; list/watch cannot be
+			// name-scoped, so they are granted at cluster scope.
+			clusterWatch = hasList && hasWatch
+		}
+	}
+	if !nameScopedGet {
+		t.Error("expected a name-scoped get rule for the extension-apiserver-authentication ConfigMap")
+	}
+	if !clusterWatch {
+		t.Error("expected a cluster-scope list/watch rule for configmaps (metrics client-CA informer)")
+	}
+}
+
+func TestStaticRules_ConfigOpenShiftIncludesAPIServers(t *testing.T) {
+	var found bool
+	for _, r := range StaticRules() {
+		for _, g := range r.APIGroups {
+			if g != "config.openshift.io" {
+				continue
+			}
+			for _, res := range r.Resources {
+				if res == "apiservers" {
+					found = true
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("expected config.openshift.io static rule to include 'apiservers' (metrics TLS security profile)")
 	}
 }
 
 func TestStaticRules_NoDuplicateAPIGroups(t *testing.T) {
 	seen := map[string]bool{}
 	for _, r := range StaticRules() {
+		// Include resourceNames in the key: the same resource may legitimately
+		// appear in two rules with different name scopes (e.g. configmaps has a
+		// name-scoped get rule and a cluster-scope list/watch rule).
+		names := append([]string(nil), r.ResourceNames...)
+		sort.Strings(names)
+		nameKey := strings.Join(names, ",")
 		for _, g := range r.APIGroups {
-			key := g + "|" + r.Resources[0]
+			key := g + "|" + r.Resources[0] + "|" + nameKey
 			if seen[key] {
-				t.Errorf("duplicate apiGroup/resource in static rules: %s", key)
+				t.Errorf("duplicate apiGroup/resource/resourceNames in static rules: %s", key)
 			}
 			seen[key] = true
 		}
