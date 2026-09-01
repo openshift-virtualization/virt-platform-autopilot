@@ -220,9 +220,17 @@ The controller exposes HTTP endpoints on three separate ports for security and o
 
 | Port | Endpoint | Purpose | Access |
 |------|----------|---------|--------|
-| `8080` | `/metrics` | Prometheus metrics | Public (service) |
+| `8443` | `/metrics` | Prometheus metrics | HTTPS + mTLS (in-cluster Prometheus only) |
 | `8081` | `/debug/*` | Debug/render endpoints | Localhost only |
 | `8082` | `/healthz`, `/readyz` | Health probes | Kubernetes probes |
+
+The metrics endpoint is served over HTTPS using a serving certificate minted by
+the OpenShift service-ca operator and requires client-certificate authentication
+(`RequireAndVerifyClientCert`); only the in-cluster Prometheus service account
+(`system:serviceaccount:openshift-monitoring:prometheus-k8s`) is authorized. The
+minimum TLS version and cipher suites follow the cluster TLS security profile
+(the HCO CR `spec.security.tlsSecurityProfile`, falling back to the APIServer
+`cluster` CR, then to the Intermediate profile).
 
 ### Debug Endpoints (Port 8081)
 
@@ -395,7 +403,7 @@ For detailed documentation, see: [Resource Lifecycle Management](lifecycle-manag
 
 ### Metrics
 
-The autopilot exposes Prometheus metrics on port 8080 (`/metrics`):
+The autopilot exposes Prometheus metrics over HTTPS (mTLS) on port 8443 (`/metrics`):
 
 - `kubevirt_autopilot_asset_reconcile_total` - Total reconciliations per asset
 - `kubevirt_autopilot_asset_reconcile_errors_total` - Reconciliation errors per asset

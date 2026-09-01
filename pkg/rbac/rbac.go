@@ -94,15 +94,39 @@ func StaticRules() []Rule {
 			Verbs:     []string{"get", "list", "watch"},
 		},
 		// Rule 5: OpenShift config CRs (for cluster topology detection: HCP, compact,
-		// cloud provider via Infrastructure; schedulable masters via Scheduler).
-		// Both are singletons (name="cluster") and are non-sensitive read-only.
+		// cloud provider via Infrastructure; schedulable masters via Scheduler; and
+		// the cluster TLS security profile for the metrics endpoint via APIServer).
+		// All are singletons (name="cluster") and are non-sensitive read-only.
 		// Gracefully absent on non-OpenShift clusters — the operator handles NotFound.
 		{
 			APIGroups: []string{"config.openshift.io"},
-			Resources: []string{"infrastructures", "schedulers"},
+			Resources: []string{"apiservers", "infrastructures", "schedulers"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		// Rule 6: Namespaces (for pre-apply guard: verify the target namespace exists before
+		// Rule 6: Metrics client CA read (the extension-apiserver-authentication
+		// ConfigMap in kube-system holds client-ca-file, the trust anchor for
+		// verifying metrics scraper client certificates). get is name-scoped to that
+		// single ConfigMap; it is the authoritative read used by seedTLSState and the
+		// MetricsTLSReconciler.
+		{
+			APIGroups:     []string{""},
+			Resources:     []string{"configmaps"},
+			ResourceNames: []string{"extension-apiserver-authentication"},
+			Verbs:         []string{"get"},
+		},
+		// Rule 7: Metrics client CA watch. The MetricsTLSReconciler informer LISTs
+		// then WATCHes the ConfigMap to refresh the trust pool on CA rotation.
+		// RBAC cannot restrict list/watch to a resource name, so these are granted
+		// at cluster scope (the informer itself is narrowed to the one ConfigMap via
+		// a field selector). list is required because informers snapshot via LIST
+		// before watching (only skippable with the WatchListClient streaming feature,
+		// which is not guaranteed on every cluster).
+		{
+			APIGroups: []string{""},
+			Resources: []string{"configmaps"},
+			Verbs:     []string{"list", "watch"},
+		},
+		// Rule 8: Namespaces (for pre-apply guard: verify the target namespace exists before
 		// consuming a rate-limit token; avoids spurious throttling when an operator component
 		// is not yet installed and its namespace is absent).
 		{
@@ -110,13 +134,13 @@ func StaticRules() []Rule {
 			Resources: []string{"namespaces"},
 			Verbs:     []string{"get"},
 		},
-		// Rule 7: CDI StorageProfiles (for RWX StorageClass auto-detection in templates)
+		// Rule 9: CDI StorageProfiles (for RWX StorageClass auto-detection in templates)
 		{
 			APIGroups: []string{"cdi.kubevirt.io"},
 			Resources: []string{"storageprofiles"},
 			Verbs:     []string{"list"},
 		},
-		// Rule 8: KubeVirt (for the kubevirt-feature-gate condition type)
+		// Rule 10: KubeVirt (for the kubevirt-feature-gate condition type)
 		{
 			APIGroups: []string{"kubevirt.io"},
 			Resources: []string{"kubevirts"},
