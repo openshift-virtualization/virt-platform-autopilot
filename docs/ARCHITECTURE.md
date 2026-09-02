@@ -407,10 +407,10 @@ The autopilot exposes Prometheus metrics on port 8080 (`/metrics`):
 
 The autopilot fires alerts only when user intervention is required:
 
-- **VirtPlatformSyncFailed**: Asset reconciliation failing repeatedly
-- **VirtPlatformDependencyMissing**: Required CRD or dependency not found
-- **VirtPlatformThrashingDetected**: Excessive reconciliation indicating configuration issue
-- **VirtPlatformTombstoneStuck**: Tombstone deletion failing
+- **VirtPlatformAutopilotSyncFailed**: Asset reconciliation failing repeatedly
+- **VirtPlatformAutopilotDependencyMissing**: Required CRD or dependency not found
+- **VirtPlatformAutopilotThrashingDetected**: Excessive reconciliation indicating configuration issue
+- **VirtPlatformAutopilotTombstoneStuck**: Tombstone deletion failing
 
 See [Runbooks](runbooks/) for detailed alert descriptions and remediation steps.
 

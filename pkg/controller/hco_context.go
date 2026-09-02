@@ -127,6 +127,7 @@ func (b *RenderContextBuilder) Build(ctx context.Context, hco *unstructured.Unst
 		Topology:             topology,
 		Images:               loadImages(),
 		KubeVirtFeatureGates: kvFG,
+		RunbookURLTemplate:   pkgcontext.RunbookURLTemplateFromEnv(),
 	}, nil
 }
 

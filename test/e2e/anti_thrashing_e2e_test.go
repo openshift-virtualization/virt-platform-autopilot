@@ -134,7 +134,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 			})
 
 			// --- Test 2 ---
-			It("should fire VirtPlatformThrashingDetected alert", func() {
+			It("should fire VirtPlatformAutopilotThrashingDetected alert", func() {
 				if !editWarSucceeded {
 					Skip("edit war did not succeed — skipping dependent test")
 				}
@@ -142,17 +142,17 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 					Skip("Alert tests only run on OCP — Kind has no Prometheus")
 				}
 
-				By("waiting for VirtPlatformThrashingDetected alert to fire")
+				By("waiting for VirtPlatformAutopilotThrashingDetected alert to fire")
 				attempt := 0
 				maxAttempts := int((2 * time.Minute) / (10 * time.Second))
 				var alertLabels map[string]string
 				Eventually(func() bool {
 					attempt++
-					alertLabels = queryFiringAlert("VirtPlatformThrashingDetected", attempt, maxAttempts,
+					alertLabels = queryFiringAlert("VirtPlatformAutopilotThrashingDetected", attempt, maxAttempts,
 						"kind", asset.GVK.Kind, "name", asset.Name)
 					return alertLabels != nil
 				}, 2*time.Minute, 10*time.Second).Should(BeTrue(),
-					"VirtPlatformThrashingDetected alert should fire when resource is paused")
+					"VirtPlatformAutopilotThrashingDetected alert should fire when resource is paused")
 
 				Expect(alertLabels).To(HaveKeyWithValue("severity", "warning"))
 				Expect(alertLabels).To(HaveKeyWithValue("operator", "virt-platform-autopilot"))
@@ -189,7 +189,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 			})
 
 			// --- Test 4 ---
-			It("should clear VirtPlatformThrashingDetected alert after resume", func() {
+			It("should clear VirtPlatformAutopilotThrashingDetected alert after resume", func() {
 				if !editWarSucceeded {
 					Skip("edit war did not succeed — skipping dependent test")
 				}
@@ -197,15 +197,15 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 					Skip("Alert tests only run on OCP — Kind has no Prometheus")
 				}
 
-				By("waiting for VirtPlatformThrashingDetected alert to resolve")
+				By("waiting for VirtPlatformAutopilotThrashingDetected alert to resolve")
 				attempt := 0
 				maxAttempts := int((2 * time.Minute) / (10 * time.Second))
 				Eventually(func() bool {
 					attempt++
-					return queryAlertNotFiring("VirtPlatformThrashingDetected", attempt, maxAttempts,
+					return queryAlertNotFiring("VirtPlatformAutopilotThrashingDetected", attempt, maxAttempts,
 						"kind", asset.GVK.Kind, "name", asset.Name)
 				}, 2*time.Minute, 10*time.Second).Should(BeTrue(),
-					"VirtPlatformThrashingDetected alert should resolve after resume")
+					"VirtPlatformAutopilotThrashingDetected alert should resolve after resume")
 			})
 
 			// --- Test 5 ---

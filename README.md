@@ -170,7 +170,7 @@ The autopilot uses a **"Patched Baseline"** approach:
 - [Local Development](docs/local-development.md) - Setting up dev environment with Kind
 - [Lifecycle Management](docs/lifecycle-management.md) - Tombstoning and resource exclusions
 - [Debug Endpoints](docs/debug-endpoints.md) - Debugging and inspection tools
-- [Runbooks](docs/runbooks/) - Operational guides for alerts
+- [Runbooks](https://github.com/kubevirt/monitoring/tree/main/docs/runbooks) - Operational guides for alerts (published at https://kubevirt.io/monitoring/runbooks/)
 
 ## Contributing
 

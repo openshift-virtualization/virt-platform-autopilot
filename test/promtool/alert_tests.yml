@@ -20,7 +20,7 @@ evaluation_interval: 1m
 
 tests:
   # ============================================================================
-  # Test: VirtPlatformSyncFailed - Critical Alert
+  # Test: VirtPlatformAutopilotSyncFailed - Critical Alert
   # Tests the "for: 15m" duration works correctly
   # ============================================================================
 
@@ -36,17 +36,17 @@ tests:
     alert_rule_test:
       # Before 15min: Alert should NOT be firing
       - eval_time: 14m
-        alertname: VirtPlatformSyncFailed
+        alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts: []
 
       # At exactly 15min: Alert still should NOT be firing (for: 15m means > 15m)
       - eval_time: 15m
-        alertname: VirtPlatformSyncFailed
+        alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts: []
 
       # After 15min: Alert SHOULD be firing with correct labels
       - eval_time: 16m
-        alertname: VirtPlatformSyncFailed
+        alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts:
           - exp_labels:
               severity: critical
@@ -56,7 +56,7 @@ tests:
               namespace: ""
 
   # ============================================================================
-  # Test: VirtPlatformThrashingDetected - Warning Alert
+  # Test: VirtPlatformAutopilotThrashingDetected - Warning Alert
   # Tests the increase() function with 10m range
   # ============================================================================
 
@@ -70,12 +70,12 @@ tests:
     alert_rule_test:
       # At 5min: increase[10m] would look at [0,5] = only 5 events, not enough
       - eval_time: 5m
-        alertname: VirtPlatformThrashingDetected
+        alertname: VirtPlatformAutopilotThrashingDetected
         exp_alerts: []
 
       # At 10min: increase[10m] looks at [0,10] = 9 events (> 5 threshold)
       - eval_time: 10m
-        alertname: VirtPlatformThrashingDetected
+        alertname: VirtPlatformAutopilotThrashingDetected
         exp_alerts:
           - exp_labels:
               severity: warning
@@ -85,7 +85,7 @@ tests:
               namespace: openshift-operators
 
   # ============================================================================
-  # Test: VirtPlatformDependencyMissing - Warning Alert
+  # Test: VirtPlatformAutopilotDependencyMissing - Warning Alert
   # Tests the "for: 5m" duration works correctly
   # ============================================================================
 
@@ -101,17 +101,17 @@ tests:
     alert_rule_test:
       # Before 5min: Alert should NOT be firing
       - eval_time: 4m
-        alertname: VirtPlatformDependencyMissing
+        alertname: VirtPlatformAutopilotDependencyMissing
         exp_alerts: []
 
       # At exactly 5min: Alert still should NOT be firing
       - eval_time: 5m
-        alertname: VirtPlatformDependencyMissing
+        alertname: VirtPlatformAutopilotDependencyMissing
         exp_alerts: []
 
       # After 5min: Alert SHOULD be firing with correct labels
       - eval_time: 6m
-        alertname: VirtPlatformDependencyMissing
+        alertname: VirtPlatformAutopilotDependencyMissing
         exp_alerts:
           - exp_labels:
               severity: warning
@@ -135,12 +135,12 @@ tests:
     alert_rule_test:
       # At 10min: Still failing but < 15min, should NOT alert
       - eval_time: 10m
-        alertname: VirtPlatformSyncFailed
+        alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts: []
 
       # At 15min: Recovered, definitely should NOT alert
       - eval_time: 15m
-        alertname: VirtPlatformSyncFailed
+        alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts: []
 
   # ============================================================================
@@ -157,7 +157,7 @@ tests:
     alert_rule_test:
       # At 10min: increase[10m] = 3 events (< 5 threshold), should NOT alert
       - eval_time: 10m
-        alertname: VirtPlatformThrashingDetected
+        alertname: VirtPlatformAutopilotThrashingDetected
         exp_alerts: []
 
   # ============================================================================
@@ -178,11 +178,11 @@ tests:
     alert_rule_test:
       # All alerts should evaluate without errors (even if not firing)
       - eval_time: 1m
-        alertname: VirtPlatformSyncFailed
+        alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts: []
       - eval_time: 1m
-        alertname: VirtPlatformThrashingDetected
+        alertname: VirtPlatformAutopilotThrashingDetected
         exp_alerts: []
       - eval_time: 1m
-        alertname: VirtPlatformDependencyMissing
+        alertname: VirtPlatformAutopilotDependencyMissing
         exp_alerts: []

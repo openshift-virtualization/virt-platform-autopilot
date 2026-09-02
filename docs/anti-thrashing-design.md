@@ -149,7 +149,7 @@ kubevirt_autopilot_thrashing_total{kind="ConfigMap",name="my-cm",namespace="defa
 **Key improvement**: Metric increments **once** when thrashing is detected, then stays stable. This makes alerts reliable:
 
 ```yaml
-- alert: VirtPlatformThrashingDetected
+- alert: VirtPlatformAutopilotThrashingDetected
   expr: kubevirt_autopilot_thrashing_total > 0
   for: 5m
   labels:

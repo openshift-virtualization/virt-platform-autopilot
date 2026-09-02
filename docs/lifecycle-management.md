@@ -130,12 +130,12 @@ kubevirt_autopilot_tombstone_status{kind, name, namespace}
 **Alert:**
 
 ```yaml
-- alert: VirtPlatformTombstoneStuck
+- alert: VirtPlatformAutopilotTombstoneStuck
   expr: kubevirt_autopilot_tombstone_status < 0
   for: 30m
 ```
 
-See runbook: `docs/runbooks/VirtPlatformTombstoneStuck.md`
+See runbook: https://kubevirt.io/monitoring/runbooks/VirtPlatformAutopilotTombstoneStuck
 
 ## Root Exclusion (Day 0 Prevention)
 
@@ -504,6 +504,6 @@ If you have an existing deployment and want to adopt lifecycle management:
 ## References
 
 - Specification: `/claude_assets/reclaiming_leftovers.md`
-- Runbook: `docs/runbooks/VirtPlatformTombstoneStuck.md`
+- Runbook: https://kubevirt.io/monitoring/runbooks/VirtPlatformAutopilotTombstoneStuck
 - RBAC generation: `cmd/rbac-gen/main.go`
 - Implementation: `pkg/engine/tombstone.go`, `pkg/engine/exclusion.go`

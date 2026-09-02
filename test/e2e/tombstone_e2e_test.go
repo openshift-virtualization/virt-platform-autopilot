@@ -258,7 +258,7 @@ var _ = Describe("Tombstone Lifecycle Tests", Ordered, ContinueOnFailure, func()
 		})
 	}
 
-	Context("VirtPlatformTombstoneStuck alert (OCP only)", func() {
+	Context("VirtPlatformAutopilotTombstoneStuck alert (OCP only)", func() {
 		ts := tombstonesUnderTest[0]
 
 		It("should fire warning alert when tombstone status is negative", func() {
@@ -281,16 +281,16 @@ var _ = Describe("Tombstone Lifecycle Tests", Ordered, ContinueOnFailure, func()
 			}, timeout, interval).Should(BeNumerically("<", 0),
 				"TombstoneStatus should be negative")
 
-			By("waiting for VirtPlatformTombstoneStuck alert to fire (for: 1m)")
+			By("waiting for VirtPlatformAutopilotTombstoneStuck alert to fire (for: 1m)")
 			attempt := 0
 			maxAttempts := int((3 * time.Minute) / (10 * time.Second))
 			var alertLabels map[string]string
 			Eventually(func() bool {
 				attempt++
-				alertLabels = queryFiringAlert("VirtPlatformTombstoneStuck", attempt, maxAttempts)
+				alertLabels = queryFiringAlert("VirtPlatformAutopilotTombstoneStuck", attempt, maxAttempts)
 				return alertLabels != nil
 			}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
-				"VirtPlatformTombstoneStuck alert should fire when tombstone_status < 0")
+				"VirtPlatformAutopilotTombstoneStuck alert should fire when tombstone_status < 0")
 
 			Expect(alertLabels).To(HaveKeyWithValue("severity", "warning"))
 			Expect(alertLabels).To(HaveKeyWithValue("operator", "virt-platform-autopilot"))
@@ -304,9 +304,9 @@ var _ = Describe("Tombstone Lifecycle Tests", Ordered, ContinueOnFailure, func()
 			alertMaxAttempts := int((3 * time.Minute) / (10 * time.Second))
 			Eventually(func() bool {
 				alertAttempt++
-				return queryAlertNotFiring("VirtPlatformTombstoneStuck", alertAttempt, alertMaxAttempts)
+				return queryAlertNotFiring("VirtPlatformAutopilotTombstoneStuck", alertAttempt, alertMaxAttempts)
 			}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
-				"VirtPlatformTombstoneStuck alert should stop firing after cleanup")
+				"VirtPlatformAutopilotTombstoneStuck alert should stop firing after cleanup")
 		})
 	})
 

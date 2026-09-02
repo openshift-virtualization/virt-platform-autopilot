@@ -63,7 +63,7 @@ func (r *countingRecorder) Eventf(_ runtime.Object, _ runtime.Object, _, reason,
 
 // TestDriftDetectionFailureSetsComplianceToZero verifies that when the SSA dry-run used
 // for drift detection fails persistently (e.g. webhook down), compliance_status is set to 0
-// so that VirtPlatformSyncFailed can fire. Before the fix, the error path returned without
+// so that VirtPlatformAutopilotSyncFailed can fire. Before the fix, the error path returned without
 // updating the metric, leaving it stuck at 1 (synced) indefinitely.
 func TestDriftDetectionFailureSetsComplianceToZero(t *testing.T) {
 	observability.ComplianceStatus.Reset()
