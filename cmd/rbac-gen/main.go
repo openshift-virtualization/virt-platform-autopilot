@@ -104,6 +104,8 @@ func formatRulesWithComments(static, transitive, dynamic []rbac.Rule) string {
 		"OpenShift config CRs (topology detection: Infrastructure for HCP/compact/cloud provider, Scheduler for schedulable masters)",
 		"Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)",
 		"CDI StorageProfiles (for RWX StorageClass auto-detection in templates)",
+		"KubeVirt (for the kubevirt-feature-gate condition type)",
+		"SR-IOV Network Operator config (read by HCO golden config to disable HCO's network-resources-injector)",
 	}
 	for i, rule := range static {
 		if i < len(staticComments) {

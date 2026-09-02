@@ -122,6 +122,13 @@ func StaticRules() []Rule {
 			Resources: []string{"kubevirts"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
+		// Rule 9: SR-IOV Network Operator config (read by the HCO golden config to
+		// disable HCO's network-resources-injector when SR-IOV deploys its own)
+		{
+			APIGroups: []string{"sriovnetwork.openshift.io"},
+			Resources: []string{"sriovoperatorconfigs"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
 	}
 }
 
