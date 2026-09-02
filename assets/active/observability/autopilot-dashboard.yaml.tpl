@@ -4,7 +4,7 @@ metadata:
   labels:
     platform.kubevirt.io/managed-by: virt-platform-autopilot
   name: autopilot-asset-health
-  namespace: openshift-cnv
+  namespace: {{ .HCO.GetNamespace | default "openshift-cnv" }}
 spec:
   config:
     display:
@@ -220,7 +220,7 @@ spec:
                 kind: PrometheusTimeSeriesQuery
                 spec:
                   query: kubevirt_autopilot_compliance_status
-                  seriesNameFormat: '{{name}} ({{kind}})'
+                  seriesNameFormat: '{{"{{name}}"}} ({{"{{kind}}"}})'
       "1_0":
         kind: Panel
         spec:
@@ -253,7 +253,7 @@ spec:
                 kind: PrometheusTimeSeriesQuery
                 spec:
                   query: rate(kubevirt_autopilot_thrashing_total[5m])
-                  seriesNameFormat: '{{name}} ({{kind}})'
+                  seriesNameFormat: '{{"{{name}}"}} ({{"{{kind}}"}})'
       "1_1":
         kind: Panel
         spec:
@@ -343,7 +343,7 @@ spec:
                 spec:
                   query: rate(kubevirt_autopilot_reconcile_duration_seconds_sum[5m])
                     / rate(kubevirt_autopilot_reconcile_duration_seconds_count[5m])
-                  seriesNameFormat: '{{name}} ({{kind}})'
+                  seriesNameFormat: '{{"{{name}}"}} ({{"{{kind}}"}})'
       "2_2":
         kind: Panel
         spec:
@@ -379,14 +379,14 @@ spec:
                 kind: PrometheusTimeSeriesQuery
                 spec:
                   query: histogram_quantile(0.95, rate(kubevirt_autopilot_reconcile_duration_seconds_bucket[5m]))
-                  seriesNameFormat: 'p95 {{name}} ({{kind}})'
+                  seriesNameFormat: 'p95 {{"{{name}}"}} ({{"{{kind}}"}})'
           - kind: TimeSeriesQuery
             spec:
               plugin:
                 kind: PrometheusTimeSeriesQuery
                 spec:
                   query: histogram_quantile(0.99, rate(kubevirt_autopilot_reconcile_duration_seconds_bucket[5m]))
-                  seriesNameFormat: 'p99 {{name}} ({{kind}})'
+                  seriesNameFormat: 'p99 {{"{{name}}"}} ({{"{{kind}}"}})'
       "3_0":
         kind: Panel
         spec:
