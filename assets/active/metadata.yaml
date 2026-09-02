@@ -38,7 +38,7 @@ assets:
     conditions: []
 
   - name: autopilot-dashboard
-    path: active/observability/autopilot-dashboard.yaml
+    path: active/observability/autopilot-dashboard.yaml.tpl
     phase: 1
     install: always
     component: PersesDashboard
