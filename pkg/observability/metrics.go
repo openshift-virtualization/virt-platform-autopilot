@@ -32,7 +32,7 @@ const (
 var (
 	// ComplianceStatus tracks whether each managed resource is in sync with desired state.
 	// 1 = Synced (Golden State matches Live), 0 = Drifted/Sync Failed
-	// This is the core health indicator used by the VirtPlatformSyncFailed alert.
+	// This is the core health indicator used by the VirtPlatformAutopilotSyncFailed alert.
 	ComplianceStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
@@ -111,7 +111,7 @@ var (
 
 	// TombstoneStatus tracks tombstone deletion status.
 	// 1 = exists (not yet deleted), 0 = deleted, -1 = error, -2 = skipped (label mismatch)
-	// Used by VirtPlatformTombstoneStuck alert to detect stuck tombstone deletions.
+	// Used by VirtPlatformAutopilotTombstoneStuck alert to detect stuck tombstone deletions.
 	TombstoneStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,

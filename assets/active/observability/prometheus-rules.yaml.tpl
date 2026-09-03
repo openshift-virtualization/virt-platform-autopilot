@@ -12,7 +12,7 @@ spec:
     - name: virt-platform-autopilot.critical
       interval: 30s
       rules:
-        - alert: VirtPlatformSyncFailed
+        - alert: VirtPlatformAutopilotSyncFailed
           # Core health indicator: Asset failed to apply for >15min
           # Expr: kubevirt_autopilot_compliance_status == 0 (for > 15m)
           # 15m allows for transient API errors or slow rollouts (like MachineConfig)
@@ -37,12 +37,12 @@ spec:
 
               Current compliance status: {{`{{ $value }}`}}
               (0 = Drifted/Sync Failed, 1 = Synced)
-            runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformSyncFailed.md"
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotSyncFailed" }}"
 
     - name: virt-platform-autopilot.warning
       interval: 30s
       rules:
-        - alert: VirtPlatformThrashingDetected
+        - alert: VirtPlatformAutopilotThrashingDetected
           # Edit war indicator: Another controller or user is fighting our configuration
           # Expr: kubevirt_autopilot_paused_resources > 0
           # Any resource currently paused indicates an active conflict
@@ -71,9 +71,9 @@ spec:
 
               To resume reconciliation, remove the annotation:
               platform.kubevirt.io/reconcile-paused="true"
-            runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformThrashingDetected.md"
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotThrashingDetected" }}"
 
-        - alert: VirtPlatformDependencyMissing
+        - alert: VirtPlatformAutopilotDependencyMissing
           # Soft dependency indicator: Optional CRD is missing
           # Expr: kubevirt_autopilot_missing_dependency == 1
           # Related platform features will not be configured until CRD is installed
@@ -99,9 +99,9 @@ spec:
 
               If the related operator is not installed intentionally, you can silence
               this alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation.
-            runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformDependencyMissing.md"
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotDependencyMissing" }}"
 
-        - alert: VirtPlatformTombstoneStuck
+        - alert: VirtPlatformAutopilotTombstoneStuck
           # Tombstone cleanup indicator: Tombstone deletion failed or skipped
           # Expr: kubevirt_autopilot_tombstone_status < 0
           # -1 = deletion error, -2 = label mismatch (not managed by autopilot)
@@ -131,4 +131,4 @@ spec:
               Deletion error: Resource deletion failed (check finalizers, webhooks, or RBAC).
 
               Manual intervention may be required to remove this resource.
-            runbook_url: "https://github.com/kubevirt/virt-platform-autopilot/blob/main/docs/runbooks/VirtPlatformTombstoneStuck.md"
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotTombstoneStuck" }}"

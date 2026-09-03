@@ -81,7 +81,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(criticalRules).To(HaveLen(1), "critical group should have 1 alert")
 
 		syncFailedAlert := criticalRules[0].(map[string]any)
-		Expect(syncFailedAlert["alert"]).To(Equal("VirtPlatformSyncFailed"))
+		Expect(syncFailedAlert["alert"]).To(Equal("VirtPlatformAutopilotSyncFailed"))
 		Expect(syncFailedAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_compliance_status == 0"))
 		Expect(syncFailedAlert["for"]).To(Equal("15m"))
 
@@ -97,18 +97,18 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 
 		// Verify thrashing alert
 		thrashingAlert := warningRules[0].(map[string]any)
-		Expect(thrashingAlert["alert"]).To(Equal("VirtPlatformThrashingDetected"))
+		Expect(thrashingAlert["alert"]).To(Equal("VirtPlatformAutopilotThrashingDetected"))
 		Expect(thrashingAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_paused_resources > 0"))
 
 		// Verify dependency alert
 		dependencyAlert := warningRules[1].(map[string]any)
-		Expect(dependencyAlert["alert"]).To(Equal("VirtPlatformDependencyMissing"))
+		Expect(dependencyAlert["alert"]).To(Equal("VirtPlatformAutopilotDependencyMissing"))
 		Expect(dependencyAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_missing_dependency == 1"))
 		Expect(dependencyAlert["for"]).To(Equal("5m"))
 
 		// Verify tombstone alert
 		tombstoneAlert := warningRules[2].(map[string]any)
-		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformTombstoneStuck"))
+		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformAutopilotTombstoneStuck"))
 		Expect(tombstoneAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_tombstone_status < 0"))
 		Expect(tombstoneAlert["for"]).To(Equal("30m"))
 	})
@@ -144,7 +144,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 			Expect(annotationsExist).To(BeTrue(), "Alert %s should have annotations", alertName)
 			Expect(annotations["summary"]).ToNot(BeEmpty(), "Alert %s should have summary annotation", alertName)
 			Expect(annotations["description"]).ToNot(BeEmpty(), "Alert %s should have description annotation", alertName)
-			Expect(annotations["runbook_url"]).To(ContainSubstring("github.com"), "Alert %s should have runbook_url", alertName)
+			Expect(annotations["runbook_url"]).To(Equal("https://kubevirt.io/monitoring/runbooks/"+alertName), "Alert %s should have runbook_url pointing at the kubevirt.io runbook", alertName)
 		}
 	})
 
@@ -184,7 +184,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		By("verifying annotations contain Prometheus template syntax (not Go template syntax)")
 		groups, _, _ := unstructured.NestedSlice(prometheusRuleObj.Object, "spec", "groups")
 
-		// Get VirtPlatformSyncFailed alert annotations
+		// Get VirtPlatformAutopilotSyncFailed alert annotations
 		criticalGroup := groups[0].(map[string]any)
 		criticalRules := criticalGroup["rules"].([]any)
 		syncFailedAlert := criticalRules[0].(map[string]any)

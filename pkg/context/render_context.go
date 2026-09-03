@@ -17,6 +17,8 @@ limitations under the License.
 package context
 
 import (
+	"os"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -40,7 +42,30 @@ const (
 
 	// DefaultHCONamespace is the default namespace for HCO
 	DefaultHCONamespace = "openshift-cnv"
+
+	// DefaultRunbookURLTemplate is the upstream base for alert runbook_url
+	// annotations. It is a printf template with a single %s placeholder for the
+	// alert name, matching the runbooks published from kubevirt/monitoring.
+	// The downstream (product) build overrides it via the RUNBOOK_URL_TEMPLATE
+	// environment variable to point at the OpenShift docs site.
+	DefaultRunbookURLTemplate = "https://kubevirt.io/monitoring/runbooks/%s"
+
+	// RunbookURLTemplateEnv is the environment variable that overrides the base
+	// runbook_url template. Mirrors the hyperconverged-cluster-operator
+	// contract: upstream defaults to kubevirt.io, downstream injects the
+	// OpenShift docs URL via the operator CSV.
+	RunbookURLTemplateEnv = "RUNBOOK_URL_TEMPLATE"
 )
+
+// RunbookURLTemplateFromEnv returns the runbook_url printf template
+// (%s = alert name), honoring the RUNBOOK_URL_TEMPLATE override and falling
+// back to DefaultRunbookURLTemplate when the variable is unset.
+func RunbookURLTemplateFromEnv() string {
+	if tmpl := os.Getenv(RunbookURLTemplateEnv); tmpl != "" {
+		return tmpl
+	}
+	return DefaultRunbookURLTemplate
+}
 
 var (
 	// HCOGVK is the GroupVersionKind for HyperConverged
@@ -66,6 +91,7 @@ type RenderContext struct {
 	Images               map[string]string          // Container images from RELATED_IMAGE_* env vars
 	Params               map[string]string          // Per-asset parameters from metadata template_params
 	KubeVirtFeatureGates []string                   // List of enabled KubeVirt feature gates
+	RunbookURLTemplate   string                     // printf template (%s = alert name) for runbook_url; empty falls back to DefaultRunbookURLTemplate
 }
 
 // HardwareContext contains cluster hardware detection results
@@ -158,10 +184,11 @@ func (h *HardwareContext) AsMap() map[string]bool {
 // NewRenderContext creates a new render context from an HCO object
 func NewRenderContext(hco *unstructured.Unstructured) *RenderContext {
 	return &RenderContext{
-		HCO:      hco,
-		Hardware: &HardwareContext{},
-		Topology: &TopologyContext{},
-		Images:   make(map[string]string),
+		HCO:                hco,
+		Hardware:           &HardwareContext{},
+		Topology:           &TopologyContext{},
+		Images:             make(map[string]string),
+		RunbookURLTemplate: RunbookURLTemplateFromEnv(),
 	}
 }
 

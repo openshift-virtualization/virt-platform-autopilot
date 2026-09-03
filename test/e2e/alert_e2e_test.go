@@ -41,11 +41,11 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 		waitForOperatorHealthy()
 	})
 
-	// --- Test 1: VirtPlatformSyncFailed (table-driven) ---
+	// --- Test 1: VirtPlatformAutopilotSyncFailed (table-driven) ---
 
 	for _, asset := range assetsUnderTest {
 		asset := asset
-		Context(fmt.Sprintf("VirtPlatformSyncFailed for %s/%s", asset.GVK.Kind, asset.Name), func() {
+		Context(fmt.Sprintf("VirtPlatformAutopilotSyncFailed for %s/%s", asset.GVK.Kind, asset.Name), func() {
 			webhookCreated := false
 
 			AfterEach(func() {
@@ -83,17 +83,17 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 				By("touching HCO to trigger immediate reconciliation")
 				touchHCO()
 
-				By("waiting for VirtPlatformSyncFailed alert to fire (compliance_status=0 for 15s)")
+				By("waiting for VirtPlatformAutopilotSyncFailed alert to fire (compliance_status=0 for 15s)")
 				syncAttempt := 0
 				syncMaxAttempts := int((3 * time.Minute) / (10 * time.Second))
 				var alertLabels map[string]string
 				Eventually(func() bool {
 					syncAttempt++
-					alertLabels = queryFiringAlert("VirtPlatformSyncFailed", syncAttempt, syncMaxAttempts,
+					alertLabels = queryFiringAlert("VirtPlatformAutopilotSyncFailed", syncAttempt, syncMaxAttempts,
 						"kind", asset.GVK.Kind, "name", asset.Name)
 					return alertLabels != nil
 				}, 3*time.Minute, 10*time.Second).Should(BeTrue(),
-					"VirtPlatformSyncFailed alert should fire when drift cannot be restored")
+					"VirtPlatformAutopilotSyncFailed alert should fire when drift cannot be restored")
 
 				Expect(alertLabels).To(HaveKeyWithValue("kind", asset.GVK.Kind))
 				Expect(alertLabels).To(HaveKeyWithValue("name", asset.Name))
@@ -103,7 +103,7 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 		})
 	}
 
-	Context("VirtPlatformDependencyMissing", func() {
+	Context("VirtPlatformAutopilotDependencyMissing", func() {
 		It("should fire warning alert when an optional CRD is absent", func() {
 			By("checking if any missing_dependency metric is already 1")
 			missingDeps := getMissingDependenciesFromMetrics()
@@ -113,17 +113,17 @@ var _ = Describe("Prometheus Alert Tests", Ordered, ContinueOnFailure, func() {
 			GinkgoWriter.Printf("missing dependencies: %v\n", missingDeps)
 
 			for _, dep := range missingDeps {
-				By(fmt.Sprintf("waiting for VirtPlatformDependencyMissing alert for %s.%s", dep.Kind, dep.Group))
+				By(fmt.Sprintf("waiting for VirtPlatformAutopilotDependencyMissing alert for %s.%s", dep.Kind, dep.Group))
 				depAttempt := 0
 				depMaxAttempts := int(time.Minute / (10 * time.Second))
 				var alertLabels map[string]string
 				Eventually(func() bool {
 					depAttempt++
-					alertLabels = queryFiringAlert("VirtPlatformDependencyMissing", depAttempt, depMaxAttempts,
+					alertLabels = queryFiringAlert("VirtPlatformAutopilotDependencyMissing", depAttempt, depMaxAttempts,
 						"kind", dep.Kind, "group", dep.Group)
 					return alertLabels != nil
 				}, time.Minute, 10*time.Second).Should(BeTrue(),
-					fmt.Sprintf("VirtPlatformDependencyMissing alert should fire for %s.%s", dep.Kind, dep.Group))
+					fmt.Sprintf("VirtPlatformAutopilotDependencyMissing alert should fire for %s.%s", dep.Kind, dep.Group))
 
 				Expect(alertLabels).To(HaveKeyWithValue("severity", "warning"))
 				Expect(alertLabels).To(HaveKeyWithValue("operator", "virt-platform-autopilot"))

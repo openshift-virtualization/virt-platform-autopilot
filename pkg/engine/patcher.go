@@ -352,7 +352,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			)
 			// Mark compliance as failed: the operator cannot verify or enforce the desired
 			// state while drift detection is broken, so the metric must signal degraded
-			// status to allow VirtPlatformSyncFailed to fire.
+			// status to allow VirtPlatformAutopilotSyncFailed to fire.
 			observability.SetCompliance(desired, 0)
 			return false, fmt.Errorf("drift detection failed: %w", err)
 		}

@@ -46,17 +46,17 @@ Expected output:
 
 The tests validate:
 
-1. **VirtPlatformSyncFailed (Critical)**
+1. **VirtPlatformAutopilotSyncFailed (Critical)**
    - ✅ Alert fires after 15 minutes of compliance_status == 0
    - ✅ Alert does NOT fire for transient failures (< 15min)
    - ✅ Alert does NOT fire when resource is synced (compliance_status == 1)
 
-2. **VirtPlatformThrashingDetected (Warning)**
+2. **VirtPlatformAutopilotThrashingDetected (Warning)**
    - ✅ Alert fires when increase(thrashing_total[10m]) > 5
    - ✅ Alert does NOT fire for low thrashing (< 5 events)
    - ✅ Alert does NOT fire when no thrashing occurs
 
-3. **VirtPlatformDependencyMissing (Warning)**
+3. **VirtPlatformAutopilotDependencyMissing (Warning)**
    - ✅ Alert fires after 5 minutes of missing_dependency == 1
    - ✅ Alert does NOT fire for transient CRD absence (< 5min)
    - ✅ Alert does NOT fire when CRD is present (missing_dependency == 0)
