@@ -113,6 +113,44 @@ install_hco_crd() {
     log_info "HCO CRD installed successfully"
 }
 
+# Create the metrics serving-cert secret.
+# On OpenShift the service-ca operator mints this secret automatically; Kind has
+# no service-ca, so we generate a self-signed serving certificate here. Without
+# it the operator keeps its HTTPS/mTLS metrics endpoint disabled (it never falls
+# back to plaintext), and the e2e metric-reading helpers cannot scrape it.
+create_metrics_serving_cert() {
+    local secret_name="virt-platform-autopilot-metrics-tls"
+    local svc_dns="virt-platform-autopilot-metrics.${NAMESPACE}.svc"
+
+    if kubectl get secret "$secret_name" -n "$NAMESPACE" \
+        --context "kind-$CLUSTER_NAME" >/dev/null 2>&1; then
+        log_info "Metrics serving-cert secret already exists"
+        return 0
+    fi
+
+    if ! command -v openssl >/dev/null 2>&1; then
+        log_error "openssl is required to mint the Kind metrics serving certificate but was not found in PATH"
+        log_error "install it (e.g. 'sudo dnf install openssl' / 'sudo apt-get install openssl') and re-run"
+        return 1
+    fi
+
+    log_info "Generating self-signed metrics serving certificate for Kind"
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' RETURN
+
+    openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout "$tmpdir/tls.key" -out "$tmpdir/tls.crt" -days 3650 \
+        -subj "/CN=${svc_dns}" \
+        -addext "subjectAltName=DNS:${svc_dns},DNS:${svc_dns}.cluster.local" >/dev/null 2>&1
+
+    kubectl create secret tls "$secret_name" \
+        --cert="$tmpdir/tls.crt" --key="$tmpdir/tls.key" \
+        -n "$NAMESPACE" --context "kind-$CLUSTER_NAME"
+
+    log_info "Metrics serving-cert secret created"
+}
+
 # Deploy operator manifests
 deploy_operator() {
     log_info "Deploying operator manifests"
@@ -200,6 +238,7 @@ deploy() {
     build_image
     load_image
     create_namespace
+    create_metrics_serving_cert
     install_hco_crd
     deploy_operator
     wait_for_operator
@@ -235,6 +274,7 @@ deploy_prebuilt() {
     check_cluster
     load_image
     create_namespace
+    create_metrics_serving_cert
     install_hco_crd
     deploy_operator_e2e  # Use E2E deployment (no leader election)
     wait_for_operator
