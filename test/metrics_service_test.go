@@ -65,7 +65,7 @@ var _ = Describe("Metrics Service", func() {
 		Expect(selector).To(HaveKeyWithValue("control-plane", "controller-manager"))
 	})
 
-	It("should expose metrics port 8080", func() {
+	It("should expose HTTPS metrics port 8443", func() {
 		ports, found, err := unstructured.NestedSlice(serviceObj.Object, "spec", "ports")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(found).To(BeTrue())
@@ -73,9 +73,17 @@ var _ = Describe("Metrics Service", func() {
 
 		port := ports[0].(map[string]any)
 		Expect(port["name"]).To(Equal("metrics"))
-		Expect(port["port"]).To(BeNumerically("==", 8080))
-		Expect(port["targetPort"]).To(BeNumerically("==", 8080))
+		Expect(port["port"]).To(BeNumerically("==", 8443))
+		Expect(port["targetPort"]).To(BeNumerically("==", 8443))
 		Expect(port["protocol"]).To(Equal("TCP"))
+	})
+
+	It("should request a service-ca serving certificate", func() {
+		annotations := serviceObj.GetAnnotations()
+		Expect(annotations).To(HaveKeyWithValue(
+			"service.beta.openshift.io/serving-cert-secret-name",
+			"virt-platform-autopilot-metrics-tls",
+		))
 	})
 
 	It("should be accepted by Kubernetes API", func() {
@@ -172,6 +180,22 @@ var _ = Describe("Metrics ServiceMonitor", Ordered, func() {
 		Expect(endpoint["port"]).To(Equal("metrics"))
 		Expect(endpoint["interval"]).To(Equal("30s"))
 		Expect(endpoint["path"]).To(Equal("/metrics"))
+		Expect(endpoint["scheme"]).To(Equal("https"))
+	})
+
+	It("should scrape over mTLS with file-based client certs", func() {
+		endpoints, found, err := unstructured.NestedSlice(serviceMonitorObj.Object, "spec", "endpoints")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(endpoints).To(HaveLen(1))
+
+		endpoint := endpoints[0].(map[string]any)
+		tlsConfig, ok := endpoint["tlsConfig"].(map[string]any)
+		Expect(ok).To(BeTrue(), "endpoint should have a tlsConfig")
+		Expect(tlsConfig["caFile"]).To(Equal("/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt"))
+		Expect(tlsConfig["certFile"]).To(Equal("/etc/prometheus/secrets/metrics-client-certs/tls.crt"))
+		Expect(tlsConfig["keyFile"]).To(Equal("/etc/prometheus/secrets/metrics-client-certs/tls.key"))
+		Expect(tlsConfig["serverName"]).To(Equal("virt-platform-autopilot-metrics.openshift-cnv.svc"))
 	})
 
 	It("should be accepted by Kubernetes API (CRD validation)", func() {
