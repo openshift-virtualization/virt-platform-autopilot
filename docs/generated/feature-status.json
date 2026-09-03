@@ -54,7 +54,7 @@
     },
     {
       "name": "Kernel Samepage Merging (KSM) zero pages only",
-      "description": "Node-level KSM tuning that enables zero-pages-only deduplication with adaptive scan rate",
+      "description": "Node-level KSM zero-pages-only deduplication with adaptive scan rate. Standalone for memory savings on Windows VM workers; recommend thp-tuning on the same nodes for THP performance.",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration"
@@ -115,7 +115,7 @@
     },
     {
       "name": "Transparent Huge Pages (THP) Tuning",
-      "description": "Node-level THP tuning that sets madvise mode and khugepaged scan rate for KVM guest memory",
+      "description": "Node-level THP tuning (enabled=madvise, defrag=madvise, khugepaged scan rate, max_ptes_none synchronization with KSM, limit fragmentation).",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-thp-tuning=true"

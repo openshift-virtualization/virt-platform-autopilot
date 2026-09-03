@@ -1047,12 +1047,16 @@ features:
     groups: [inflightoperations]
 
   - name: Kernel Samepage Merging (KSM) zero pages only
-    description: Node-level KSM tuning that enables zero-pages-only deduplication with adaptive scan rate
+    description: >-
+      Node-level KSM zero-pages-only deduplication with adaptive scan rate and
+      max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows
+      VM workers; recommend thp-tuning on the same nodes for THP performance.
     maturity: dp
     groups: [ksm-zero-only]
 
   - name: Transparent Huge Pages (THP) Tuning
-    description: Node-level THP tuning that sets madvise mode and khugepaged scan rate for KVM guest memory
+    description: >-
+      Node-level THP tuning to improve THP memory backing
     maturity: dp
     groups: [thp-tuning]
 
