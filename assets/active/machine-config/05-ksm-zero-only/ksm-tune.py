@@ -11,6 +11,10 @@ Strategy:
       sweep = node_gb * 262144 / (1000 / (25600/node_gb)) = 6711s ≈ 112 min
   - redhat_only_zero_pages restricts KSM to only merge zero pages (no content dedup).
   - Two full scans are needed before pages can be merged (convergence = 2x sweep).
+  - max_ptes_none = 0 when KSM is active, else 511. Same logic as thp-tune.py so
+    boot order or manual re-runs stay coordinated. Tradeoff of max_ptes_none=0:
+    slower khugepaged re-collapse on sparse regions, avoiding conflict between
+    each other.
 
 Performance table:
   Node RAM | sleep_ms | Rate p/s | Sweep     | Convergence
@@ -26,6 +30,11 @@ import os
 import sys
 
 KSM_SYSFS = "/sys/kernel/mm/ksm"
+THP_SYSFS = "/sys/kernel/mm/transparent_hugepage"
+KHUGEPAGED_SYSFS = os.path.join(THP_SYSFS, "khugepaged")
+KSM_RUN_PATH = os.path.join(KSM_SYSFS, "run")
+MAX_PTES_NONE_KSM = 0
+MAX_PTES_NONE_DEFAULT = 511
 
 
 def read_total_mem_gb():
@@ -49,8 +58,15 @@ def compute_params(mem_gb):
     return pages_to_scan, sleep_ms
 
 
-def write_sysfs(name, value):
-    path = os.path.join(KSM_SYSFS, name)
+def read_sysfs(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def write_sysfs(path, value):
     if not os.path.exists(path):
         print(f"WARNING: {path} not available, skipping")
         return False
@@ -63,19 +79,31 @@ def write_sysfs(name, value):
         return False
 
 
+def apply_max_ptes_none():
+    """Set max_ptes_none from live KSM state; safe to call from either tune script."""
+    ksm_active = read_sysfs(KSM_RUN_PATH) == "1"
+    value = MAX_PTES_NONE_KSM if ksm_active else MAX_PTES_NONE_DEFAULT
+    reason = "ksm active" if ksm_active else "no ksm"
+    path = os.path.join(KHUGEPAGED_SYSFS, "max_ptes_none")
+    write_sysfs(path, value)
+    return value, reason
+
+
 def main():
     mem_gb = read_total_mem_gb()
     pages_to_scan, sleep_ms = compute_params(mem_gb)
     scan_rate = pages_to_scan * 1000 // sleep_ms
 
-    write_sysfs("redhat_only_zero_pages", 1)
-    write_sysfs("pages_to_scan", pages_to_scan)
-    write_sysfs("sleep_millisecs", sleep_ms)
-    write_sysfs("run", 1)
+    write_sysfs(os.path.join(KSM_SYSFS, "redhat_only_zero_pages"), 1)
+    write_sysfs(os.path.join(KSM_SYSFS, "pages_to_scan"), pages_to_scan)
+    write_sysfs(os.path.join(KSM_SYSFS, "sleep_millisecs"), sleep_ms)
+    write_sysfs(KSM_RUN_PATH, 1)
+    max_ptes_none, max_ptes_reason = apply_max_ptes_none()
 
     print(f"ksm-tune: node={mem_gb}GB pages_to_scan={pages_to_scan} "
           f"sleep={sleep_ms}ms rate={scan_rate}p/s "
-          f"bw={scan_rate * 4 // 1024}MB/s")
+          f"bw={scan_rate * 4 // 1024}MB/s "
+          f"max_ptes_none={max_ptes_none} ({max_ptes_reason})")
 
 
 if __name__ == "__main__":
