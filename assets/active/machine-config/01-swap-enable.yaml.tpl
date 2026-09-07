@@ -37,7 +37,7 @@ spec:
 
           [Service]
           Type=oneshot
-          ExecStart=/bin/sh -c "sudo swapon --priority 100 /dev/disk/by-partlabel/OCPSWAP"
+          ExecStart=/bin/sh -c "grep -q '/dev/disk/by-partlabel/OCPSWAP' /proc/swaps || swapon --priority 100 /dev/disk/by-partlabel/OCPSWAP"
 
           [Install]
           RequiredBy=kubelet-dependencies.target
