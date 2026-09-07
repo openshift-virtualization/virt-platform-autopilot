@@ -48,10 +48,11 @@ spec:
           Description=Enable OCP file swap
           ConditionFirstBoot=no
           ConditionPathExists=/var/tmp/ocpswap.file
+          After=swap-provision.service
 
           [Service]
           Type=oneshot
-          ExecStart=/bin/sh -c "sudo swapon --priority 10 /var/tmp/ocpswap.file"
+          ExecStart=/bin/sh -c "grep -q '/var/tmp/ocpswap.file' /proc/swaps || swapon --priority 10 /var/tmp/ocpswap.file"
 
           [Install]
           RequiredBy=kubelet-dependencies.target
