@@ -2,6 +2,8 @@
 
 Production-ready OpenShift Virtualization with zero manual configuration. The autopilot detects your hardware, applies best practices, and configures the platform automatically. **Convention over Configuration** for enterprise virtualization.
 
+
+
 ## The Problem
 
 Traditional virtualization platform setup requires:
