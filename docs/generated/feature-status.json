@@ -124,6 +124,13 @@
       "opt_in": "platform.kubevirt.io/openshift=true, platform.kubevirt.io/enable-pci-passthrough=true"
     },
     {
+      "name": "SCSI Persistent Reservations",
+      "description": "Configures worker-node multipath to persist SCSI persistent-reservation keys for VMs sharing LUN-backed disks",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-scsi-persistent-reservations=true"
+    },
+    {
       "name": "Transparent Huge Pages (THP) Tuning",
       "description": "Node-level THP tuning to improve THP memory backing",
       "maturity": "DP",
