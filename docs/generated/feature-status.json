@@ -5,6 +5,16 @@
   },
   "features": [
     {
+      "name": "Incident Detection",
+      "description": "OpenShift Incident Detection groups related cluster alerts into a single, cohesive timeline to eliminate alert fatigue and speed up troubleshooting.",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null,
+      "requires": [
+        "Cluster Observability Operator"
+      ]
+    },
+    {
       "name": "Load-Aware Descheduler",
       "description": "Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics",
       "maturity": "GA",
@@ -32,6 +42,16 @@
       "opt_in": null
     },
     {
+      "name": "Troubleshooting Panel",
+      "description": "Korrel8r observability signal correlation in the console",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null,
+      "requires": [
+        "Cluster Observability Operator"
+      ]
+    },
+    {
       "name": "In-Flight Operations",
       "description": "OperationRuleSet-based coordination for safe concurrent operations",
       "maturity": "TP",
@@ -51,16 +71,6 @@
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "kubevirtFeatureGate:CPUManager, platform.kubevirt.io/enable-cpu-manager-perf-tunings=true"
-    },
-    {
-      "name": "Incident Detection",
-      "description": "OpenShift Incident Detection groups related cluster alerts into a single, cohesive timeline to eliminate alert fatigue and speed up troubleshooting.",
-      "maturity": "DP",
-      "install": "always",
-      "opt_in": null,
-      "requires": [
-        "Cluster Observability Operator"
-      ]
     },
     {
       "name": "Kernel Samepage Merging (KSM) zero pages only",
@@ -129,16 +139,6 @@
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-thp-tuning=true, platform.kubevirt.io/enable-thp-tuning-kernelcore=true"
-    },
-    {
-      "name": "Troubleshooting Panel",
-      "description": "Korrel8r observability signal correlation in the console",
-      "maturity": "DP",
-      "install": "always",
-      "opt_in": null,
-      "requires": [
-        "Cluster Observability Operator"
-      ]
     },
     {
       "name": "VM drain shutdown inhibitor",

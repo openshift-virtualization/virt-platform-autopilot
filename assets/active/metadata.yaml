@@ -1077,14 +1077,12 @@ features:
     description: >-
       OpenShift Incident Detection groups related cluster alerts into a single, cohesive
       timeline to eliminate alert fatigue and speed up troubleshooting.
-    maturity: dp
     assets: [monitoring-ui-plugin-incidents]
     requires:
       - Cluster Observability Operator
 
   - name: Troubleshooting Panel
     description: Korrel8r observability signal correlation in the console
-    maturity: dp
     assets: [troubleshooting-panel-ui-plugin]
     requires:
       - Cluster Observability Operator

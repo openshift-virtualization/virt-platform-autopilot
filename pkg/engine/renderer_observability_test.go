@@ -25,7 +25,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 )
 
-func renderObservabilityAsset(t *testing.T, assetName string, annotations map[string]string) *unstructured.Unstructured {
+func renderObservabilityAsset(t *testing.T, assetName string) *unstructured.Unstructured {
 	t.Helper()
 
 	loader := assets.NewLoader()
@@ -41,9 +41,6 @@ func renderObservabilityAsset(t *testing.T, assetName string, annotations map[st
 	hco.SetKind("HyperConverged")
 	hco.SetName("kubevirt-hyperconverged")
 	hco.SetNamespace("openshift-cnv")
-	if annotations != nil {
-		hco.SetAnnotations(annotations)
-	}
 
 	renderCtx := &pkgcontext.RenderContext{
 		HCO: hco,
@@ -86,7 +83,7 @@ func assertAlwaysInstallNoConditions(t *testing.T, assetName string) {
 }
 
 func TestMonitoringUIPluginWithoutIncidents(t *testing.T) {
-	rendered := renderObservabilityAsset(t, "monitoring-ui-plugin", nil)
+	rendered := renderObservabilityAsset(t, "monitoring-ui-plugin")
 
 	if rendered.GetKind() != "UIPlugin" {
 		t.Errorf("Kind = %q, want UIPlugin", rendered.GetKind())
@@ -117,8 +114,8 @@ func TestMonitoringUIPluginWithoutIncidents(t *testing.T) {
 func TestMonitoringUIPluginIncidentsAsset(t *testing.T) {
 	assertAlwaysInstallNoConditions(t, "monitoring-ui-plugin-incidents")
 
-	baseRendered := renderObservabilityAsset(t, "monitoring-ui-plugin", nil)
-	incidentsRendered := renderObservabilityAsset(t, "monitoring-ui-plugin-incidents", nil)
+	baseRendered := renderObservabilityAsset(t, "monitoring-ui-plugin")
+	incidentsRendered := renderObservabilityAsset(t, "monitoring-ui-plugin-incidents")
 
 	persesEnabled, found, _ := unstructured.NestedBool(incidentsRendered.Object, "spec", "monitoring", "perses", "enabled")
 	if !found {
@@ -143,7 +140,7 @@ func TestMonitoringUIPluginIncidentsAsset(t *testing.T) {
 
 func TestTroubleshootingPanelUIPlugin(t *testing.T) {
 	assertAlwaysInstallNoConditions(t, "troubleshooting-panel-ui-plugin")
-	rendered := renderObservabilityAsset(t, "troubleshooting-panel-ui-plugin", nil)
+	rendered := renderObservabilityAsset(t, "troubleshooting-panel-ui-plugin")
 
 	if rendered.GetKind() != "UIPlugin" {
 		t.Errorf("Kind = %q, want UIPlugin", rendered.GetKind())
