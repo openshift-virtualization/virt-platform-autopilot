@@ -56,8 +56,8 @@
       "name": "Incident Detection",
       "description": "OpenShift Incident Detection groups related cluster alerts into a single, cohesive timeline to eliminate alert fatigue and speed up troubleshooting.",
       "maturity": "DP",
-      "install": "opt-in",
-      "opt_in": "platform.kubevirt.io/enable-incident-detection=true",
+      "install": "always",
+      "opt_in": null,
       "requires": [
         "Cluster Observability Operator"
       ]
@@ -134,8 +134,8 @@
       "name": "Troubleshooting Panel",
       "description": "Korrel8r observability signal correlation in the console",
       "maturity": "DP",
-      "install": "opt-in",
-      "opt_in": "platform.kubevirt.io/enable-korrel8r=true",
+      "install": "always",
+      "opt_in": null,
       "requires": [
         "Cluster Observability Operator"
       ]
