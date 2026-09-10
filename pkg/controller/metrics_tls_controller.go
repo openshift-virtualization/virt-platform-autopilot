@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -67,16 +68,21 @@ type MetricsTLSReconciler struct {
 	// exists on OpenShift, so on other clusters we watch the client-CA ConfigMap
 	// alone and leave the APIServer profile at its default.
 	watchAPIServer bool
+	// policyChanged notifies the platform reconciler after this controller has
+	// refreshed the cached policy. The channel is intentionally lossy: one
+	// pending reconciliation always renders the newest cache state.
+	policyChanged chan<- event.GenericEvent
 }
 
 // NewMetricsTLSReconciler builds a reconciler that refreshes the metrics mTLS
 // state. Set watchAPIServer only when the apiservers.config.openshift.io CRD is
 // installed.
-func NewMetricsTLSReconciler(reader client.Reader, caPool *metricstls.ClientCAPool, watchAPIServer bool) *MetricsTLSReconciler {
+func NewMetricsTLSReconciler(reader client.Reader, caPool *metricstls.ClientCAPool, watchAPIServer bool, policyChanged chan<- event.GenericEvent) *MetricsTLSReconciler {
 	return &MetricsTLSReconciler{
 		reader:         reader,
 		caPool:         caPool,
 		watchAPIServer: watchAPIServer,
+		policyChanged:  policyChanged,
 	}
 }
 
@@ -88,8 +94,12 @@ func (r *MetricsTLSReconciler) Reconcile(ctx context.Context, _ reconcile.Reques
 	logger := log.FromContext(ctx)
 
 	if r.watchAPIServer {
-		if _, err := tlsprofile.RefreshAPIServer(ctx, r.reader); err != nil && !apierrors.IsNotFound(err) {
+		changed, err := tlsprofile.RefreshAPIServer(ctx, r.reader)
+		if err != nil && !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
+		}
+		if changed {
+			r.notifyPolicyChanged()
 		}
 	}
 
@@ -104,6 +114,16 @@ func (r *MetricsTLSReconciler) Reconcile(ctx context.Context, _ reconcile.Reques
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *MetricsTLSReconciler) notifyPolicyChanged() {
+	if r.policyChanged == nil {
+		return
+	}
+	select {
+	case r.policyChanged <- event.GenericEvent{Object: &corev1.ConfigMap{}}:
+	default:
+	}
 }
 
 // SetupWithManager registers the watches. It runs the controller on every

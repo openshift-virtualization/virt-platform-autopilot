@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
@@ -49,7 +50,8 @@ import (
 // PlatformReconciler reconciles the virt platform based on HCO state
 type PlatformReconciler struct {
 	client.Client
-	Namespace string
+	Namespace        string
+	tlsProfileEvents <-chan event.GenericEvent
 
 	loader              *assets.Loader
 	registry            *assets.Registry
@@ -89,6 +91,12 @@ func NewPlatformReconciler(c client.Client, apiReader client.Reader, namespace s
 		crdChecker:          util.NewCRDChecker(apiReader), // Use apiReader (not cache-dependent)
 		watchedCRDs:         make(map[string]bool),
 	}, nil
+}
+
+// SetTLSProfileEvents supplies notifications emitted only after the metrics TLS
+// controller has refreshed its in-memory APIServer policy cache.
+func (r *PlatformReconciler) SetTLSProfileEvents(events <-chan event.GenericEvent) {
+	r.tlsProfileEvents = events
 }
 
 // SetEventRecorder sets the event recorder for this reconciler
@@ -519,6 +527,17 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
 		})).
 		Named("platform")
+
+	// The metrics TLS controller sends this only after it has atomically updated
+	// the in-memory APIServer policy. Re-rendering KME from the channel therefore
+	// needs no second API read and cannot observe stale policy due to queue order.
+	if r.tlsProfileEvents != nil {
+		builder = builder.WatchesRawSource(source.Channel(r.tlsProfileEvents,
+			handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []reconcile.Request {
+				return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
+			}),
+		))
+	}
 
 	// Dynamically add watches for every CRD required by a declared asset.
 	// RequiredCRD is derived from the asset template at load time, so no separate
