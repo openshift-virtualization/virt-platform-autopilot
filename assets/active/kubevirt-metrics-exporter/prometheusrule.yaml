@@ -155,7 +155,7 @@ spec:
         - alert: KSMDCPUHigh
           expr: |
             rate(kme_cgroup_ksmd_cpu_seconds_total[5m]) > 0.5
-          for: 10m
+          for: 5m
           labels:
             severity: warning
           annotations:
@@ -169,7 +169,7 @@ spec:
         - alert: KhugepagedCPUHigh
           expr: |
             rate(kme_cgroup_khugepaged_cpu_seconds_total[5m]) > 0.1
-          for: 10m
+          for: 5m
           labels:
             severity: warning
           annotations:
