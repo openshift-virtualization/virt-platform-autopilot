@@ -19,7 +19,7 @@ kind: KubeletConfiguration
 
 # Prevent uneven scheduling based on image count (BZ#1984442)
 # according to https://access.redhat.com/articles/6994974
-nodeStatusMaxImages: -1
+nodeStatusMaxImages: 500
 
 {{- $maxPods := dig "spec" "deployment" "nodePlacements" "infra" "maxPods" 500 .HCO.Object }}
 maxPods: {{ $maxPods }}
