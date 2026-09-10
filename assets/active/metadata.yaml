@@ -225,7 +225,7 @@ assets:
   # Soft dependency: skipped if COO (uiplugins.observability.openshift.io CRD) is absent.
   # When ACM is present it manages the same 'monitoring' UIPlugin and adds acm.* fields;
   # SSA field managers don't conflict because autopilot owns spec.monitoring.perses
-  # and spec.monitoring.incidents (when enabled via separate opt-in asset).
+  # and spec.monitoring.incidents (via the always-on incidents asset).
   - name: monitoring-ui-plugin
     path: active/operators/monitoring-uiplugin.yaml.tpl
     phase: 1
@@ -238,33 +238,26 @@ assets:
   # into a single, cohesive timeline to eliminate alert fatigue and speed up
   # troubleshooting, in the monitoring UIPlugin.
   # Applied after the base monitoring-ui-plugin to add the incidents.enabled
-  # field via SSA.
-  # Opt-in via: platform.kubevirt.io/enable-incident-detection=true
+  # field via SSA. Soft dependency: skipped if COO UIPlugin CRD is absent.
   - name: monitoring-ui-plugin-incidents
     path: active/operators/monitoring-uiplugin-incidents.yaml.tpl
     phase: 1
-    install: opt-in
+    install: always
     component: UIPlugin
     reconcile_order: 2
-    conditions:
-      - type: annotation
-        key: platform.kubevirt.io/enable-incident-detection
-        value: "true"
+    conditions: []
 
   # Phase 1: Troubleshooting Panel (korrel8r) - enables observability signal correlation.
   # Provides a side-panel in the console that links metrics, logs, alerts, traces,
   # and Kubernetes resources for cross-signal navigation.
-  # Opt-in via: platform.kubevirt.io/enable-korrel8r=true
+  # Soft dependency: skipped if COO (uiplugins.observability.openshift.io CRD) is absent.
   - name: troubleshooting-panel-ui-plugin
     path: active/operators/troubleshooting-panel-uiplugin.yaml
     phase: 1
-    install: opt-in
+    install: always
     component: UIPlugin
     reconcile_order: 1
-    conditions:
-      - type: annotation
-        key: platform.kubevirt.io/enable-korrel8r
-        value: "true"
+    conditions: []
 
   # Phase 1: Logging stack - configures LokiStack, ClusterLogForwarder,
   # and Logging UI Plugin.

@@ -96,7 +96,12 @@ Critical baseline configurations applied to all clusters:
     the OpenShift console via the Cluster Observability Operator (COO). Automatically skipped
     when the `uiplugins.observability.openshift.io` CRD is absent. When ACM is present it
     manages the same `monitoring` UIPlugin and adds `spec.monitoring.acm.*` fields; SSA field
-    managers don't conflict because autopilot only owns `spec.monitoring.perses.enabled`.
+    managers don't conflict because autopilot owns `spec.monitoring.perses.enabled` and
+    `spec.monitoring.incidents.enabled` (via `monitoring-ui-plugin-incidents`).
+  - **Incident Detection** (`monitoring-ui-plugin-incidents`): Enables COO incident detection
+    on the monitoring UIPlugin. Skipped when the COO UIPlugin CRD is absent.
+  - **Troubleshooting Panel** (`troubleshooting-panel-ui-plugin`): Enables Korrel8r observability
+    signal correlation in the OpenShift console. Skipped when the COO UIPlugin CRD is absent.
   - MTV (Migration Toolkit for Virtualization)
   - MetalLB (Load balancing)
   - Monitoring UIPlugin (see `monitoring-ui-plugin` above)
