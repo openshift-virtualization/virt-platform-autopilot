@@ -173,6 +173,14 @@ var assetsUnderTest = initAssets([]testAsset{
 		ClusterScoped: true,
 	},
 	{
+		// No Override: CRD validation ties spec.type to metadata.name.
+		GVK:           schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
+		Plural:        "uiplugins",
+		Name:          "troubleshooting-panel",
+		GateCRD:       "uiplugins.observability.openshift.io",
+		ClusterScoped: true,
+	},
+	{
 		GVK:           schema.GroupVersionKind{Group: "operator.openshift.io", Version: "v1", Kind: "KubeDescheduler"},
 		Plural:        "kubedeschedulers",
 		Name:          "cluster",

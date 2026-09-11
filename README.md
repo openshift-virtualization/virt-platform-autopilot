@@ -37,7 +37,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | In-Flight Operations | OperationRuleSet-based coordination for safe concurrent operations | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-in-flight-operations=true</code></details> | - |
 | Kubelet Performance | Optimized kubelet settings for virtualization workloads | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubelet-performance-settings=true</code></details> | - |
 | CPU Manager | Dedicated CPU pinning for guaranteed QoS workloads | DP | <details><summary>opt-in</summary><code>kubevirtFeatureGate:CPUManager</code><br><code>platform.kubevirt.io/enable-cpu-manager-perf-tunings=true</code></details> | - |
-| Incident Detection | OpenShift Incident Detection groups related cluster alerts into a single, cohesive timeline to eliminate alert fatigue and speed up troubleshooting. | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-incident-detection=true</code></details> | Cluster Observability Operator |
+| Incident Detection | OpenShift Incident Detection groups related cluster alerts into a single, cohesive timeline to eliminate alert fatigue and speed up troubleshooting. | DP | always | Cluster Observability Operator |
 | Kernel Samepage Merging (KSM) zero pages only | Node-level KSM zero-pages-only deduplication with adaptive scan rate and max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows VM workers; recommend thp-tuning on the same nodes for THP performance. | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-ksm-zero-only=true</code><br><code>hcoUnconfigured:spec.virtualization.ksmConfiguration</code></details> | - |
 | KubeVirt Metrics Exporter | Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubevirt-metrics-exporter=true</code></details> | Cluster Observability Operator _(recommended)_ |
 | Logging | Integrated logging stack with LokiStack and ClusterLogForwarder | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-logging=true</code><br><code>platform.kubevirt.io/enable-audit-logging=true</code></details> | Loki Operator, Red Hat OpenShift Logging Operator |
@@ -46,16 +46,18 @@ The autopilot applies opinionated best practices and manages your platform autom
 | NHC with FAR remediator and SBR detection-mode config | Node health checks with fence-agents remediation and storage-based remediation in detection-only mode | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-node-remediation=true</code></details> | Node Health Check Operator, Fence Agents Remediation Operator, Storage Based Remediation Operator |
 | PCI Passthrough | GPU/PCI device passthrough via VFIO | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/openshift=true</code><br><code>platform.kubevirt.io/enable-pci-passthrough=true</code></details> | - |
 | Transparent Huge Pages (THP) Tuning | Node-level THP tuning to improve THP memory backing | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-thp-tuning=true</code></details> | - |
-| Troubleshooting Panel | Korrel8r observability signal correlation in the console | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-korrel8r=true</code></details> | Cluster Observability Operator |
+| Troubleshooting Panel | Korrel8r observability signal correlation in the console | DP | always | Cluster Observability Operator |
 | VM drain shutdown inhibitor | Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor=true</code></details> | - |
 <!-- END FEATURE STATUS -->
 
 ## Opt-In Features
 
-Technology Preview (TP) and Developer Preview (DP) capabilities are not applied
-by default; enable them with an annotation on the HyperConverged CR. Disabling
-stops autopilot from managing the feature but does not undo cluster changes —
-cleanup of created resources is manual.
+Technology Preview (TP) and Developer Preview (DP) capabilities listed as
+**opt-in** in the table above are not applied by default; enable them with an
+annotation on the HyperConverged CR. DP features listed as **always** are
+applied automatically when their required operators are installed. Disabling an
+opt-in feature stops autopilot from managing it but does not undo cluster
+changes — cleanup of created resources is manual.
 
 ### Enable
 
@@ -144,7 +146,7 @@ The autopilot continuously evaluates your infrastructure and applies production 
 - **Optimized platform defaults** for production stability
 - **Swap optimization** for memory management
 - **CPU management** for guaranteed workloads
-- **Perses monitoring dashboards** for CNV observability via the OpenShift console (when the Cluster Observability Operator is installed)
+- **Perses monitoring dashboards**, incident detection, and Korrel8r resource correlation via the OpenShift console (when the Cluster Observability Operator is installed)
 
 The configuration adapts to your environment - if hardware capabilities are detected, appropriate optimizations are applied automatically.
 
