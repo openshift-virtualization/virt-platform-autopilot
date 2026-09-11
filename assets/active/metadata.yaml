@@ -791,7 +791,7 @@ assets:
   # I/O latency via QMP, QGA and eBPF.
   # Opt-in via: platform.kubevirt.io/enable-kubevirt-metrics-exporter=true
   # Assets are split by CRD dependency so soft dependencies work correctly:
-  # core resources (always available), SCC (security.openshift.io), PodMonitor +
+  # core resources (always available), SCC (security.openshift.io), ServiceMonitor +
   # PrometheusRule (monitoring.coreos.com), and Perses dashboard (perses.dev).
   #
   # Reconcile order: namespace (1) -> RBAC -> SCC prerequisites (2) -> DaemonSet (3)
@@ -864,22 +864,31 @@ assets:
     reconcile_order: 2
     conditions: *kubevirt-metrics-exporter-conditions
 
+  - name: kubevirt-metrics-exporter-service
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/metrics-service.yaml
+    phase: 1
+    install: opt-in
+    component: Service
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
   - name: kubevirt-metrics-exporter
     group: kubevirt-metrics-exporter
     path: active/kubevirt-metrics-exporter/kubevirt-metrics-exporter.yaml.tpl
     phase: 1
     install: opt-in
     component: DaemonSet
-    reconcile_order: 3
+    reconcile_order: 4
     conditions: *kubevirt-metrics-exporter-conditions
 
-  - name: kubevirt-metrics-exporter-podmonitor
+  - name: kubevirt-metrics-exporter-servicemonitor
     group: kubevirt-metrics-exporter
-    path: active/kubevirt-metrics-exporter/podmonitor.yaml
+    path: active/kubevirt-metrics-exporter/servicemonitor.yaml
     phase: 1
     install: opt-in
-    component: PodMonitor
-    reconcile_order: 3
+    component: ServiceMonitor
+    reconcile_order: 4
     conditions: *kubevirt-metrics-exporter-conditions
 
   - name: kubevirt-metrics-exporter-prometheusrule

@@ -29,7 +29,8 @@ declare -a COPY_MAP=(
 	"deploy/base/serviceaccount.yaml|serviceaccount.yaml"
 	"deploy/base/clusterrole.yaml|clusterrole.yaml"
 	"deploy/base/clusterrolebinding.yaml|clusterrolebinding.yaml"
-	"deploy/podmonitor/podmonitor.yaml|podmonitor.yaml"
+	"deploy/openshift/metrics-service.yaml|metrics-service.yaml"
+	"deploy/openshift/metrics-servicemonitor.yaml|servicemonitor.yaml"
 	"deploy/prometheus-rules/prometheusrule.yaml|prometheusrule.yaml"
 	"deploy/openshift/scc.yaml|scc.yaml"
 	"deploy/openshift/scc-clusterrole.yaml|scc-clusterrole.yaml"
@@ -97,10 +98,38 @@ transform_daemonset() {
 	local src=$1
 	printf '%s\n' "${TEMPLATE_HEADER}"
 	sed -e 's|^[[:space:]]*image:.*|          image: {{ index .Images "kubevirt-metrics-exporter" }}|' \
+		-e 's/containerPort: 8080/containerPort: 8443/' \
+		-e 's/httpGet:/tcpSocket:/' \
+		-e '/path: \/healthz/d' \
 		-e '/hostPID: true/a\
       nodeSelector:\
         node-role.kubernetes.io/worker: ""
 ' "${src}" | awk '
+/^[[:space:]]+env:/ {
+	match($0, /^[[:space:]]+/)
+	env_indent = substr($0, RSTART, RLENGTH)
+	print
+	printf "%s  - name: LISTEN_ADDRESS\n%s    value: \":8443\"\n", env_indent, env_indent
+	printf "%s  - name: TLS_CERT_FILE\n%s    value: \"/etc/tls/private/tls.crt\"\n", env_indent, env_indent
+	printf "%s  - name: TLS_KEY_FILE\n%s    value: \"/etc/tls/private/tls.key\"\n", env_indent, env_indent
+	printf "%s  - name: TLS_MIN_VERSION\n%s    value: {{ resolvedTLSMinVersion | quote }}\n", env_indent, env_indent
+	printf "%s  - name: TLS_CIPHER_SUITES\n%s    value: {{ resolvedTLSCipherSuites | quote }}\n", env_indent, env_indent
+	next
+}
+/^[[:space:]]+volumeMounts:/ {
+	match($0, /^[[:space:]]+/)
+	indent = substr($0, RSTART, RLENGTH)
+	print
+	printf "%s  - name: metrics-serving-cert\n%s    mountPath: /etc/tls/private\n%s    readOnly: true\n", indent, indent, indent
+	next
+}
+/^[[:space:]]+volumes:/ {
+	match($0, /^[[:space:]]+/)
+	indent = substr($0, RSTART, RLENGTH)
+	print
+	printf "%s  - name: metrics-serving-cert\n%s    secret:\n%s      secretName: kubevirt-metrics-exporter-tls\n", indent, indent, indent
+	next
+}
 /^[[:space:]]+- name: / {
 	match($0, /^[[:space:]]+/)
 	env_indent = substr($0, RSTART, RLENGTH)
