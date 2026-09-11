@@ -171,7 +171,10 @@ var _ = Describe("Dependency Opt-In Metric Tests", Ordered, func() {
 		if crdInstalled(nhcCRDName) {
 			By("removing NodeHealthCheck CRD to start from a known absent state")
 			nhcWasInstalled = true
+			prevCount := getManagerRestartCount()
 			removeCRD(nhcCRDName)
+			waitForOperatorRestart(prevCount)
+			waitForOperatorHealthy()
 		}
 
 		reconcileStart := time.Now()
@@ -187,11 +190,17 @@ var _ = Describe("Dependency Opt-In Metric Tests", Ordered, func() {
 		removeAnnotation(hcoGVK, hcoName, operatorNamespace, nhcAnnot)
 		if nhcWasInstalled && !crdInstalled(nhcCRDName) {
 			By("restoring NodeHealthCheck CRD")
+			prevCount := getManagerRestartCount()
 			installCRDFromFile(nhcCRDFile)
 			waitForCRDEstablished(nhcCRDName)
+			waitForOperatorRestart(prevCount)
+			waitForOperatorHealthy()
 		} else if nhcInstalledByTest && !nhcWasInstalled && crdInstalled(nhcCRDName) {
 			By("removing NodeHealthCheck CRD installed by test (was absent at suite entry)")
+			prevCount := getManagerRestartCount()
 			removeCRD(nhcCRDName)
+			waitForOperatorRestart(prevCount)
+			waitForOperatorHealthy()
 		}
 	})
 
@@ -228,8 +237,11 @@ var _ = Describe("Dependency Opt-In Metric Tests", Ordered, func() {
 	It("should emit missing_dependency=0 and dependency_opted_in=1 after gate CRD is installed", func() {
 		By("installing NodeHealthCheck CRD")
 		nhcInstalledByTest = true
+		prevCount := getManagerRestartCount()
 		installCRDFromFile(nhcCRDFile)
 		waitForCRDEstablished(nhcCRDName)
+		waitForOperatorRestart(prevCount)
+		waitForOperatorHealthy()
 		reconcileStart := time.Now()
 		touchHCO()
 		waitForReconcileSucceeded(reconcileStart)
