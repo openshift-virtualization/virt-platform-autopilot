@@ -403,6 +403,36 @@ assets:
         key: platform.kubevirt.io/enable-cpu-manager-perf-tunings
         value: "true"
 
+  # Phase 1: Opt-in - configures multipath to persist SCSI PR keys in a file
+  # on every worker that can host VMs using shared LUNs.
+  - name: scsi-persistent-reservations
+    path: active/machine-config/08-scsi-persistent-reservations.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: worker
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-scsi-persistent-reservations
+        value: "true"
+
+  - name: scsi-persistent-reservations-master
+    path: active/machine-config/08-scsi-persistent-reservations.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-scsi-persistent-reservations
+        value: "true"
+      - type: topology
+        field: hasSchedulableMasters
+
   # Phase 2: InflightOperations OperationRuleSet assets (opt-in, gated on IFO CRD)
   - name: ifo-datavolume-rules
     group: inflightoperations
@@ -1022,6 +1052,11 @@ features:
     description: Dedicated CPU pinning for guaranteed QoS workloads
     maturity: dp
     assets: [kubelet-cpu-manager]
+
+  - name: SCSI Persistent Reservations
+    description: Configures worker-node multipath to persist SCSI persistent-reservation keys for VMs sharing LUN-backed disks
+    maturity: dp
+    assets: [scsi-persistent-reservations, scsi-persistent-reservations-master]
 
   - name: MTV Operator
     description: Migration Toolkit for Virtualization

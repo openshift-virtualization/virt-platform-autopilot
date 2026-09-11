@@ -45,6 +45,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | MetalLB Operator | Bare-metal load balancer for services | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-metallb=true</code></details> | - |
 | NHC with FAR remediator and SBR detection-mode config | Node health checks with fence-agents remediation and storage-based remediation in detection-only mode | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-node-remediation=true</code></details> | Node Health Check Operator, Fence Agents Remediation Operator, Storage Based Remediation Operator |
 | PCI Passthrough | GPU/PCI device passthrough via VFIO | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/openshift=true</code><br><code>platform.kubevirt.io/enable-pci-passthrough=true</code></details> | - |
+| SCSI Persistent Reservations | Configures worker-node multipath to persist SCSI persistent-reservation keys for VMs sharing LUN-backed disks | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-scsi-persistent-reservations=true</code></details> | - |
 | Transparent Huge Pages (THP) Tuning | Node-level THP tuning to improve THP memory backing | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-thp-tuning=true</code></details> | - |
 | Troubleshooting Panel | Korrel8r observability signal correlation in the console | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-korrel8r=true</code></details> | Cluster Observability Operator |
 | VM drain shutdown inhibitor | Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor=true</code></details> | - |
@@ -214,6 +215,7 @@ The autopilot uses a **"Patched Baseline"** approach:
 - [Local Development](docs/local-development.md) - Setting up dev environment with Kind
 - [Lifecycle Management](docs/lifecycle-management.md) - Tombstoning and resource exclusions
 - [Debug Endpoints](docs/debug-endpoints.md) - Debugging and inspection tools
+- [SCSI Persistent Reservations](docs/scsi-persistent-reservations.md) - Configure multipath reservation keys for shared LUN disks
 - [Runbooks](https://github.com/kubevirt/monitoring/tree/main/docs/runbooks) - Operational guides for alerts (published at https://kubevirt.io/monitoring/runbooks/)
 
 ## Contributing
