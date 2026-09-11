@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kubevirt-metrics-exporter
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app: kubevirt-metrics-exporter
+spec:
+  jobLabel: app
+  namespaceSelector: {}
+  selector:
+    matchLabels:
+      app: kubevirt-metrics-exporter
+  endpoints:
+    - port: https
+      scheme: https
+      path: /metrics
+      interval: 30s
+      honorLabels: true
+      tlsConfig:
+        ca: {}
+        cert: {}
+        insecureSkipVerify: false
+        serverName: kubevirt-metrics-exporter.kubevirt-metrics-exporter.svc
+  scrapeClass: tls-client-certificate-auth

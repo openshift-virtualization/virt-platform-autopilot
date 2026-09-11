@@ -29,6 +29,16 @@ spec:
         - name: exporter
           image: {{ index .Images "kubevirt-metrics-exporter" }}
           env:
+            - name: LISTEN_ADDRESS
+              value: ":8443"
+            - name: TLS_CERT_FILE
+              value: "/etc/tls/private/tls.crt"
+            - name: TLS_KEY_FILE
+              value: "/etc/tls/private/tls.key"
+            - name: TLS_MIN_VERSION
+              value: {{ resolvedTLSMinVersion | quote }}
+            - name: TLS_CIPHER_SUITES
+              value: {{ resolvedTLSCipherSuites | quote }}
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
@@ -63,9 +73,12 @@ spec:
               value: {{ index $envOverrides "LOG_LEVEL" | default "info" | quote }}
           ports:
             - name: metrics
-              containerPort: 8080
+              containerPort: 8443
               protocol: TCP
           volumeMounts:
+            - name: metrics-serving-cert
+              mountPath: /etc/tls/private
+              readOnly: true
             - name: cri-socket
               mountPath: /run/crio/crio.sock
               readOnly: true
@@ -81,14 +94,12 @@ spec:
               cpu: 200m
               memory: 256Mi
           livenessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: metrics
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: metrics
             initialDelaySeconds: 5
             periodSeconds: 10
@@ -106,6 +117,9 @@ spec:
               drop:
                 - ALL
       volumes:
+        - name: metrics-serving-cert
+          secret:
+            secretName: kubevirt-metrics-exporter-tls
         - name: cri-socket
           hostPath:
             path: /run/crio/crio.sock

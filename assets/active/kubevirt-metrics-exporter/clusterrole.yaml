@@ -6,6 +6,16 @@ rules:
   - apiGroups: [""]
     resources: ["pods", "persistentvolumeclaims"]
     verbs: ["get", "list", "watch"]
+  # The mTLS client-CA source used when TLS_CLIENT_CA_FILE is not configured.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["extension-apiserver-authentication"]
+    verbs: ["get"]
+  # Kubernetes RBAC cannot name-scope list/watch. The informer field-selects
+  # the ConfigMap above and keeps the last known-good CA on invalid updates.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["list", "watch"]
   - apiGroups: ["kubevirt.io"]
     resources: ["virtualmachineinstances"]
     verbs: ["get"]

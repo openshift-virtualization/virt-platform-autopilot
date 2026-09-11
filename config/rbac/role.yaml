@@ -115,12 +115,21 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - configmaps
       - persistentvolumeclaims
       - pods
     verbs:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
   - apiGroups:
       - kubevirt.io
     resources:
