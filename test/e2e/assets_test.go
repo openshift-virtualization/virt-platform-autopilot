@@ -184,6 +184,16 @@ var assetsUnderTest = initAssets([]testAsset{
 			Values:      [2]string{"120", "180"},
 		},
 	},
+	{
+		// No Override: PersesDashboard has no user-facing field outside SSA ownership.
+		// Uses legacy annotation-based patch path (same as UIPlugin).
+		GVK:           schema.GroupVersionKind{Group: "perses.dev", Version: "v1alpha2", Kind: "PersesDashboard"},
+		Plural:        "persesdashboards",
+		Name:          "descheduler-memory-aware-rebalancing",
+		Namespace:     "openshift-cnv",
+		GateCRD:       "kubedeschedulers.operator.openshift.io",
+		ClusterScoped: false,
+	},
 })
 
 func initAssets(assets []testAsset) []testAsset {
