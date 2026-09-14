@@ -186,6 +186,36 @@ assets:
       - type: topology
         field: hasSchedulableMasters
 
+  - name: thp-tuning-kernelcore
+    group: thp-tuning
+    path: active/machine-config/06-thp-tuning-kernelcore.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 2
+    template_params:
+      role: worker
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-thp-tuning-kernelcore
+        value: "true"
+
+  - name: thp-tuning-kernelcore-master
+    group: thp-tuning
+    path: active/machine-config/06-thp-tuning-kernelcore.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 2
+    template_params:
+      role: master
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-thp-tuning-kernelcore
+        value: "true"
+      - type: topology
+        field: hasSchedulableMasters
+
   # Phase 1: OpenShift Kubelet (MachineConfig dropping files to /etc/openshift/kubelet.conf.d)
   - name: kubelet-perf-settings
     path: active/machine-config/03-kubelet-perf-settings.yaml.tpl
@@ -1088,7 +1118,10 @@ features:
 
   - name: Transparent Huge Pages (THP) Tuning
     description: >-
-      Node-level THP tuning to improve THP memory backing
+      Node-level THP madvise/defrag tuning, khugepaged scan rates, and
+      max_ptes_none coordination with KSM. Optional sub-feature:
+      enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97%
+      (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot.
     maturity: dp
     groups: [thp-tuning]
 

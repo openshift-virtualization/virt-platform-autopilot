@@ -14,8 +14,9 @@ Strategy:
       Large nodes (1 TB):  sleep=1063ms, wake 0.9/s — frequent to keep up.
   - max_ptes_none = 0 when KSM is active (/sys/kernel/mm/ksm/run == 1),
     else 511. Same logic runs in ksm-tune.py so start order doesn't matter.
-  - kernelcore boot parameter to limit fragmentation by unmovable blocks is set
-    separately via MachineConfig.
+  - kernelcore boot parameter (optional thp-tuning-kernelcore opt-in:
+    kernelcore=2G + movablecore=97% for max(2G, 3% MemTotal)) caps the
+    DMA+DMA32+Normal pool; not set here.
 
 Performance table:
   Node RAM | sleep_ms | Wakes/s | Regions/s | Sweep (80% VM)

@@ -5,11 +5,6 @@ metadata:
     machineconfiguration.openshift.io/role: {{ .Params.role }}
   name: 99-{{ .Params.role }}-thp-tuning
 spec:
-  # Experimental: kernelcore caps slab/non-movable memory for mixed workloads
-  # to minimize memory fragmentation by scattered unmovable blocks.
-  # Formula intent: max(2GB, 2% MemTotal). Requires node reboot.
-  kernelArguments:
-    - kernelcore=2G
   config:
     ignition:
       version: 3.5.0
