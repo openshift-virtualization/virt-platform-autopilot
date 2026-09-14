@@ -82,7 +82,8 @@ func assertAlwaysInstallNoConditions(t *testing.T, assetName string) {
 	}
 }
 
-func TestMonitoringUIPluginWithoutIncidents(t *testing.T) {
+func TestMonitoringUIPlugin(t *testing.T) {
+	assertAlwaysInstallNoConditions(t, "monitoring-ui-plugin")
 	rendered := renderObservabilityAsset(t, "monitoring-ui-plugin")
 
 	if rendered.GetKind() != "UIPlugin" {
@@ -105,36 +106,12 @@ func TestMonitoringUIPluginWithoutIncidents(t *testing.T) {
 		t.Error("spec.monitoring.perses.enabled should be true")
 	}
 
-	_, found, _ = unstructured.NestedBool(rendered.Object, "spec", "monitoring", "incidents", "enabled")
-	if found {
-		t.Error("spec.monitoring.incidents should NOT be present on the base monitoring UIPlugin")
-	}
-}
-
-func TestMonitoringUIPluginIncidentsAsset(t *testing.T) {
-	assertAlwaysInstallNoConditions(t, "monitoring-ui-plugin-incidents")
-
-	baseRendered := renderObservabilityAsset(t, "monitoring-ui-plugin")
-	incidentsRendered := renderObservabilityAsset(t, "monitoring-ui-plugin-incidents")
-
-	persesEnabled, found, _ := unstructured.NestedBool(incidentsRendered.Object, "spec", "monitoring", "perses", "enabled")
+	incidentsEnabled, found, _ := unstructured.NestedBool(rendered.Object, "spec", "monitoring", "incidents", "enabled")
 	if !found {
-		t.Fatal("incidents asset: spec.monitoring.perses.enabled not found")
-	}
-	if !persesEnabled {
-		t.Error("incidents asset: spec.monitoring.perses.enabled should be true")
-	}
-
-	incidentsEnabled, found, _ := unstructured.NestedBool(incidentsRendered.Object, "spec", "monitoring", "incidents", "enabled")
-	if !found {
-		t.Fatal("incidents asset: spec.monitoring.incidents.enabled not found")
+		t.Fatal("spec.monitoring.incidents.enabled not found")
 	}
 	if !incidentsEnabled {
-		t.Error("incidents asset: spec.monitoring.incidents.enabled should be true")
-	}
-
-	if baseRendered.GetName() != incidentsRendered.GetName() {
-		t.Errorf("assets target different resources: base=%s, incidents=%s", baseRendered.GetName(), incidentsRendered.GetName())
+		t.Error("spec.monitoring.incidents.enabled should be true")
 	}
 }
 

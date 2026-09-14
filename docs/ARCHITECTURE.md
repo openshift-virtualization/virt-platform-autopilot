@@ -92,14 +92,12 @@ Critical baseline configurations applied to all clusters:
   - PCI device passthrough enablement
 - **KubeletConfig**: Kubelet performance settings
 - **Operators**: Third-party operator CRs
-  - **Monitoring UI Plugin** (`monitoring-ui-plugin`): Enables the Perses dashboard UI in
-    the OpenShift console via the Cluster Observability Operator (COO). Automatically skipped
-    when the `uiplugins.observability.openshift.io` CRD is absent. When ACM is present it
-    manages the same `monitoring` UIPlugin and adds `spec.monitoring.acm.*` fields; SSA field
-    managers don't conflict because autopilot owns `spec.monitoring.perses.enabled` and
-    `spec.monitoring.incidents.enabled` (via `monitoring-ui-plugin-incidents`).
-  - **Incident Detection** (`monitoring-ui-plugin-incidents`): Enables COO incident detection
-    on the monitoring UIPlugin. Skipped when the COO UIPlugin CRD is absent.
+  - **Monitoring UI Plugin** (`monitoring-ui-plugin`): Enables Perses dashboards and COO
+    incident detection in the OpenShift console. Automatically skipped when the
+    `uiplugins.observability.openshift.io` CRD is absent. When ACM is present it
+    manages the same `monitoring` UIPlugin and adds `spec.monitoring.acm.*` fields; SSA
+    field managers don't conflict because autopilot owns `spec.monitoring.perses.enabled`
+    and `spec.monitoring.incidents.enabled` in a single apply.
   - **Troubleshooting Panel** (`troubleshooting-panel-ui-plugin`): Enables Korrel8r observability
     signal correlation in the OpenShift console. Skipped when the COO UIPlugin CRD is absent.
   - MTV (Migration Toolkit for Virtualization)
