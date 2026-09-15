@@ -40,6 +40,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -335,6 +336,8 @@ func runController(
 		setupLog.Error(err, "unable to create platform reconciler")
 		return err
 	}
+	tlsProfileEvents := make(chan event.GenericEvent, 1)
+	reconciler.SetTLSProfileEvents(tlsProfileEvents)
 
 	// Setup event recorder
 	eventRecorder := util.NewEventRecorder(
@@ -362,7 +365,7 @@ func runController(
 		// pick up the refreshed state). The APIServer watch is only wired when its
 		// CRD exists (OpenShift, determined above); elsewhere the client-CA
 		// ConfigMap is watched alone and the APIServer profile stays at its default.
-		tlsWatcher := controller.NewMetricsTLSReconciler(mgr.GetAPIReader(), caPool, apiServerCRDInstalled)
+		tlsWatcher := controller.NewMetricsTLSReconciler(mgr.GetAPIReader(), caPool, apiServerCRDInstalled, tlsProfileEvents)
 		if err := tlsWatcher.SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to setup metrics TLS watcher")
 			return err

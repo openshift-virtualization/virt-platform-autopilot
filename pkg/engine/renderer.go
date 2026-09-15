@@ -36,6 +36,7 @@ import (
 	embeddedassets "github.com/kubevirt/virt-platform-autopilot/assets"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/tlsprofile"
 )
 
 // Renderer handles template rendering with RenderContext
@@ -218,6 +219,17 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// dig provides safe nested field access with default value
 		// Usage: {{ dig "spec" "field" "default" .HCO }}
 		"dig": dig,
+
+		// resolvedTLSMinVersion and resolvedTLSCipherSuites expose the effective
+		// HCO > APIServer > Intermediate TLS policy to managed workloads.
+		"resolvedTLSMinVersion": func() string {
+			_, minVersion := tlsprofile.CipherSuitesAndMinTLSVersion(nil)
+			return string(minVersion)
+		},
+		"resolvedTLSCipherSuites": func() string {
+			ciphers, _ := tlsprofile.CipherSuitesAndMinTLSVersion(nil)
+			return strings.Join(ciphers, ",")
+		},
 
 		// has checks if a slice contains a value
 		// Usage: {{ has "value" .HCO.spec.featureGates }}
