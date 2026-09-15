@@ -133,7 +133,8 @@ const (
 
 func init() {
 	// Register all metrics with controller-runtime's metrics registry
-	// This registry is automatically exposed on :8080/metrics by the manager
+	// This registry is automatically exposed over HTTPS (mTLS) on :8443/metrics
+	// by the manager
 	metrics.Registry.MustRegister(
 		ComplianceStatus,
 		ThrashingTotal,

@@ -63,10 +63,28 @@ rules:
   - apiGroups:
       - config.openshift.io
     resources:
+      - apiservers
       - infrastructures
       - schedulers
     verbs:
       - get
+      - list
+      - watch
+  # Metrics client CA read (name-scoped get of the extension-apiserver-authentication ConfigMap: the metrics mTLS trust anchor)
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
+  # Metrics client CA watch (cluster-scope list/watch for the client-CA informer; RBAC cannot name-scope list/watch)
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
       - list
       - watch
   # Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)
@@ -82,12 +100,21 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - configmaps
       - persistentvolumeclaims
       - pods
     verbs:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
   - apiGroups:
       - kubevirt.io
     resources:
@@ -190,7 +217,7 @@ rules:
       - patch
       - update
       - watch
-  # Prometheus Monitoring
+  # Prometheus Monitoring (includes tombstone cleanup)
   - apiGroups:
       - monitoring.coreos.com
     resources:
@@ -199,6 +226,7 @@ rules:
       - servicemonitors
     verbs:
       - create
+      - delete
       - get
       - list
       - patch

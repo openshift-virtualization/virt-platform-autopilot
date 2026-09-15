@@ -25,8 +25,8 @@ import (
 
 func TestStaticRules_Count(t *testing.T) {
 	rules := StaticRules()
-	if len(rules) != 7 {
-		t.Errorf("expected 7 static rules, got %d", len(rules))
+	if len(rules) != 9 {
+		t.Errorf("expected 9 static rules, got %d", len(rules))
 	}
 }
 
@@ -34,7 +34,10 @@ func TestStaticRules_NoDuplicateAPIGroups(t *testing.T) {
 	seen := map[string]bool{}
 	for _, r := range StaticRules() {
 		for _, g := range r.APIGroups {
-			key := g + "|" + r.Resources[0]
+			key := g + "|" + r.Resources[0] + "|"
+			if len(r.ResourceNames) > 0 {
+				key += r.ResourceNames[0]
+			}
 			if seen[key] {
 				t.Errorf("duplicate apiGroup/resource in static rules: %s", key)
 			}

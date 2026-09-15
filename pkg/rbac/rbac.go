@@ -93,16 +93,24 @@ func StaticRules() []Rule {
 			Resources: []string{"customresourcedefinitions"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		// Rule 5: OpenShift config CRs (for cluster topology detection: HCP, compact,
-		// cloud provider via Infrastructure; schedulable masters via Scheduler).
+		// Rule 5: OpenShift config CRs, including the APIServer TLS security profile.
 		// Both are singletons (name="cluster") and are non-sensitive read-only.
 		// Gracefully absent on non-OpenShift clusters — the operator handles NotFound.
 		{
 			APIGroups: []string{"config.openshift.io"},
-			Resources: []string{"infrastructures", "schedulers"},
+			Resources: []string{"apiservers", "infrastructures", "schedulers"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		// Rule 6: Namespaces (for pre-apply guard: verify the target namespace exists before
+		// Rule 6: Metrics client CA get (name-scoped).
+		{
+			APIGroups: []string{""}, Resources: []string{"configmaps"},
+			ResourceNames: []string{"extension-apiserver-authentication"}, Verbs: []string{"get"},
+		},
+		// Rule 7: Metrics client CA informer list/watch.
+		{
+			APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"list", "watch"},
+		},
+		// Rule 8: Namespaces (for pre-apply guard: verify the target namespace exists before
 		// consuming a rate-limit token; avoids spurious throttling when an operator component
 		// is not yet installed and its namespace is absent).
 		{

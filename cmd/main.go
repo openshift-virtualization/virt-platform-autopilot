@@ -18,15 +18,19 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,6 +40,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -46,6 +51,8 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/controller"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/debug"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/metricstls"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/tlsprofile"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -119,7 +126,8 @@ func newRunCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	cmd.Flags().StringVar(&metricsAddr, "metrics-bind-address", ":8443",
+		"The address the HTTPS metrics endpoint binds to. Set to \"0\" to disable.")
 	cmd.Flags().StringVar(&debugAddr, "debug-bind-address", "127.0.0.1:8081", "The address the debug endpoint binds to (localhost only for security).")
 	cmd.Flags().StringVar(&probeAddr, "health-probe-bind-address", ":8082", "The address the probe endpoint binds to.")
 	cmd.Flags().BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -135,6 +143,36 @@ func newRunCommand() *cobra.Command {
 		"Enable development mode logging.")
 
 	return cmd
+}
+
+func buildMetricsServerOptions(metricsAddr string, caPool *metricstls.ClientCAPool) (metricsserver.Options, bool) {
+	opts := metricsserver.Options{BindAddress: metricsAddr}
+	secure := metricsAddr != "0" && certFilesPresent(metricstls.ServingCertDir)
+	if secure {
+		opts.SecureServing = true
+		opts.CertDir = metricstls.ServingCertDir
+		opts.FilterProvider = metricstls.AllowPrometheusK8s
+		opts.TLSOpts = []func(*tls.Config){metricstls.ConfigureServerTLS(caPool.Get)}
+	} else if metricsAddr != "0" {
+		setupLog.Info("metrics serving certificate not present yet; keeping the metrics endpoint disabled until service-ca mints it", "certDir", metricstls.ServingCertDir)
+		opts.BindAddress = "0"
+	}
+	return opts, secure
+}
+
+func cacheByObjectExemptions(hcoForCache, apiServerForCache client.Object, apiServerCRDInstalled bool) map[client.Object]cache.ByObject {
+	byObject := map[client.Object]cache.ByObject{
+		hcoForCache: {Label: labels.Everything()},
+		&apiextensionsv1.CustomResourceDefinition{}: {Label: labels.Everything()},
+		&corev1.ConfigMap{}: {Namespaces: map[string]cache.Config{metricstls.ClientCAConfigMapNamespace: {
+			LabelSelector: labels.Everything(),
+			FieldSelector: fields.OneTermEqualSelector("metadata.name", metricstls.ClientCAConfigMapName),
+		}}},
+	}
+	if apiServerCRDInstalled {
+		byObject[apiServerForCache] = cache.ByObject{Label: labels.Everything()}
+	}
+	return byObject
 }
 
 // runController starts the controller manager
@@ -171,12 +209,27 @@ func runController(
 	// We registered Unstructured with the HCO GVK in init(), so this won't require API queries
 	hcoForCache := &unstructured.Unstructured{}
 	hcoForCache.SetGroupVersionKind(pkgcontext.HCOGVK)
+	apiServerForCache := &unstructured.Unstructured{}
+	apiServerForCache.SetGroupVersionKind(tlsprofile.APIServerGVK)
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
-		},
+	restConfig := ctrl.GetConfigOrDie()
+	caPool := &metricstls.ClientCAPool{}
+	bootstrapClient, err := client.New(restConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create bootstrap client for TLS setup")
+		return err
+	}
+	seedTLSState(context.Background(), bootstrapClient, caPool)
+	apiServerCRDInstalled, err := util.NewCRDChecker(bootstrapClient).IsCRDInstalled(context.Background(), "apiservers.config.openshift.io")
+	if err != nil {
+		setupLog.Error(err, "failed to check for APIServer CRD; APIServer TLS profile changes will not be watched")
+		apiServerCRDInstalled = false
+	}
+	metricsOpts, secureMetrics := buildMetricsServerOptions(metricsAddr, caPool)
+
+	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
+		Scheme:                 scheme,
+		Metrics:                metricsOpts,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "virt-platform-autopilot.kubevirt.io",
@@ -185,17 +238,7 @@ func runController(
 			// This dramatically reduces memory usage in large clusters
 			DefaultLabelSelector: managedBySelector,
 			// IMPORTANT: Exempt certain resource types from label filtering
-			ByObject: map[client.Object]cache.ByObject{
-				// Watch all HCOs (labeled or not) to adopt pre-existing ones
-				hcoForCache: {
-					Label: labels.Everything(),
-				},
-				// Watch all CRDs for soft dependency detection
-				// CRDs are managed by other operators and won't have our label
-				&apiextensionsv1.CustomResourceDefinition{}: {
-					Label: labels.Everything(),
-				},
-			},
+			ByObject: cacheByObjectExemptions(hcoForCache, apiServerForCache, apiServerCRDInstalled),
 		},
 	})
 	if err != nil {
@@ -232,6 +275,8 @@ func runController(
 		setupLog.Error(err, "unable to create platform reconciler")
 		return err
 	}
+	tlsProfileEvents := make(chan event.GenericEvent, 1)
+	reconciler.SetTLSProfileEvents(tlsProfileEvents)
 
 	// Setup event recorder
 	eventRecorder := util.NewEventRecorder(
@@ -248,6 +293,26 @@ func runController(
 	if err = reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to setup platform controller")
 		return err
+	}
+
+	if secureMetrics {
+		// Watch the cluster APIServer profile and the client-CA ConfigMap so TLS
+		// policy / CA rotation take effect on change (per-connection reads then
+		// pick up the refreshed state). The APIServer watch is only wired when its
+		// CRD exists (OpenShift, determined above); elsewhere the client-CA
+		// ConfigMap is watched alone and the APIServer profile stays at its default.
+		tlsWatcher := controller.NewMetricsTLSReconciler(mgr.GetAPIReader(), caPool, apiServerCRDInstalled, tlsProfileEvents)
+		if err := tlsWatcher.SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to setup metrics TLS watcher")
+			return err
+		}
+	} else if metricsAddr != "0" {
+		if err := mgr.Add(nonLeaderRunnable(func(runCtx context.Context) error {
+			return waitForServingCertThenRestart(runCtx, cancel)
+		})); err != nil {
+			setupLog.Error(err, "unable to add serving-cert watcher")
+			return err
+		}
 	}
 
 	// Setup debug server if enabled
@@ -304,3 +369,46 @@ func runController(
 
 	return nil
 }
+
+const servingCertPollInterval = 15 * time.Second
+
+func seedTLSState(ctx context.Context, c client.Reader, caPool *metricstls.ClientCAPool) {
+	if _, err := tlsprofile.RefreshAPIServer(ctx, c); err != nil {
+		setupLog.Info("could not read APIServer TLS security profile; using default", "reason", err.Error())
+	}
+	if err := metricstls.RefreshClientCA(ctx, c, caPool); err != nil {
+		setupLog.Info("could not read metrics client CA", "reason", err.Error())
+	}
+}
+
+func waitForServingCertThenRestart(ctx context.Context, restart context.CancelFunc) error {
+	ticker := time.NewTicker(servingCertPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if certFilesPresent(metricstls.ServingCertDir) {
+				setupLog.Info("metrics serving certificate is now present; restarting to enable HTTPS metrics", "certDir", metricstls.ServingCertDir)
+				restart()
+				return nil
+			}
+		}
+	}
+}
+
+func certFilesPresent(dir string) bool {
+	for _, name := range []string{"tls.crt", "tls.key"} {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || info.Size() == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+type nonLeaderRunnable func(context.Context) error
+
+func (f nonLeaderRunnable) Start(ctx context.Context) error { return f(ctx) }
+func (nonLeaderRunnable) NeedLeaderElection() bool          { return false }
