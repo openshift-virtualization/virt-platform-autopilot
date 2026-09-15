@@ -251,11 +251,14 @@ assets:
         key: platform.kubevirt.io/enable-metallb
         value: "true"
 
-  # Phase 1: Monitoring UI Plugin - enables Perses in the OpenShift console (COO).
-  # Soft dependency: skipped if COO (uiplugins.observability.openshift.io CRD) is absent.
-  # When ACM is present it manages the same 'monitoring' UIPlugin and adds acm.* fields;
-  # SSA field managers don't conflict because autopilot owns spec.monitoring.perses
-  # and spec.monitoring.incidents (when enabled via separate opt-in asset).
+  # Phase 1: Monitoring UI Plugin - enables Perses and incident detection in the
+  # OpenShift console (COO). Soft dependency: skipped if COO
+  # (uiplugins.observability.openshift.io CRD) is absent.
+  # When ACM is present it manages the same 'monitoring' UIPlugin and adds acm.*
+  # fields; SSA field managers don't conflict because autopilot owns
+  # spec.monitoring.perses and spec.monitoring.incidents in a single apply.
+  # Both fields live in this asset: a second apply of the same object with the
+  # shared field manager would drop incidents and trigger anti-thrashing.
   - name: monitoring-ui-plugin
     path: active/operators/monitoring-uiplugin.yaml.tpl
     phase: 1
@@ -264,37 +267,17 @@ assets:
     reconcile_order: 1
     conditions: []
 
-  # Phase 1: Incident Detection enables the grouping of related cluster alerts
-  # into a single, cohesive timeline to eliminate alert fatigue and speed up
-  # troubleshooting, in the monitoring UIPlugin.
-  # Applied after the base monitoring-ui-plugin to add the incidents.enabled
-  # field via SSA.
-  # Opt-in via: platform.kubevirt.io/enable-incident-detection=true
-  - name: monitoring-ui-plugin-incidents
-    path: active/operators/monitoring-uiplugin-incidents.yaml.tpl
-    phase: 1
-    install: opt-in
-    component: UIPlugin
-    reconcile_order: 2
-    conditions:
-      - type: annotation
-        key: platform.kubevirt.io/enable-incident-detection
-        value: "true"
-
   # Phase 1: Troubleshooting Panel (korrel8r) - enables observability signal correlation.
   # Provides a side-panel in the console that links metrics, logs, alerts, traces,
   # and Kubernetes resources for cross-signal navigation.
-  # Opt-in via: platform.kubevirt.io/enable-korrel8r=true
+  # Soft dependency: skipped if COO (uiplugins.observability.openshift.io CRD) is absent.
   - name: troubleshooting-panel-ui-plugin
     path: active/operators/troubleshooting-panel-uiplugin.yaml
     phase: 1
-    install: opt-in
+    install: always
     component: UIPlugin
     reconcile_order: 1
-    conditions:
-      - type: annotation
-        key: platform.kubevirt.io/enable-korrel8r
-        value: "true"
+    conditions: []
 
   # Phase 1: Logging stack - configures LokiStack, ClusterLogForwarder,
   # and Logging UI Plugin.
@@ -1091,14 +1074,12 @@ features:
     description: >-
       OpenShift Incident Detection groups related cluster alerts into a single, cohesive
       timeline to eliminate alert fatigue and speed up troubleshooting.
-    maturity: dp
-    assets: [monitoring-ui-plugin-incidents]
+    assets: [monitoring-ui-plugin]
     requires:
       - Cluster Observability Operator
 
   - name: Troubleshooting Panel
     description: Korrel8r observability signal correlation in the console
-    maturity: dp
     assets: [troubleshooting-panel-ui-plugin]
     requires:
       - Cluster Observability Operator
