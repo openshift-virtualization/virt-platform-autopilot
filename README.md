@@ -39,6 +39,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | In-Flight Operations | OperationRuleSet-based coordination for safe concurrent operations | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-in-flight-operations=true</code></details> | - |
 | Kubelet Performance | Optimized kubelet settings for virtualization workloads | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubelet-performance-settings=true</code></details> | - |
 | CPU Manager | Dedicated CPU pinning for guaranteed QoS workloads | DP | <details><summary>opt-in</summary><code>kubevirtFeatureGate:CPUManager</code><br><code>platform.kubevirt.io/enable-cpu-manager-perf-tunings=true</code></details> | - |
+| File-based Swap Provisioning | Provisions file-backed swap sized to each worker's memory overcommitment; swap activation remains managed by Swap Enablement | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-file-based-swap-provisioning=true</code></details> | - |
 | Kernel Samepage Merging (KSM) zero pages only | Node-level KSM zero-pages-only deduplication with adaptive scan rate and max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows VM workers; recommend thp-tuning on the same nodes for THP performance. | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-ksm-zero-only=true</code><br><code>hcoUnconfigured:spec.virtualization.ksmConfiguration</code></details> | - |
 | KubeVirt Metrics Exporter | Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubevirt-metrics-exporter=true</code></details> | Cluster Observability Operator _(recommended)_ |
 | Logging | Integrated logging stack with LokiStack and ClusterLogForwarder | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-logging=true</code><br><code>platform.kubevirt.io/enable-audit-logging=true</code></details> | Loki Operator, Red Hat OpenShift Logging Operator |
@@ -217,6 +218,7 @@ The autopilot uses a **"Patched Baseline"** approach:
 - [Lifecycle Management](docs/lifecycle-management.md) - Tombstoning and resource exclusions
 - [Debug Endpoints](docs/debug-endpoints.md) - Debugging and inspection tools
 - [SCSI Persistent Reservations](docs/scsi-persistent-reservations.md) - Configure multipath reservation keys for shared LUN disks
+- [File-based Swap Provisioning](docs/file-based-swap-provisioning.md) - Provision swap files for memory-overcommitted workers
 - [Runbooks](https://github.com/kubevirt/monitoring/tree/main/docs/runbooks) - Operational guides for alerts (published at https://kubevirt.io/monitoring/runbooks/)
 
 ## Contributing

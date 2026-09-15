@@ -134,6 +134,64 @@ func TestKubeletPerfSettingsIsMachineConfig(t *testing.T) {
 	}
 }
 
+func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
+	rendered, _, asset := renderHCOAsset(t, "file-based-swap-provisioning")
+
+	if rendered.GetName() != "90-worker-file-based-swap-provisioning" {
+		t.Errorf("MachineConfig name = %q, want 90-worker-file-based-swap-provisioning", rendered.GetName())
+	}
+	if asset.Install != "opt-in" {
+		t.Errorf("file-based-swap-provisioning Install = %q, want opt-in", asset.Install)
+	}
+
+	units, found, err := unstructured.NestedSlice(rendered.Object, "spec", "config", "systemd", "units")
+	if err != nil || !found {
+		t.Fatal("MachineConfig should contain systemd units")
+	}
+
+	provisioningUnitFound := false
+	activationDropInFound := false
+	for _, unit := range units {
+		unitMap, ok := unit.(map[string]any)
+		if !ok {
+			continue
+		}
+		if unitMap["name"] == "ocpswap-file-enable.service" {
+			dropins, _ := unitMap["dropins"].([]any)
+			for _, dropin := range dropins {
+				dropinMap, _ := dropin.(map[string]any)
+				contents, _ := dropinMap["contents"].(string)
+				if strings.Contains(contents, "After=swap-provision.service") &&
+					strings.Contains(contents, "ConditionFirstBoot=") &&
+					strings.Contains(contents, "ConditionPathExists=/var/tmp/ocpswap.file") {
+					activationDropInFound = true
+				}
+			}
+			continue
+		}
+		if unitMap["name"] != "swap-provision.service" {
+			continue
+		}
+		provisioningUnitFound = true
+		contents, _ := unitMap["contents"].(string)
+		if !strings.Contains(contents, "kubevirt-provision-file-swap.sh 100") {
+			t.Error("swap-provision.service should default the overcommit percentage to 100")
+		}
+		if !strings.Contains(contents, "Before=kubelet-dependencies.target") {
+			t.Error("swap-provision.service must complete before kubelet dependencies start")
+		}
+		if !strings.Contains(contents, "WantedBy=kubelet-dependencies.target") {
+			t.Error("swap-provision.service must not block kubelet startup when provisioning fails")
+		}
+	}
+	if !provisioningUnitFound {
+		t.Error("MachineConfig should contain swap-provision.service")
+	}
+	if !activationDropInFound {
+		t.Error("ocpswap-file-enable.service must wait for swap provisioning")
+	}
+}
+
 // Detailed field tests removed: kubelet configuration is now dropped as files
 // to /etc/openshift/kubelet.conf.d, base64-encoded in the MachineConfig.
 // The kubelet merges these files at runtime, making field-level assertions

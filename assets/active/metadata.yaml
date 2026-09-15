@@ -67,6 +67,19 @@ assets:
     reconcile_order: 1
     conditions: []
 
+  # Phase 1: Opt-in - provisions file-backed swap. The always-on swap-enable
+  # asset owns activation, avoiding concurrent swapon calls during boot.
+  - name: file-based-swap-provisioning
+    path: active/machine-config/09-file-based-swap-provisioning.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 1
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-file-based-swap-provisioning
+        value: "true"
+
   - name: pci-passthrough
     path: active/machine-config/02-pci-passthrough.yaml.tpl
     phase: 1
@@ -1054,6 +1067,11 @@ features:
   - name: Swap Enablement
     description: Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available
     assets: [swap-enable]
+
+  - name: File-based Swap Provisioning
+    description: Provisions file-backed swap sized to each worker's memory overcommitment; swap activation remains managed by Swap Enablement
+    maturity: dp
+    assets: [file-based-swap-provisioning]
 
   - name: Kubelet Performance
     description: Optimized kubelet settings for virtualization workloads
