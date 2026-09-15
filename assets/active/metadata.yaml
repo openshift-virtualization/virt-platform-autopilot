@@ -336,6 +336,10 @@ assets:
 
   - name: logging-collector-crb-application
     group: logging
+    # These bindings reference ClusterRoles installed by the OpenShift Logging
+    # Operator. Skip them until the operator CRD is available so a missing
+    # optional logging stack is reported as a dependency, not an apply failure.
+    gate_crd: clusterlogforwarders.observability.openshift.io
     path: active/logging/collector-crb-application.yaml
     phase: 1
     install: opt-in
@@ -348,6 +352,7 @@ assets:
 
   - name: logging-collector-crb-infrastructure
     group: logging
+    gate_crd: clusterlogforwarders.observability.openshift.io
     path: active/logging/collector-crb-infrastructure.yaml
     phase: 1
     install: opt-in
@@ -360,6 +365,7 @@ assets:
 
   - name: logging-collector-crb-writer
     group: logging
+    gate_crd: clusterlogforwarders.observability.openshift.io
     path: active/logging/collector-crb-writer.yaml
     phase: 1
     install: opt-in
@@ -372,6 +378,7 @@ assets:
 
   - name: logging-collector-crb-audit
     group: audit-logging
+    gate_crd: clusterlogforwarders.observability.openshift.io
     path: active/logging/collector-crb-audit.yaml
     phase: 1
     install: opt-in
