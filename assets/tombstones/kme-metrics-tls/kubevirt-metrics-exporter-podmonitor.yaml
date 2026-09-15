@@ -1,0 +1,7 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: kubevirt-metrics-exporter
+  namespace: kubevirt-metrics-exporter
+  labels:
+    platform.kubevirt.io/managed-by: virt-platform-autopilot
