@@ -73,6 +73,13 @@
       "opt_in": "kubevirtFeatureGate:CPUManager, platform.kubevirt.io/enable-cpu-manager-perf-tunings=true"
     },
     {
+      "name": "File-based Swap Provisioning",
+      "description": "Optional cheaper alternative to a dedicated swap partition; provisions file-backed swap sized to each worker's memory overcommitment, skipped on workers that have the dedicated partition. Swap activation remains managed by Swap Enablement",
+      "maturity": "DP",
+      "install": "opt-in",
+      "opt_in": "platform.kubevirt.io/enable-file-based-swap-provisioning=true"
+    },
+    {
       "name": "Kernel Samepage Merging (KSM) zero pages only",
       "description": "Node-level KSM zero-pages-only deduplication with adaptive scan rate and max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows VM workers; recommend thp-tuning on the same nodes for THP performance.",
       "maturity": "DP",

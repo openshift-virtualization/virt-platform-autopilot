@@ -27,6 +27,10 @@ import (
 )
 
 func renderHCOAsset(t *testing.T, assetName string) (*unstructured.Unstructured, *assets.Loader, *assets.AssetMetadata) {
+	return renderHCOAssetWithAnnotations(t, assetName, nil)
+}
+
+func renderHCOAssetWithAnnotations(t *testing.T, assetName string, annotations map[string]string) (*unstructured.Unstructured, *assets.Loader, *assets.AssetMetadata) {
 	t.Helper()
 
 	loader := assets.NewLoader()
@@ -42,6 +46,7 @@ func renderHCOAsset(t *testing.T, assetName string) (*unstructured.Unstructured,
 	hco.SetKind("HyperConverged")
 	hco.SetName("kubevirt-hyperconverged")
 	hco.SetNamespace("openshift-cnv")
+	hco.SetAnnotations(annotations)
 
 	renderCtx := &pkgcontext.RenderContext{HCO: hco}
 
@@ -132,6 +137,100 @@ func TestKubeletPerfSettingsIsMachineConfig(t *testing.T) {
 	if !strings.HasPrefix(path, "/etc/openshift/kubelet.conf.d/") {
 		t.Errorf("File path = %s, want /etc/openshift/kubelet.conf.d/*", path)
 	}
+}
+
+func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
+	rendered, loader, asset := renderHCOAsset(t, "file-based-swap-provisioning")
+
+	if rendered.GetName() != "90-worker-file-based-swap-provisioning" {
+		t.Errorf("MachineConfig name = %q, want 90-worker-file-based-swap-provisioning", rendered.GetName())
+	}
+	if asset.Install != "opt-in" {
+		t.Errorf("file-based-swap-provisioning Install = %q, want opt-in", asset.Install)
+	}
+
+	provisioningUnit := machineConfigSystemdUnit(t, rendered, "swap-provision.service")
+	provisioningContents, _ := provisioningUnit["contents"].(string)
+	if !strings.Contains(provisioningContents, "kubevirt-provision-file-swap.sh 100 15") {
+		t.Error("swap-provision.service should default the overcommit percentage to 100 and retain 15% free space")
+	}
+	if !strings.Contains(provisioningContents, "Before=kubelet-dependencies.target") {
+		t.Error("swap-provision.service must complete before kubelet dependencies start")
+	}
+	if !strings.Contains(provisioningContents, "RequiresMountsFor=/var") {
+		t.Error("swap-provision.service must require the mount backing /var, so the swap file is never written to an unmounted directory")
+	}
+	if !strings.Contains(provisioningContents, "WantedBy=kubelet-dependencies.target") {
+		t.Error("swap-provision.service must not block kubelet startup when provisioning fails")
+	}
+
+	activationUnit := machineConfigSystemdUnit(t, rendered, "ocpswap-file-enable.service")
+	activationDropInContents := systemdDropInContents(t, activationUnit, "10-wait-for-provisioning.conf")
+	if !strings.Contains(activationDropInContents, "After=swap-provision.service") ||
+		!strings.Contains(activationDropInContents, "ConditionFirstBoot=") ||
+		!strings.Contains(activationDropInContents, "ConditionPathExists=/var/ocpswap.file") {
+		t.Error("ocpswap-file-enable.service must wait for swap provisioning")
+	}
+
+	provisioner, err := loader.LoadAsset("active/machine-config/09-file-based-swap-provisioning/kubevirt-provision-file-swap.sh")
+	if err != nil {
+		t.Fatalf("Failed to load swap provisioner: %v", err)
+	}
+	if !strings.Contains(string(provisioner), "swap_file=/var/ocpswap.file") {
+		t.Error("swap provisioner must create the swap file under /var")
+	}
+	if !strings.Contains(string(provisioner), "semanage fcontext -a -f a -t swapfile_t") ||
+		!strings.Contains(string(provisioner), "restorecon -v \"${swap_file}\"") {
+		t.Error("swap provisioner must persist and restore the swap file SELinux context")
+	}
+	if !strings.Contains(string(provisioner), "legacy_swap_files=(/var/tmp/ocpswap.file /var/tmp/swapfile)") ||
+		!strings.Contains(string(provisioner), "legacy file-backed swap ${legacy_swap_file} exists; leaving it unchanged") {
+		t.Error("swap provisioner must preserve both supported legacy /var/tmp swap file paths")
+	}
+}
+
+func TestFileBasedSwapProvisioningUsesConfiguredFreeSpaceReserve(t *testing.T) {
+	rendered, _, _ := renderHCOAssetWithAnnotations(t, "file-based-swap-provisioning", map[string]string{
+		"platform.kubevirt.io/file-based-swap-min-free-percent": "20",
+	})
+
+	provisioningUnit := machineConfigSystemdUnit(t, rendered, "swap-provision.service")
+	provisioningContents, _ := provisioningUnit["contents"].(string)
+	if !strings.Contains(provisioningContents, "kubevirt-provision-file-swap.sh 100 20") {
+		t.Error("swap-provision.service should pass the configured free-space reserve to the provisioner")
+	}
+}
+
+func machineConfigSystemdUnit(t *testing.T, rendered *unstructured.Unstructured, name string) map[string]any {
+	t.Helper()
+
+	units, found, err := unstructured.NestedSlice(rendered.Object, "spec", "config", "systemd", "units")
+	if err != nil || !found {
+		t.Fatal("MachineConfig should contain systemd units")
+	}
+	for _, unit := range units {
+		unitMap, ok := unit.(map[string]any)
+		if ok && unitMap["name"] == name {
+			return unitMap
+		}
+	}
+	t.Fatalf("MachineConfig should contain %s", name)
+	return nil
+}
+
+func systemdDropInContents(t *testing.T, unit map[string]any, name string) string {
+	t.Helper()
+
+	dropins, _ := unit["dropins"].([]any)
+	for _, dropin := range dropins {
+		dropinMap, ok := dropin.(map[string]any)
+		if ok && dropinMap["name"] == name {
+			contents, _ := dropinMap["contents"].(string)
+			return contents
+		}
+	}
+	t.Fatalf("systemd unit should contain %s", name)
+	return ""
 }
 
 // Detailed field tests removed: kubelet configuration is now dropped as files
