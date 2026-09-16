@@ -114,8 +114,13 @@ type PodSpec struct {
 }
 
 type Volume struct {
-	Name   string              `json:"name"`
-	Secret *SecretVolumeSource `json:"secret,omitempty"`
+	Name     string                `json:"name"`
+	Secret   *SecretVolumeSource   `json:"secret,omitempty"`
+	EmptyDir *EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+}
+
+type EmptyDirVolumeSource struct {
+	SizeLimit string `json:"sizeLimit,omitempty"`
 }
 
 type SecretVolumeSource struct {
@@ -160,6 +165,7 @@ type ResourceRequirements struct {
 type SecurityContext struct {
 	AllowPrivilegeEscalation *bool           `json:"allowPrivilegeEscalation,omitempty"`
 	Capabilities             *Capabilities   `json:"capabilities,omitempty"`
+	ReadOnlyRootFilesystem   *bool           `json:"readOnlyRootFilesystem,omitempty"`
 	RunAsNonRoot             *bool           `json:"runAsNonRoot,omitempty"`
 	SeccompProfile           *SeccompProfile `json:"seccompProfile,omitempty"`
 }
@@ -400,6 +406,7 @@ through the existing HyperConverged resource.`,
 												SecurityContext: &SecurityContext{
 													AllowPrivilegeEscalation: &falseVal,
 													Capabilities:             &Capabilities{Drop: []string{"ALL"}},
+													ReadOnlyRootFilesystem:   &trueVal,
 													RunAsNonRoot:             &trueVal,
 													SeccompProfile:           &SeccompProfile{Type: "RuntimeDefault"},
 												},
@@ -422,6 +429,10 @@ through the existing HyperConverged resource.`,
 														MountPath: metricsCertMountPath,
 														ReadOnly:  true,
 													},
+													{
+														Name:      "tmp",
+														MountPath: "/tmp",
+													},
 												},
 											},
 										},
@@ -435,6 +446,10 @@ through the existing HyperConverged resource.`,
 													SecretName: metricsCertSecretName,
 													Optional:   &trueVal,
 												},
+											},
+											{
+												Name:     "tmp",
+												EmptyDir: &EmptyDirVolumeSource{SizeLimit: "64Mi"},
 											},
 										},
 									},
