@@ -49,6 +49,7 @@ type Patcher struct {
 	thrashingDetector *throttling.ThrashingDetector
 	client            client.Client
 	eventRecorder     *util.EventRecorder
+	staging           machineConfigStagingStore
 }
 
 // NewPatcher creates a new patcher
@@ -84,6 +85,9 @@ func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCt
 		return
 	}
 	observability.DeleteAssetMetrics(desired.GetKind(), desired.GetName(), desired.GetNamespace())
+	if err := p.clearMachineConfigStaging(context.Background(), desired, renderCtx); err != nil {
+		log.Log.V(1).Info("Failed to clear staged MachineConfig update for excluded asset", "name", desired.GetName(), "error", err)
+	}
 }
 
 // ReconcileAsset performs the full Patched Baseline algorithm for an asset
@@ -313,6 +317,18 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		}
 	}
 
+	// Identify a MachineConfig update from the rendered desired state, before
+	// masking. MaskIgnoredFields folds values read from the live object into
+	// desired, so hashing its output would let drift on the live side restart the
+	// staging clock of an update that has not itself changed.
+	machineConfigHash := ""
+	if liveExists && isMachineConfig(desired) {
+		machineConfigHash, err = machineConfigDesiredHash(desired)
+		if err != nil {
+			return false, fmt.Errorf("machineconfig rollout coalescing: %w", err)
+		}
+	}
+
 	// Step 4: Mask ignored fields → Effective Desired State
 	if liveExists {
 		// Check if ignore-fields annotation exists
@@ -353,7 +369,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			// Mark compliance as failed: the operator cannot verify or enforce the desired
 			// state while drift detection is broken, so the metric must signal degraded
 			// status to allow VirtPlatformAutopilotSyncFailed to fire.
-			observability.SetCompliance(desired, 0)
+			observability.SetCompliance(desired, observability.ComplianceFailed)
 			return false, fmt.Errorf("drift detection failed: %w", err)
 		}
 	} else {
@@ -365,9 +381,27 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		logger.V(1).Info("No drift detected, skipping apply",
 			"name", assetMeta.Name,
 		)
-		observability.SetCompliance(desired, 1)
+		observability.SetCompliance(desired, observability.ComplianceSynced)
 		observability.SetPaused(desired, false)
 		return false, nil
+	}
+
+	// Existing MachineConfigs are expensive because each update can reboot a
+	// pool. Stage them until an MCP is already Updating, unless explicitly
+	// bypassed. New MachineConfigs remain immediate.
+	if liveExists {
+		apply, err := p.coalesceMachineConfigUpdate(ctx, desired, live, machineConfigHash, renderCtx)
+		if err != nil {
+			return false, fmt.Errorf("machineconfig rollout coalescing: %w", err)
+		}
+		if !apply {
+			// A staged update is an intentional, observable deferral rather than a
+			// failed reconciliation, and it is equally not a synced asset. Its own
+			// compliance state keeps the generic sync-failed alert (which matches
+			// == 0) quiet without claiming the live object matches the golden state.
+			observability.SetCompliance(desired, observability.ComplianceDeferred)
+			return false, nil
+		}
 	}
 
 	// Record drift detection (only when drift is found)
@@ -474,7 +508,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		}
 
 		// Set compliance status to failed (0)
-		observability.SetCompliance(desired, 0)
+		observability.SetCompliance(desired, observability.ComplianceFailed)
 
 		// Record apply failure event
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
@@ -491,7 +525,16 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"objectName", desired.GetName(),
 		)
 		// Set compliance status to synced (1)
-		observability.SetCompliance(desired, 1)
+		observability.SetCompliance(desired, observability.ComplianceSynced)
+
+		// A staged MachineConfig update is only retired once its release has
+		// actually reached the API server, so that a refusal further up (namespace
+		// guard, token bucket) keeps the original staging timestamp.
+		if err := p.clearMachineConfigStaging(ctx, desired, renderCtx); err != nil {
+			logger.Error(err, "Failed to clear staged MachineConfig update after apply",
+				"name", desired.GetName(),
+			)
+		}
 
 		// Reset thrashing detector - successful reconciliation resolves edit war
 		p.thrashingDetector.RecordSuccess(resourceKey)
@@ -509,7 +552,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		}
 	} else {
 		// No drift detected or skipped - still compliant
-		observability.SetCompliance(desired, 1)
+		observability.SetCompliance(desired, observability.ComplianceSynced)
 	}
 
 	return applied, nil

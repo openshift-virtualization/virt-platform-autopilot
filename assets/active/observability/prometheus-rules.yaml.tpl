@@ -17,6 +17,9 @@ spec:
           # Expr: kubevirt_autopilot_compliance_status == 0 (for > 15m)
           # 15m allows for transient API errors or slow rollouts (like MachineConfig)
           # If it persists longer, the automation is broken and requires attention
+          # Matching == 0 (not != 1) deliberately excludes 2 = Staged: a MachineConfig
+          # update held for an MCP rollout is out of sync by design, not by failure.
+          # See docs/machineconfig-rollout-coalescing.md
           expr: |
             kubevirt_autopilot_compliance_status == 0
           for: 15m
@@ -36,7 +39,7 @@ spec:
               This indicates the automation is broken and requires immediate attention.
 
               Current compliance status: {{`{{ $value }}`}}
-              (0 = Drifted/Sync Failed, 1 = Synced)
+              (0 = Drifted/Sync Failed, 1 = Synced, 2 = Staged for an MCP rollout)
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotSyncFailed" }}"
 
     - name: virt-platform-autopilot.warning

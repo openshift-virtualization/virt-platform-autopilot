@@ -31,14 +31,14 @@ const (
 
 var (
 	// ComplianceStatus tracks whether each managed resource is in sync with desired state.
-	// 1 = Synced (Golden State matches Live), 0 = Drifted/Sync Failed
+	// See the Compliance* constants for the values.
 	// This is the core health indicator used by the VirtPlatformAutopilotSyncFailed alert.
 	ComplianceStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
 			Name:      "compliance_status",
-			Help:      "Compliance status of managed resources (1=synced, 0=drifted/failed)",
+			Help:      "Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)",
 		},
 		[]string{"kind", "name", "namespace"},
 	)
@@ -138,9 +138,32 @@ var (
 		},
 		[]string{"kind", "name", "namespace"},
 	)
+
+	// MachineConfigUpdateStaged reports a desired MachineConfig update held for
+	// the next already-running MCP rollout. One series is emitted per matching
+	// pool, making shared MachineConfig fan-out visible.
+	MachineConfigUpdateStaged = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Namespace: namespace, Subsystem: subsystem, Name: "machineconfig_update_staged", Help: "MachineConfig updates staged for an active MCP rollout (1=staged)"},
+		[]string{"machineconfig", "pool"},
+	)
+	MachineConfigUpdateStagedSinceSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Namespace: namespace, Subsystem: subsystem, Name: "machineconfig_update_staged_since_seconds", Help: "Unix time when a MachineConfig update was staged"},
+		[]string{"machineconfig", "pool"},
+	)
 )
 
 const (
+	// ComplianceStatus values.
+	//
+	// ComplianceDeferred is deliberately distinct from both others: the live object
+	// does not match the golden state, so claiming Synced would be false, but the
+	// mismatch is an intentional deferral rather than a failure, so it must not
+	// trigger VirtPlatformAutopilotSyncFailed (which matches == 0). It is currently
+	// only used for MachineConfig updates staged for an MCP rollout.
+	ComplianceFailed   = 0.0
+	ComplianceSynced   = 1.0
+	ComplianceDeferred = 2.0
+
 	// Tombstone status values
 	TombstoneExists  = 1.0
 	TombstoneDeleted = 0.0
@@ -161,11 +184,13 @@ func init() {
 		DependencyOptedIn,
 		ReconcileDuration,
 		TombstoneStatus,
+		MachineConfigUpdateStaged,
+		MachineConfigUpdateStagedSinceSeconds,
 	)
 }
 
 // SetCompliance sets the compliance status for a managed resource.
-// status: 1 = synced, 0 = drifted/failed
+// status: one of ComplianceSynced, ComplianceFailed or ComplianceDeferred.
 func SetCompliance(obj *unstructured.Unstructured, status float64) {
 	ComplianceStatus.WithLabelValues(
 		obj.GetKind(),
@@ -293,4 +318,20 @@ func DeleteAssetMetrics(kind, name, namespace string) {
 	for _, customizationType := range []string{"patch", "ignore", "unmanaged"} {
 		CustomizationInfo.DeleteLabelValues(kind, name, namespace, customizationType)
 	}
+}
+
+// SetMachineConfigUpdateStaged refreshes the durable staging state in metrics.
+func SetMachineConfigUpdateStaged(machineConfig string, pools []string, stagedAt time.Time) {
+	for _, pool := range pools {
+		MachineConfigUpdateStaged.WithLabelValues(machineConfig, pool).Set(1)
+		MachineConfigUpdateStagedSinceSeconds.WithLabelValues(machineConfig, pool).Set(float64(stagedAt.Unix()))
+	}
+}
+
+// ClearMachineConfigUpdateStaged removes every pool series for a MachineConfig.
+// Pool names are not retained in-memory deliberately; DeletePartialMatch is safe
+// and also clears obsolete pools after selectors change.
+func ClearMachineConfigUpdateStaged(machineConfig string) {
+	MachineConfigUpdateStaged.DeletePartialMatch(prometheus.Labels{"machineconfig": machineConfig})
+	MachineConfigUpdateStagedSinceSeconds.DeletePartialMatch(prometheus.Labels{"machineconfig": machineConfig})
 }
