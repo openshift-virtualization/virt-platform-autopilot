@@ -219,6 +219,33 @@ tests:
         exp_alerts: []
 
   # ============================================================================
+  # Test: VirtPlatformAutopilotMachineConfigUpdateStaged - Informational Alert
+  # A staged update is deliberate; this makes it visible after five minutes
+  # without representing a remediation request.
+  # ============================================================================
+
+  - interval: 1m
+    input_series:
+      - series: 'kubevirt_autopilot_machineconfig_update_staged{machineconfig="95-worker-kubelet-perf-settings",pool="worker"}'
+        values: '1 1 1 1 1 1 1 1'
+
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: VirtPlatformAutopilotMachineConfigUpdateStaged
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: VirtPlatformAutopilotMachineConfigUpdateStaged
+        exp_alerts:
+          - exp_labels:
+              severity: info
+              operator: virt-platform-autopilot
+              operator_health_impact: none
+              kubernetes_operator_part_of: kubevirt
+              kubernetes_operator_component: autopilot
+              machineconfig: 95-worker-kubelet-perf-settings
+              pool: worker
+
+  # ============================================================================
   # Test: Alert Expressions Are Syntactically Valid
   # Tests that all alert rules can be loaded and evaluated
   # ============================================================================
@@ -234,6 +261,8 @@ tests:
         values: '0 0 0'
       - series: 'kubevirt_autopilot_dependency_opted_in{group="test",version="v1",kind="Test"}'
         values: '1 1 1'
+      - series: 'kubevirt_autopilot_machineconfig_update_staged{machineconfig="test",pool="worker"}'
+        values: '0 0 0'
 
     alert_rule_test:
       # All alerts should evaluate without errors (even if not firing)
@@ -245,4 +274,7 @@ tests:
         exp_alerts: []
       - eval_time: 1m
         alertname: VirtPlatformAutopilotDependencyMissing
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: VirtPlatformAutopilotMachineConfigUpdateStaged
         exp_alerts: []

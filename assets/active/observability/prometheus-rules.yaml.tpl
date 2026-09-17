@@ -139,3 +139,28 @@ spec:
 
               Manual intervention may be required to remove this resource.
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotTombstoneStuck" }}"
+
+    - name: virt-platform-autopilot.info
+      interval: 30s
+      rules:
+        - alert: VirtPlatformAutopilotMachineConfigUpdateStaged
+          # Informational only: a staged update is intentional and will be
+          # applied when a matching MCP next begins its rollout.
+          expr: |
+            kubevirt_autopilot_machineconfig_update_staged == 1
+          for: 5m
+          labels:
+            severity: info
+            operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: none
+          annotations:
+            summary: "MachineConfig update staged for MCP {{`{{ $labels.pool }}`}}"
+            description: |-
+              virt-platform-autopilot has staged an update to MachineConfig
+              {{`{{ $labels.machineconfig }}`}} for MachineConfigPool {{`{{ $labels.pool }}`}}.
+
+              The update is intentional and will be applied when a matching
+              MachineConfigPool next starts a rollout. No administrator action
+              is required.

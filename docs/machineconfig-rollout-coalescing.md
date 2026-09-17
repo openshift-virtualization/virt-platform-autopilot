@@ -50,4 +50,9 @@ Autopilot preserves this annotation and applies future updates immediately. Remo
 
 `kubevirt_autopilot_machineconfig_update_staged{machineconfig,pool}` is `1` for each MCP matching either label set while an update is staged. `kubevirt_autopilot_machineconfig_update_staged_since_seconds` records when it was first staged. The **Autopilot / Asset Health** dashboard includes a **Staged MachineConfig Updates** table.
 
+After five minutes, `VirtPlatformAutopilotMachineConfigUpdateStaged` fires with
+`severity: info`. It records an intentional deferral that will be released by a
+future matching MCP rollout; it is not a failure and has no runbook or required
+administrator action.
+
 While an update is staged, `kubevirt_autopilot_compliance_status` for that MachineConfig reports `2` (Staged) rather than `1` (Synced): the live object genuinely does not match the golden state. `VirtPlatformAutopilotSyncFailed` matches `== 0`, so a deliberate deferral does not raise a sync failure, and the dashboard shows the asset as Staged rather than Synced.

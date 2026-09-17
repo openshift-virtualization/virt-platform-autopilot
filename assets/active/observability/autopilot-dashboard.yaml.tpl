@@ -595,8 +595,8 @@ spec:
           display:
             description: Alerts currently firing for virt-platform-autopilot. Covers
               VirtPlatformAutopilotSyncFailed (critical), VirtPlatformAutopilotThrashingDetected, VirtPlatformAutopilotDependencyMissing,
-              and VirtPlatformAutopilotTombstoneStuck (warnings). Empty table means no active
-              alerts.
+              and VirtPlatformAutopilotTombstoneStuck (warnings), plus the informational
+              VirtPlatformAutopilotMachineConfigUpdateStaged. Empty table means no active alerts.
             name: Currently Firing Alerts
           plugin:
             kind: Table
