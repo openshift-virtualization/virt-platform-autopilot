@@ -17,6 +17,9 @@ spec:
           # Expr: kubevirt_autopilot_compliance_status == 0 (for > 15m)
           # 15m allows for transient API errors or slow rollouts (like MachineConfig)
           # If it persists longer, the automation is broken and requires attention
+          # Matching == 0 (not != 1) deliberately excludes 2 = Staged: a MachineConfig
+          # update held for an MCP rollout is out of sync by design, not by failure.
+          # See docs/machineconfig-rollout-coalescing.md
           expr: |
             kubevirt_autopilot_compliance_status == 0
           for: 15m
@@ -36,7 +39,7 @@ spec:
               This indicates the automation is broken and requires immediate attention.
 
               Current compliance status: {{`{{ $value }}`}}
-              (0 = Drifted/Sync Failed, 1 = Synced)
+              (0 = Drifted/Sync Failed, 1 = Synced, 2 = Staged for an MCP rollout)
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotSyncFailed" }}"
 
     - name: virt-platform-autopilot.warning
@@ -136,3 +139,28 @@ spec:
 
               Manual intervention may be required to remove this resource.
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotTombstoneStuck" }}"
+
+    - name: virt-platform-autopilot.info
+      interval: 30s
+      rules:
+        - alert: VirtPlatformAutopilotMachineConfigUpdateStaged
+          # Informational only: a staged update is intentional and will be
+          # applied when a matching MCP next begins its rollout.
+          expr: |
+            kubevirt_autopilot_machineconfig_update_staged == 1
+          for: 5m
+          labels:
+            severity: info
+            operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: none
+          annotations:
+            summary: "MachineConfig update staged for MCP {{`{{ $labels.pool }}`}}"
+            description: |-
+              virt-platform-autopilot has staged an update to MachineConfig
+              {{`{{ $labels.machineconfig }}`}} for MachineConfigPool {{`{{ $labels.pool }}`}}.
+
+              The update is intentional and will be applied when a matching
+              MachineConfigPool next starts a rollout. No administrator action
+              is required.
