@@ -14,16 +14,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
 func TestMachineConfigUpdateIsStagedUntilMatchingPoolUpdates(t *testing.T) {
 	ctx := context.Background()
 	p := NewPatcher(fake.NewClientBuilder().WithRuntimeObjects(testMCP("worker", "False")).Build(), nil, nil)
+	events := &countingRecorder{counts: map[string]int{}}
+	p.SetEventRecorder(util.NewEventRecorder(events))
 	desired, live := testMachineConfigs()
 
 	apply, err := p.coalesceMachineConfigUpdate(ctx, desired, live, testHash(t, desired), testRenderContext())
 	if err != nil || apply {
 		t.Fatalf("stable MCP: apply=%t err=%v, want false nil", apply, err)
+	}
+	if events.counts[util.EventReasonMachineConfigUpdateStaged] != 1 {
+		t.Fatalf("staged events = %d, want 1", events.counts[util.EventReasonMachineConfigUpdateStaged])
 	}
 	stage, err := p.machineConfigStage(ctx, "openshift-cnv", desired.GetName())
 	if err != nil || stage == nil {
@@ -56,7 +62,7 @@ func TestMachineConfigUpdateIsStagedUntilMatchingPoolUpdates(t *testing.T) {
 	if err != nil || stage == nil {
 		t.Fatalf("stage was dropped on release before apply: stage=%v err=%v", stage, err)
 	}
-	if err := p.clearMachineConfigStaging(ctx, desired, testRenderContext()); err != nil {
+	if _, err := p.clearMachineConfigStaging(ctx, desired, testRenderContext()); err != nil {
 		t.Fatal(err)
 	}
 	stage, err = p.machineConfigStage(ctx, "openshift-cnv", desired.GetName())

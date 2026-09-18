@@ -85,7 +85,7 @@ func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCt
 		return
 	}
 	observability.DeleteAssetMetrics(desired.GetKind(), desired.GetName(), desired.GetNamespace())
-	if err := p.clearMachineConfigStaging(context.Background(), desired, renderCtx); err != nil {
+	if _, err := p.clearMachineConfigStaging(context.Background(), desired, renderCtx); err != nil {
 		log.Log.V(1).Info("Failed to clear staged MachineConfig update for excluded asset", "name", desired.GetName(), "error", err)
 	}
 }
@@ -530,10 +530,20 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		// A staged MachineConfig update is only retired once its release has
 		// actually reached the API server, so that a refusal further up (namespace
 		// guard, token bucket) keeps the original staging timestamp.
-		if err := p.clearMachineConfigStaging(ctx, desired, renderCtx); err != nil {
+		stage, err := p.clearMachineConfigStaging(ctx, desired, renderCtx)
+		if err != nil {
 			logger.Error(err, "Failed to clear staged MachineConfig update after apply",
 				"name", desired.GetName(),
 			)
+		} else if stage != nil {
+			logger.Info("Released staged MachineConfig update",
+				"machineconfig", desired.GetName(),
+				"matchingPools", stage.MatchingPools,
+				"stagedAt", stage.StagedAt,
+			)
+			if p.eventRecorder != nil && renderCtx.HCO != nil {
+				p.eventRecorder.MachineConfigUpdateReleased(renderCtx.HCO, desired.GetName(), stage.MatchingPools)
+			}
 		}
 
 		// Reset thrashing detector - successful reconciliation resolves edit war

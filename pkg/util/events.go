@@ -37,11 +37,13 @@ const (
 // Event reasons - these appear in kubectl get events
 const (
 	// Successful operations
-	EventReasonAssetApplied       = "AssetApplied"
-	EventReasonDriftCorrected     = "DriftCorrected"
-	EventReasonPatchApplied       = "PatchApplied"
-	EventReasonReconcileSucceeded = "ReconcileSucceeded"
-	EventReasonCRDDiscovered      = "CRDDiscovered"
+	EventReasonAssetApplied                = "AssetApplied"
+	EventReasonDriftCorrected              = "DriftCorrected"
+	EventReasonPatchApplied                = "PatchApplied"
+	EventReasonReconcileSucceeded          = "ReconcileSucceeded"
+	EventReasonCRDDiscovered               = "CRDDiscovered"
+	EventReasonMachineConfigUpdateStaged   = "MachineConfigUpdateStaged"
+	EventReasonMachineConfigUpdateReleased = "MachineConfigUpdateReleased"
 
 	// Informational events
 	EventReasonAssetSkipped    = "AssetSkipped"
@@ -105,6 +107,21 @@ func (e *EventRecorder) DriftCorrected(object runtime.Object, kind, namespace, n
 func (e *EventRecorder) DriftDetected(object runtime.Object, kind, namespace, name string) {
 	e.recorder.Eventf(object, nil, EventTypeWarning, EventReasonDriftDetected, assetAction(EventReasonDriftDetected, kind, namespace, name),
 		"Drift detected for %s/%s/%s", kind, namespace, name)
+}
+
+// MachineConfigUpdateStaged records that a MachineConfig update is held until
+// a matching MachineConfigPool starts updating.
+func (e *EventRecorder) MachineConfigUpdateStaged(object runtime.Object, name string, pools []string) {
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonMachineConfigUpdateStaged,
+		assetAction(EventReasonMachineConfigUpdateStaged, "MachineConfig", "", name),
+		"Staged MachineConfig update %s until a matching MachineConfigPool starts updating: %s", name, strings.Join(pools, ", "))
+}
+
+// MachineConfigUpdateReleased records that a staged MachineConfig update was applied.
+func (e *EventRecorder) MachineConfigUpdateReleased(object runtime.Object, name string, pools []string) {
+	e.recorder.Eventf(object, nil, EventTypeNormal, EventReasonMachineConfigUpdateReleased,
+		assetAction(EventReasonMachineConfigUpdateReleased, "MachineConfig", "", name),
+		"Applied staged MachineConfig update %s after a matching MachineConfigPool began updating: %s", name, strings.Join(pools, ", "))
 }
 
 // PatchApplied records that a user JSON patch was applied

@@ -142,6 +142,10 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 		if err := p.stageMachineConfigUpdate(ctx, namespace, desired.GetName(), *stage, renderCtx.HCO); err != nil {
 			return false, err
 		}
+		log.Log.Info("Staged MachineConfig update", "machineconfig", desired.GetName(), "matchingPools", names, "stagedAt", stage.StagedAt)
+		if p.eventRecorder != nil && renderCtx.HCO != nil {
+			p.eventRecorder.MachineConfigUpdateStaged(renderCtx.HCO, desired.GetName(), names)
+		}
 	case !slices.Equal(stage.MatchingPools, names):
 		stage.MatchingPools = names
 		if err := p.stageMachineConfigUpdate(ctx, namespace, desired.GetName(), *stage, renderCtx.HCO); err != nil {
@@ -158,15 +162,19 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 // clearMachineConfigStaging drops any staged entry for a MachineConfig asset. It
 // is a no-op for every other kind, and needs no API call unless something is
 // actually staged.
-func (p *Patcher) clearMachineConfigStaging(ctx context.Context, desired *unstructured.Unstructured, renderCtx *pkgcontext.RenderContext) error {
+func (p *Patcher) clearMachineConfigStaging(ctx context.Context, desired *unstructured.Unstructured, renderCtx *pkgcontext.RenderContext) (*machineConfigStage, error) {
 	if !isMachineConfig(desired) || renderCtx == nil || renderCtx.HCO == nil {
-		return nil
+		return nil, nil
 	}
 	namespace := renderCtx.HCO.GetNamespace()
 	if namespace == "" {
-		return nil
+		return nil, nil
 	}
-	return p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
+	stage, err := p.machineConfigStage(ctx, namespace, desired.GetName())
+	if err != nil || stage == nil {
+		return stage, err
+	}
+	return stage, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
 }
 
 // machineConfigCoalescingBypassed reports whether the live MachineConfig opts out
