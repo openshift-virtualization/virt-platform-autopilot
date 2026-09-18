@@ -629,6 +629,12 @@ spec:
               - enableSorting: true
                 header: Namespace
                 name: namespace
+              - enableSorting: true
+                header: MachineConfig
+                name: machineconfig
+              - enableSorting: true
+                header: MCP
+                name: pool
               - hide: true
                 name: value
               - hide: true
