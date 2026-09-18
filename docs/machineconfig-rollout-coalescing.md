@@ -2,6 +2,11 @@
 
 MachineConfig updates can trigger a costly Machine Config Operator (MCO) rollout and node reboot. Autopilot therefore creates MachineConfigs immediately, but stages updates to an existing Autopilot-managed MachineConfig while all matching MachineConfigPools (MCPs) are stable.
 
+Coalescing is a generic, conservative safety net for production clusters: it
+assumes an update might cause an unexpected reboot and waits to join an existing
+rollout when possible. It is not a claim that every MachineConfig update requires
+a reboot.
+
 When any matching MCP reports `Updating=True`, Autopilot applies the latest staged version. MCO can then include that change in the rollout already in progress. The first matching updating MCP wins. Matching covers both the live and proposed MachineConfig labels, so target-pool label changes are coalesced safely. Staging is stored in the `virt-platform-autopilot-mc-staging` ConfigMap in the HyperConverged namespace, so an operator restart does not discard it. The ConfigMap is owned by HyperConverged, and entries are removed when their MachineConfig leaves Autopilot's active set.
 
 ## Degraded pools
@@ -45,6 +50,14 @@ metadata:
 ```
 
 Autopilot preserves this annotation and applies future updates immediately. Remove it to resume staging. Use it sparingly: it can start a new MCO rollout and reboot nodes.
+
+Use the bypass only for a MachineConfig whose on-the-fly behavior is covered by
+the MCO's [Node Disruption Policy](https://github.com/openshift/machine-config-operator/blob/main/docs/NodeDisruptionPolicy.md)
+for the target OpenShift version and configuration. When an asset requires a
+specific `MachineConfiguration` cluster singleton setting to make that behavior
+safe, manage that setting in a companion Autopilot asset. Keeping the singleton
+change and bypassed MachineConfig together makes the exception explicit,
+reviewable, and scoped to that use case.
 
 ## Observability
 
