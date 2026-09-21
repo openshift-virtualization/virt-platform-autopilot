@@ -99,8 +99,6 @@ transform_daemonset() {
 	printf '%s\n' "${TEMPLATE_HEADER}"
 	sed -e 's|^[[:space:]]*image:.*|          image: {{ index .Images "kubevirt-metrics-exporter" }}|' \
 		-e 's/containerPort: 8080/containerPort: 8443/' \
-		-e 's/httpGet:/tcpSocket:/' \
-		-e '/path: \/healthz/d' \
 		-e '/hostPID: true/a\
       nodeSelector:\
         node-role.kubernetes.io/worker: ""
