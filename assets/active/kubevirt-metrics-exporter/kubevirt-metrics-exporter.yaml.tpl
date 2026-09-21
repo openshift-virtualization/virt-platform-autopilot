@@ -71,9 +71,14 @@ spec:
               value: {{ index $envOverrides "EBPF_SCAN_INTERVAL" | default "30" | quote }}
             - name: LOG_LEVEL
               value: {{ index $envOverrides "LOG_LEVEL" | default "info" | quote }}
+            - name: HEALTH_LISTEN_ADDRESS
+              value: {{ index $envOverrides "HEALTH_LISTEN_ADDRESS" | default ":8081" | quote }}
           ports:
             - name: metrics
               containerPort: 8443
+              protocol: TCP
+            - name: health
+              containerPort: 8081
               protocol: TCP
           volumeMounts:
             - name: metrics-serving-cert
@@ -94,13 +99,15 @@ spec:
               cpu: 200m
               memory: 256Mi
           livenessProbe:
-            tcpSocket:
-              port: metrics
+            httpGet:
+              path: /healthz
+              port: health
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
-            tcpSocket:
-              port: metrics
+            httpGet:
+              path: /healthz
+              port: health
             initialDelaySeconds: 5
             periodSeconds: 10
           securityContext:
