@@ -39,7 +39,7 @@ func TestSetCompliance(t *testing.T) {
 	SetCompliance(obj, 1)
 
 	expected := `
-		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 		# TYPE kubevirt_autopilot_compliance_status gauge
 		kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 1
 	`
@@ -52,7 +52,7 @@ func TestSetCompliance(t *testing.T) {
 	SetCompliance(obj, 0)
 
 	expected = `
-		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 		# TYPE kubevirt_autopilot_compliance_status gauge
 		kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 0
 	`
@@ -365,7 +365,7 @@ func TestMultipleResources(t *testing.T) {
 	SetCompliance(deploy, 0)
 
 	expected := `
-		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 		# TYPE kubevirt_autopilot_compliance_status gauge
 		kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="test-ns"} 1
 		kubevirt_autopilot_compliance_status{kind="Deployment",name="test-deploy",namespace="test-ns"} 0
@@ -389,7 +389,7 @@ func TestClusterScopedResources(t *testing.T) {
 	SetCompliance(obj, 1)
 
 	expected := `
-		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+		# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 		# TYPE kubevirt_autopilot_compliance_status gauge
 		kubevirt_autopilot_compliance_status{kind="ClusterRole",name="test-role",namespace=""} 1
 	`

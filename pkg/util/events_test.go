@@ -119,6 +119,36 @@ func TestEventRecorder_DriftDetected(t *testing.T) {
 	}
 }
 
+func TestEventRecorder_MachineConfigUpdateStaged(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	recorder.MachineConfigUpdateStaged(&unstructured.Unstructured{}, "99-worker-example", []string{"worker"})
+
+	event := fake.LastEvent()
+	if event == nil || event.EventType != EventTypeNormal || event.Reason != EventReasonMachineConfigUpdateStaged {
+		t.Fatalf("event = %#v, want normal staged event", event)
+	}
+	if expected := "MachineConfigUpdateStaged MachineConfig//99-worker-example"; event.Action != expected {
+		t.Errorf("Action = %q, want %q", event.Action, expected)
+	}
+}
+
+func TestEventRecorder_MachineConfigUpdateReleased(t *testing.T) {
+	fake := &FakeRecorder{}
+	recorder := NewEventRecorder(fake)
+
+	recorder.MachineConfigUpdateReleased(&unstructured.Unstructured{}, "99-worker-example", []string{"worker"})
+
+	event := fake.LastEvent()
+	if event == nil || event.EventType != EventTypeNormal || event.Reason != EventReasonMachineConfigUpdateReleased {
+		t.Fatalf("event = %#v, want normal released event", event)
+	}
+	if expected := "MachineConfigUpdateReleased MachineConfig//99-worker-example"; event.Action != expected {
+		t.Errorf("Action = %q, want %q", event.Action, expected)
+	}
+}
+
 func TestEventRecorder_DriftCorrected(t *testing.T) {
 	fake := &FakeRecorder{}
 	recorder := NewEventRecorder(fake)

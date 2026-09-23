@@ -87,7 +87,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		groups, found, err := unstructured.NestedSlice(specMap, "groups")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(found).To(BeTrue(), "spec.groups should exist")
-		Expect(groups).To(HaveLen(2), "should have 2 rule groups (critical + warning)")
+		Expect(groups).To(HaveLen(3), "should have 3 rule groups (critical + warning + info)")
 
 		By("verifying critical alert group")
 		criticalGroup := groups[0].(map[string]any)
@@ -128,6 +128,18 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformAutopilotTombstoneStuck"))
 		Expect(tombstoneAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_tombstone_status < 0"))
 		Expect(tombstoneAlert["for"]).To(Equal("30m"))
+
+		By("verifying informational staged MachineConfig alert group")
+		infoGroup := groups[2].(map[string]any)
+		Expect(infoGroup["name"]).To(Equal("virt-platform-autopilot.info"))
+		infoRules := infoGroup["rules"].([]any)
+		Expect(infoRules).To(HaveLen(1), "info group should have 1 alert")
+		stagedAlert := infoRules[0].(map[string]any)
+		Expect(stagedAlert["alert"]).To(Equal("VirtPlatformAutopilotMachineConfigUpdateStaged"))
+		Expect(stagedAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_machineconfig_update_staged == 1"))
+		Expect(stagedAlert["for"]).To(Equal("5m"))
+		Expect(stagedAlert["labels"].(map[string]any)["severity"]).To(Equal("info"))
+		Expect(stagedAlert["annotations"].(map[string]any)).NotTo(HaveKey("runbook_url"))
 	})
 
 	It("should have proper labels and annotations on all alerts", func() {
@@ -161,7 +173,11 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 			Expect(annotationsExist).To(BeTrue(), "Alert %s should have annotations", alertName)
 			Expect(annotations["summary"]).ToNot(BeEmpty(), "Alert %s should have summary annotation", alertName)
 			Expect(annotations["description"]).ToNot(BeEmpty(), "Alert %s should have description annotation", alertName)
-			Expect(annotations["runbook_url"]).To(Equal("https://kubevirt.io/monitoring/runbooks/"+alertName), "Alert %s should have runbook_url pointing at the kubevirt.io runbook", alertName)
+			if alertName == "VirtPlatformAutopilotMachineConfigUpdateStaged" {
+				Expect(annotations).NotTo(HaveKey("runbook_url"), "informational staged-update alert has no action or runbook")
+			} else {
+				Expect(annotations["runbook_url"]).To(Equal("https://kubevirt.io/monitoring/runbooks/"+alertName), "Alert %s should have runbook_url pointing at the kubevirt.io runbook", alertName)
+			}
 		}
 	})
 

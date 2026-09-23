@@ -162,6 +162,14 @@ func (a *Applier) GetDirect(ctx context.Context, key client.ObjectKey, obj *unst
 	return a.client.Get(ctx, key, obj)
 }
 
+// GetDirectObject is the typed counterpart of GetDirect.
+func (a *Applier) GetDirectObject(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+	if a.apiReader != nil {
+		return a.apiReader.Get(ctx, key, obj)
+	}
+	return a.client.Get(ctx, key, obj)
+}
+
 // ensureManagedByLabel adds the managed-by label to an object
 // This is a GitOps best practice and enables cache filtering
 func ensureManagedByLabel(obj *unstructured.Unstructured) {

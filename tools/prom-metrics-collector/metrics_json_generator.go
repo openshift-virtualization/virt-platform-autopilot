@@ -43,7 +43,7 @@ func typePtr(t dto.MetricType) *dto.MetricType { return &t }
 var metricFamilies = []*dto.MetricFamily{
 	{
 		Name: strPtr("kubevirt_autopilot_compliance_status"),
-		Help: strPtr("Compliance status of managed resources (1=synced, 0=drifted/failed)"),
+		Help: strPtr("Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)"),
 		Type: typePtr(dto.MetricType_GAUGE),
 	},
 	{
@@ -79,6 +79,16 @@ var metricFamilies = []*dto.MetricFamily{
 	{
 		Name: strPtr("kubevirt_autopilot_tombstone_status"),
 		Help: strPtr("Tombstone deletion status (1=exists, 0=deleted, -1=error, -2=skipped)"),
+		Type: typePtr(dto.MetricType_GAUGE),
+	},
+	{
+		Name: strPtr("kubevirt_autopilot_machineconfig_update_staged"),
+		Help: strPtr("MachineConfig updates staged for an active MCP rollout (1=staged)"),
+		Type: typePtr(dto.MetricType_GAUGE),
+	},
+	{
+		Name: strPtr("kubevirt_autopilot_machineconfig_update_staged_since_seconds"),
+		Help: strPtr("Unix time when a MachineConfig update was staged"),
 		Type: typePtr(dto.MetricType_GAUGE),
 	},
 }

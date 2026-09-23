@@ -20,6 +20,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"maps"
 	"os"
 	"sync"
 	"time"
@@ -31,10 +32,15 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	// Aliased: the local controller builder variable in SetupWithManager shadows
+	// the package name.
+	ctrlbuilder "sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
@@ -504,6 +510,26 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 	}
 }
 
+// machineConfigPoolRolloutPredicate limits MachineConfigPool events to changes in
+// the conditions that can release a staged MachineConfig update. MCP status is
+// rewritten on every node transition of a rollout, and each event here enqueues a
+// reconciliation of every managed asset, so an unfiltered watch would turn one
+// rollout into a reconcile storm.
+func machineConfigPoolRolloutPredicate() predicate.Predicate {
+	conditions := func(obj client.Object) map[string]string {
+		pool, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			return nil
+		}
+		return engine.MachineConfigPoolRolloutConditions(pool)
+	}
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return !maps.Equal(conditions(e.ObjectOld), conditions(e.ObjectNew))
+		},
+	}
+}
+
 func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	logger := mgr.GetLogger().WithName("setup")
 	ctx := context.Background()
@@ -515,6 +541,9 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Create unstructured object for KubeVirt
 	kv := &unstructured.Unstructured{}
 	kv.SetGroupVersionKind(pkgcontext.KVGVK)
+	mcp := &unstructured.Unstructured{}
+	mcp.SetAPIVersion("machineconfiguration.openshift.io/v1")
+	mcp.SetKind("MachineConfigPool")
 
 	// Build controller with HCO watch
 	builder := ctrl.NewControllerManagedBy(mgr).
@@ -525,8 +554,18 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Watches(kv, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
 			return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
-		})).
-		Named("platform")
+		})).Named("platform")
+
+	// MCO is absent on non-OpenShift clusters. Avoid registering an unserved
+	// GVK there, while still watching it immediately on OpenShift.
+	mcpInstalled, err := r.crdChecker.IsCRDInstalled(ctx, "machineconfigpools.machineconfiguration.openshift.io")
+	if err != nil {
+		logger.Error(err, "Failed to check MCP CRD; staged MachineConfig updates will use periodic reconciliation")
+	} else if mcpInstalled {
+		builder = builder.Watches(mcp, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
+			return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
+		}), ctrlbuilder.WithPredicates(machineConfigPoolRolloutPredicate()))
+	}
 
 	// The metrics TLS controller sends this only after it has atomically updated
 	// the in-memory APIServer policy. Re-rendering KME from the channel therefore

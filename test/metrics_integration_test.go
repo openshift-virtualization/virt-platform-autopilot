@@ -90,7 +90,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric is 1 (synced)")
 			expected := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="test-cm",namespace="` + testNs + `"} 1
 			`
@@ -120,7 +120,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric is 0 (failed)")
 			expected := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="invalid-cm",namespace="` + testNs + `"} 0
 			`
@@ -158,7 +158,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying both metrics are tracked independently")
 			expected := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-failed",namespace="` + testNs + `"} 0
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-synced",namespace="` + testNs + `"} 1
@@ -184,7 +184,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying initial state is 1")
 			expected1 := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-changing",namespace="` + testNs + `"} 1
 			`
@@ -195,7 +195,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying updated state is 0")
 			expected0 := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="cm-changing",namespace="` + testNs + `"} 0
 			`
@@ -511,7 +511,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric is 1 (synced)")
 			expectedCompliance := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="e2e-cm",namespace="` + testNs + `"} 1
 			`
@@ -555,7 +555,7 @@ var _ = Describe("Metrics Integration", func() {
 
 			By("verifying compliance metric shows failure (0)")
 			expectedFailed := `
-				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed)
+				# HELP kubevirt_autopilot_compliance_status Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)
 				# TYPE kubevirt_autopilot_compliance_status gauge
 				kubevirt_autopilot_compliance_status{kind="ConfigMap",name="failed-cm",namespace="` + testNs + `"} 0
 			`

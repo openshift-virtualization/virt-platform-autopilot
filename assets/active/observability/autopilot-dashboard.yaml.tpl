@@ -67,6 +67,19 @@ spec:
         display:
           collapse:
             open: true
+          title: Staged MachineConfig Updates
+        items:
+        - content:
+            $ref: '#/spec/panels/6_0'
+          height: 9
+          width: 24
+          x: 0
+          "y": 0
+    - kind: Grid
+      spec:
+        display:
+          collapse:
+            open: true
           title: Customizations & Dependencies
         items:
         - content:
@@ -150,6 +163,12 @@ spec:
                       value: "0"
                   text: Drifted
                   textColor: '#F2495C'
+                - condition:
+                    kind: Value
+                    spec:
+                      value: "2"
+                  text: Staged
+                  textColor: '#FF9830'
                 enableSorting: true
                 header: Status
                 name: value
@@ -190,7 +209,8 @@ spec:
         spec:
           display:
             description: "Compliance status over time. 1 = Synced (asset matches golden\
-              \ state) | 0 = Drifted (mismatch detected). Drops from 1→0 indicate\
+              \ state) | 0 = Drifted (mismatch detected) | 2 = Staged (MachineConfig\
+              \ update deliberately held for an MCP rollout). Drops from 1→0 indicate\
               \ drift events; recovery back to 1 indicates autopilot re-applied the\
               \ golden state."
             name: Compliance Over Time
@@ -210,7 +230,7 @@ spec:
               yAxis:
                 format:
                   unit: decimal
-                max: 1.1
+                max: 2.1
                 min: 0
                 show: true
           queries:
@@ -575,8 +595,8 @@ spec:
           display:
             description: Alerts currently firing for virt-platform-autopilot. Covers
               VirtPlatformAutopilotSyncFailed (critical), VirtPlatformAutopilotThrashingDetected, VirtPlatformAutopilotDependencyMissing,
-              and VirtPlatformAutopilotTombstoneStuck (warnings). Empty table means no active
-              alerts.
+              and VirtPlatformAutopilotTombstoneStuck (warnings), plus the informational
+              VirtPlatformAutopilotMachineConfigUpdateStaged. Empty table means no active alerts.
             name: Currently Firing Alerts
           plugin:
             kind: Table
@@ -609,6 +629,12 @@ spec:
               - enableSorting: true
                 header: Namespace
                 name: namespace
+              - enableSorting: true
+                header: MachineConfig
+                name: machineconfig
+              - enableSorting: true
+                header: MCP
+                name: pool
               - hide: true
                 name: value
               - hide: true
@@ -645,4 +671,35 @@ spec:
                 kind: PrometheusTimeSeriesQuery
                 spec:
                   query: ALERTS{alertstate="firing",operator="virt-platform-autopilot"}
-
+      "6_0":
+        kind: Panel
+        spec:
+          display:
+            description: Existing MachineConfig updates held until a matching, non-degraded MachineConfigPool is already updating. The first such pool releases the change. Empty means no pending update.
+            name: Pending MachineConfig Updates
+          plugin:
+            kind: Table
+            spec:
+              columnSettings:
+              - hide: true
+                name: timestamp
+              - enableSorting: true
+                header: MachineConfig
+                name: machineconfig
+              - enableSorting: true
+                header: Matching MCP
+                name: pool
+              - hide: true
+                name: value
+              - hide: true
+                name: __name__
+              transforms:
+              - kind: MergeSeries
+                spec: {}
+          queries:
+          - kind: TimeSeriesQuery
+            spec:
+              plugin:
+                kind: PrometheusTimeSeriesQuery
+                spec:
+                  query: kubevirt_autopilot_machineconfig_update_staged == 1
