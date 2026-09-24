@@ -20,7 +20,7 @@ spec:
       units:
       - contents: |
           [Unit]
-          Description=Configure THP madvise/defrag mode, khugepaged scan rate, and max_ptes_none
+          Description=Configure THP madvise/defrag/shmem modes, shrink_underused, khugepaged scan rate, and max_ptes_none
           After=sys-kernel-mm-transparent_hugepage.mount
 
           [Service]
