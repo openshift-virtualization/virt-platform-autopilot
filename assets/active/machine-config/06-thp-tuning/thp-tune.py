@@ -6,6 +6,12 @@ Strategy:
     madvise(MADV_HUGEPAGE) get THP at fault time. QEMU does this for guest
     RAM automatically. System services stay on 4K pages, reducing memory
     overhead and improving predictability.
+  - shmem_enabled = advise: memfd-backed guest RAM (KubeVirt/QEMU shared
+    memory for virtiofs/passt) is shmem, not anonymous.
+  - shrink_underused = 0 (when present, CS10 / 6.12+): with max_ptes_none=0,
+    the deferred underused shrinker would otherwise split freshly collapsed
+    lightly used guest THPs under reclaim. Disabling keeps opportunistic
+    collapses from being undone.
   - khugepaged pages_to_scan = 130,000 (fixed): provides ~254 regions/wake
     (each region = 512 pages = 2 MB), enough budget to re-collapse PMD
     splits caused by KSM or free-page-reporting.
@@ -97,11 +103,15 @@ def main():
 
     write_file(os.path.join(THP_SYSFS, "enabled"), "madvise")
     write_file(os.path.join(THP_SYSFS, "defrag"), "madvise")
+    write_file(os.path.join(THP_SYSFS, "shmem_enabled"), "advise")
+    # Present on 6.12+ / CS10; write_file warns and skips if absent.
+    shrink_ok = write_file(os.path.join(THP_SYSFS, "shrink_underused"), "0")
     write_file(os.path.join(KHUGEPAGED_SYSFS, "pages_to_scan"), pages_to_scan)
     write_file(os.path.join(KHUGEPAGED_SYSFS, "scan_sleep_millisecs"), scan_sleep_ms)
     max_ptes_none, max_ptes_reason = apply_max_ptes_none()
 
     print(f"thp-tune: node={mem_gb}GB enabled=madvise defrag=madvise "
+          f"shmem_enabled=advise shrink_underused={'0' if shrink_ok else 'n/a'} "
           f"pages_to_scan={pages_to_scan} sleep={scan_sleep_ms}ms "
           f"regions/s={regions_per_s} max_ptes_none={max_ptes_none} ({max_ptes_reason})")
 

@@ -1141,8 +1141,9 @@ features:
 
   - name: Transparent Huge Pages (THP) Tuning
     description: >-
-      Node-level THP madvise/defrag tuning, khugepaged scan rates, and
-      max_ptes_none coordination with KSM. Optional sub-feature:
+      Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on
+      kernels that support it, khugepaged scan rates, and max_ptes_none
+      coordination with KSM. Optional sub-feature:
       enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97%
       (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot.
     maturity: dp
