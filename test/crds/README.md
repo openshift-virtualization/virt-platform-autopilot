@@ -43,6 +43,12 @@ test/crds/
 - Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_machineconfigs.crd.yaml`
 - Local: `openshift/machineconfig-crd.yaml`
 
+**MachineConfigPool**
+- Repository: https://github.com/openshift/api
+- Branch: `master`
+- Path: `machineconfiguration/v1/zz_generated.crd-manifests/0000_80_machine-config_01_machineconfigpools.crd.yaml`
+- Local: `openshift/machineconfigpool-crd.yaml`
+
 **KubeletConfig**
 - Repository: https://github.com/openshift/api
 - Branch: `master`

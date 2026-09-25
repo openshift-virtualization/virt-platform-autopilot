@@ -46,7 +46,7 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 			setAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation, modeUnmanaged)
 
 			By("reducing alert 'for' durations to 15s for faster test feedback")
-			patchAlertForDurations("15s")
+			patchAlertForDurations()
 
 			By("touching HCO to trigger reconciliation and ensure metrics are emitted")
 			touchHCO()
