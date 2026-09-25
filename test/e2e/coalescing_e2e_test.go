@@ -361,21 +361,22 @@ var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
 				waitForMCComplianceStatus(asset.Name, 2.0)
 			}
 
+			By("verifying machineconfig_update_staged=1 for both pools before release")
+			for _, asset := range coalescingAssetsUnderTest {
+				asset := asset
+				EventuallyWithOffset(1, func() bool {
+					return findMCStagedMetric(asset.Name, workerMCPName, "kubevirt_autopilot_machineconfig_update_staged") == 1.0 ||
+						findMCStagedMetric(asset.Name, infraMCPName, "kubevirt_autopilot_machineconfig_update_staged") == 1.0
+				}, timeout, interval).Should(BeTrue(),
+					"at least one pool staging metric must be 1 for "+asset.Name+" before release")
+			}
+
 			By("transitioning infra pool to Updating=True — this should release all staged updates")
 			setMCPUpdating(infraMCPName, true)
 		})
 
 		AfterAll(func() {
 			cleanupCoalescingContext(workerMCPName, infraMCPName)
-		})
-
-		It("should have emitted machineconfig_update_staged=1 for both pools while staged", func() {
-			for _, asset := range coalescingAssetsUnderTest {
-				asset := asset
-				Expect(findMCStagedMetric(asset.Name, workerMCPName, "kubevirt_autopilot_machineconfig_update_staged") == 1.0 ||
-					findMCStagedMetric(asset.Name, infraMCPName, "kubevirt_autopilot_machineconfig_update_staged") == 1.0).To(BeTrue(),
-					"at least one pool staging metric must have been emitted for "+asset.Name+" before release")
-			}
 		})
 
 		for _, asset := range coalescingAssetsUnderTest {
