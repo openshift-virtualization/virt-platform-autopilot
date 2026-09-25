@@ -86,7 +86,7 @@ var _ = Describe("Tombstone Lifecycle Tests", Ordered, ContinueOnFailure, func()
 			setAnnotation(prometheusRuleGVK, prometheusRuleName, operatorNamespace, modeAnnotation, modeUnmanaged)
 
 			By("reducing alert 'for' durations to 1m for faster test feedback")
-			patchAlertForDurations("15s")
+			patchAlertForDurations()
 		}
 
 		By("triggering initial reconciliation to establish baseline metrics")

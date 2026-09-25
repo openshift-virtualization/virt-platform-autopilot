@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -26,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -185,7 +187,13 @@ type EventFilter struct {
 // or if it has a Series whose last firing is at/after Since.
 func findEvents(filter EventFilter) []eventsv1.Event {
 	eventList := &eventsv1.EventList{}
-	ExpectWithOffset(1, k8sClient.List(ctx, eventList, client.InNamespace(operatorNamespace))).To(Succeed())
+	listOpts := []client.ListOption{client.InNamespace(operatorNamespace)}
+	if filter.Reason != "" {
+		listOpts = append(listOpts, &client.ListOptions{
+			FieldSelector: fields.OneTermEqualSelector("reason", filter.Reason),
+		})
+	}
+	ExpectWithOffset(1, k8sClient.List(ctx, eventList, listOpts...)).To(Succeed())
 
 	var matched []eventsv1.Event
 	for _, event := range eventList.Items {
@@ -652,8 +660,8 @@ func deleteBlockingWebhook(asset testAsset) {
 	}
 }
 
-func patchAlertForDurations(targetFor string) {
-	By(fmt.Sprintf("patching all alert 'for' durations to %s", targetFor))
+func patchAlertForDurations() {
+	By("patching all alert 'for' durations to 15s")
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(prometheusRuleGVK)
 	ExpectWithOffset(1, k8sClient.Get(ctx, types.NamespacedName{
@@ -674,7 +682,7 @@ func patchAlertForDurations(targetFor string) {
 			ruleMap, ok := rule.(map[string]any)
 			ExpectWithOffset(1, ok).To(BeTrue())
 			if _, hasFor := ruleMap["for"]; hasFor {
-				ruleMap["for"] = targetFor
+				ruleMap["for"] = "15s"
 			}
 		}
 	}
@@ -1093,20 +1101,18 @@ func waitForMCPStable() {
 	start := time.Now()
 	By("waiting for all MachineConfigPools to be stable (Updated, not Updating, not Degraded)")
 
-	Eventually(func() (string, error) {
+	allMCPsStable := func() (string, error) {
 		list := &unstructured.UnstructuredList{}
 		list.SetGroupVersionKind(mcpGVK)
 		if err := k8sClient.List(ctx, list); err != nil {
 			return "", fmt.Errorf("listing MachineConfigPools: %w", err)
 		}
-
 		for _, mcp := range list.Items {
 			name := mcp.GetName()
 			conditions, found, err := unstructured.NestedSlice(mcp.Object, "status", "conditions")
 			if err != nil || !found {
 				return fmt.Sprintf("MCP %s has no conditions yet", name), nil
 			}
-
 			condMap := make(map[string]string)
 			for _, c := range conditions {
 				cm, ok := c.(map[string]any)
@@ -1117,15 +1123,22 @@ func waitForMCPStable() {
 				cStatus, _ := cm["status"].(string)
 				condMap[cType] = cStatus
 			}
-
 			if condMap["Updated"] != "True" || condMap["Updating"] != "False" || condMap["Degraded"] != "False" {
 				return fmt.Sprintf("MCP %s not stable: Updated=%s Updating=%s Degraded=%s",
 					name, condMap["Updated"], condMap["Updating"], condMap["Degraded"]), nil
 			}
 		}
 		return "", nil
-	}, 30*time.Minute, 30*time.Second).Should(BeEmpty(),
+	}
+
+	Eventually(allMCPsStable, 30*time.Minute, 30*time.Second).Should(BeEmpty(),
 		"All MachineConfigPools should become stable")
+
+	// MCO can start a second rollout immediately after the first completes (e.g.
+	// when the autopilot's corrections change the rendered config again). Hold the
+	// stability check for 30s to detect that case before the caller proceeds.
+	Consistently(allMCPsStable, 30*time.Second, 5*time.Second).Should(BeEmpty(),
+		"All MachineConfigPools must remain stable — a second MCO rollout may have started")
 
 	elapsed := time.Since(start)
 	GinkgoWriter.Printf("MachineConfigPools stable after %s\n", elapsed.Truncate(time.Second))
@@ -1253,6 +1266,197 @@ func exclusionEntryYAML(kind, name, namespace string) string {
 	return fmt.Sprintf("- kind: %s\n  name: %s", kind, name)
 }
 
+// --- MachineConfig coalescing test helpers ---
+
+var mcpGVK = schema.GroupVersionKind{
+	Group:   "machineconfiguration.openshift.io",
+	Version: "v1",
+	Kind:    "MachineConfigPool",
+}
+
+// createTestMCP creates a MachineConfigPool that selects MachineConfigs carrying
+// the "machineconfiguration.openshift.io/role=worker" label (matching the kubelet-perf
+// MC) and immediately sets its Updating condition to the requested state.
+func createTestMCP(name string) {
+	pool := &unstructured.Unstructured{}
+	pool.SetGroupVersionKind(mcpGVK)
+	pool.SetName(name)
+	ExpectWithOffset(1, unstructured.SetNestedMap(pool.Object, map[string]any{
+		"machineConfigSelector": map[string]any{
+			"matchLabels": map[string]any{
+				"machineconfiguration.openshift.io/role": "worker",
+			},
+		},
+	}, "spec")).To(Succeed())
+	ExpectWithOffset(1, k8sClient.Create(ctx, pool)).To(Succeed(),
+		fmt.Sprintf("should create test MachineConfigPool %s", name))
+	setMCPUpdating(name, false)
+	// Poll until the pool appears in the API server list. The round-trip latency of
+	// each List call gives the controller's informer goroutine time to process the
+	// watch event emitted on creation, making it safe to tamper MachineConfigs
+	// immediately after createTestMCP returns.
+	ExpectWithOffset(1, func() bool {
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(mcpGVK.GroupVersion().WithKind("MachineConfigPoolList"))
+		if err := k8sClient.List(ctx, list); err != nil {
+			return false
+		}
+		for _, pool := range list.Items {
+			if pool.GetName() == name {
+				return true
+			}
+		}
+		return false
+	}()).To(BeTrue(), fmt.Sprintf("MachineConfigPool %s should be visible after creation", name))
+}
+
+// setMCPUpdating patches the status conditions of a MachineConfigPool so that
+// Updating equals the requested state. Updating=True signals the controller to
+// release any staged MachineConfig updates for pools that select the same MC.
+func setMCPUpdating(name string, updating bool) {
+	updatingStatus := "False"
+	updatedStatus := "True"
+	if updating {
+		updatingStatus = "True"
+		updatedStatus = "False"
+	}
+	patch := fmt.Sprintf(
+		`{"status":{"conditions":[`+
+			`{"type":"Updated","status":%q,"lastTransitionTime":"2026-01-01T00:00:00Z","reason":"test","message":""},`+
+			`{"type":"Updating","status":%q,"lastTransitionTime":"2026-01-01T00:00:00Z","reason":"test","message":""},`+
+			`{"type":"Degraded","status":"False","lastTransitionTime":"2026-01-01T00:00:00Z","reason":"test","message":""},`+
+			`{"type":"RenderDegraded","status":"False","lastTransitionTime":"2026-01-01T00:00:00Z","reason":"test","message":""}]}}`,
+		updatedStatus, updatingStatus)
+	pool := &unstructured.Unstructured{}
+	pool.SetGroupVersionKind(mcpGVK)
+	pool.SetName(name)
+	ExpectWithOffset(1, k8sClient.Status().Patch(ctx, pool, client.RawPatch(types.MergePatchType, []byte(patch)))).To(Succeed(),
+		fmt.Sprintf("should set MachineConfigPool %s Updating=%s", name, updatingStatus))
+}
+
+// deleteTestMCP removes a MachineConfigPool created by createTestMCP. Safe when absent.
+func deleteTestMCP(name string) {
+	pool := &unstructured.Unstructured{}
+	pool.SetGroupVersionKind(mcpGVK)
+	pool.SetName(name)
+	_ = k8sClient.Delete(ctx, pool)
+}
+
+// stagingEntry mirrors the machineConfigStage struct written by the operator into
+// the staging ConfigMap. It is intentionally a local copy so the e2e package
+// does not import internal engine types.
+type stagingEntry struct {
+	StagedAt      time.Time `json:"stagedAt"`
+	DesiredHash   string    `json:"desiredHash"`
+	MatchingPools []string  `json:"matchingPools"`
+}
+
+// getStagingEntry reads and decodes the staging ConfigMap entry for the given
+// MachineConfig name. Returns nil when absent or when the entry cannot be decoded.
+func getStagingEntry(mcName string) *stagingEntry {
+	cm := &corev1.ConfigMap{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{
+		Namespace: operatorNamespace,
+		Name:      "virt-platform-autopilot-mc-staging",
+	}, cm); err != nil {
+		return nil
+	}
+	raw, ok := cm.Data[mcName]
+	if !ok {
+		return nil
+	}
+	var entry stagingEntry
+	if err := json.Unmarshal([]byte(raw), &entry); err != nil {
+		return nil
+	}
+	return &entry
+}
+
+// stagingEntryExists returns a function that reports whether a valid staging
+// entry exists for the given MachineConfig name. Suitable for Eventually/Consistently.
+func stagingEntryExists(mcName string) func() bool {
+	return func() bool {
+		return getStagingEntry(mcName) != nil
+	}
+}
+
+// deleteStagingConfigMap removes the MC staging ConfigMap. Safe when absent.
+func deleteStagingConfigMap() {
+	cm := &corev1.ConfigMap{}
+	cm.SetName("virt-platform-autopilot-mc-staging")
+	cm.SetNamespace(operatorNamespace)
+	_ = k8sClient.Delete(ctx, cm)
+}
+
+// findMCStagedMetric returns the value of the named machineconfig staging gauge
+// for the given MachineConfig + pool pair. Returns -1 when absent.
+// Pass "kubevirt_autopilot_machineconfig_update_staged" or
+// "kubevirt_autopilot_machineconfig_update_staged_since_seconds" as metric.
+func findMCStagedMetric(mcName, poolName, metric string) float64 {
+	return findMetricValue(metric, map[string]string{
+		"machineconfig": mcName,
+		"pool":          poolName,
+	})
+}
+
+// waitForMCComplianceStatus polls until the named MachineConfig reaches the given compliance status.
+// Use observability.ComplianceSynced (1.0) or observability.ComplianceDeferred (2.0).
+func waitForMCComplianceStatus(mcName string, status float64) {
+	EventuallyWithOffset(1, func() float64 {
+		return captureAssetMetrics("MachineConfig", mcName, "").ComplianceStatus
+	}, 2*timeout, interval).Should(Equal(status),
+		fmt.Sprintf("%s should reach compliance_status=%.0f", mcName, status))
+}
+
+// findRealWorkerMCPName returns the name of the first MachineConfigPool on the
+// cluster whose machineConfigSelector matches the kubelet-perf MC role label.
+// Returns "" when no matching pool exists (e.g. Kind without a real MCO).
+func findRealWorkerMCPName() string {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(mcpGVK.GroupVersion().WithKind("MachineConfigPoolList"))
+	if err := k8sClient.List(ctx, list); err != nil {
+		return ""
+	}
+	for _, pool := range list.Items {
+		selector, _, _ := unstructured.NestedMap(pool.Object, "spec", "machineConfigSelector")
+		labels, _, _ := unstructured.NestedStringMap(selector, "matchLabels")
+		if labels["machineconfiguration.openshift.io/role"] == "worker" {
+			return pool.GetName()
+		}
+	}
+	return ""
+}
+
+// tamperAllAssetsParallel calls each asset's TamperFn concurrently. GinkgoRecover
+// is deferred in each goroutine so assertion failures surface correctly.
+func tamperAllAssetsParallel(assets []coalescingAsset) {
+	var wg sync.WaitGroup
+	for _, asset := range assets {
+		asset := asset
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			asset.TamperFn()
+		}()
+	}
+	wg.Wait()
+}
+
+// cleanupCoalescingContext removes all test MCPs and the staging ConfigMap, then
+// waits for every coalescing asset to return to compliance. Touching the HCO
+// triggers a reconcile that restores any tampered spec field.
+func cleanupCoalescingContext(pools ...string) {
+	for _, name := range pools {
+		deleteTestMCP(name)
+	}
+	touchHCO()
+	deleteStagingConfigMap()
+	for _, asset := range coalescingAssetsUnderTest {
+		waitForMCComplianceStatus(asset.Name, 1.0)
+	}
+}
+
 // restartOperatorPod deletes the operator pod and waits for a replacement pod
 // with a new UID to become Running, then waits for the operator to be healthy.
 func restartOperatorPod() {
@@ -1261,7 +1465,7 @@ func restartOperatorPod() {
 	oldUID := operatorPod.UID
 	ExpectWithOffset(1, k8sClient.Delete(ctx, operatorPod)).To(Succeed())
 
-	By("waiting for replacement pod with new UID to become Running")
+	By("waiting for replacement pod with new UID to become Running and Ready")
 	EventuallyWithOffset(1, func() bool {
 		podList := &corev1.PodList{}
 		if err := k8sClient.List(ctx, podList,
@@ -1271,12 +1475,44 @@ func restartOperatorPod() {
 			return false
 		}
 		for _, p := range podList.Items {
-			if p.UID != oldUID && p.Status.Phase == corev1.PodRunning {
-				return true
+			if p.UID == oldUID || p.Status.Phase != corev1.PodRunning {
+				continue
+			}
+			for _, cs := range p.Status.ContainerStatuses {
+				if (cs.Name == "manager" || len(p.Status.ContainerStatuses) == 1) && cs.Ready {
+					return true
+				}
 			}
 		}
 		return false
 	}, timeout, interval).Should(BeTrue(),
-		"replacement operator pod should be Running after deletion")
+		"replacement operator pod should be Running and Ready after deletion")
 	waitForOperatorHealthy()
+}
+
+// setRealMCPPaused patches spec.paused on a real MachineConfigPool.
+// true prevents MCO from draining nodes; false resumes the rollout.
+func setRealMCPPaused(name string, paused bool) {
+	pool := &unstructured.Unstructured{}
+	pool.SetGroupVersionKind(mcpGVK)
+	pool.SetName(name)
+	value := "false"
+	if paused {
+		value = "true"
+	}
+	ExpectWithOffset(1, k8sClient.Patch(ctx, pool,
+		client.RawPatch(types.MergePatchType, []byte(`{"spec":{"paused":`+value+`}}`)))).To(Succeed(),
+		fmt.Sprintf("should set MachineConfigPool %s paused=%v", name, paused))
+}
+
+// workerMCPHasMachines returns true when the named MachineConfigPool has at least
+// one machine assigned. Used to skip tests on compact clusters where the worker pool
+// is empty.
+func workerMCPHasMachines(name string) bool {
+	mcp, err := getUnstructuredResource(mcpGVK, name, "")
+	if err != nil {
+		return false
+	}
+	count, _, _ := unstructured.NestedInt64(mcp.Object, "status", "machineCount")
+	return count > 0
 }
