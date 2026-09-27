@@ -7,55 +7,384 @@ metadata:
     app.kubernetes.io/name: kubevirt-metrics-exporter
 spec:
   groups:
+    # Admin signals. One series per storage class and operation.
+    # Histogram signals count a VMI when more than 1% of operations are
+    # slower than the bucket and the series has at least 100 operations
+    # in 5m. Buckets are 10ms, 100ms, and 1s. Read/write and block use
+    # 100ms. Flush and NFS use 1s: 500ms and 250ms fall inside the
+    # 100ms–1s bucket and are not measurable. Guest latency is an average
+    # above 100ms. Fires when more than 10 VMIs are affected, or more
+    # than 10% of active VMIs are affected and at least 3 are.
+    - name: kubevirt-storage-io.rules
+      rules:
+        - record: storageclass:kme_vmi_io_latency_affected:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  (
+                    (
+                      sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                        rate(kubevirt_vmi_storage_io_latency_seconds_count{operation=~"read|write"}[5m])
+                      )
+                      -
+                      sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                        rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation=~"read|write",le="0.1"}[5m])
+                      )
+                    )
+                    /
+                    sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                      rate(kubevirt_vmi_storage_io_latency_seconds_count{operation=~"read|write"}[5m])
+                    )
+                  ) > 0.01
+                  and
+                  sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                    increase(kubevirt_vmi_storage_io_latency_seconds_count{operation=~"read|write"}[5m])
+                  ) > 100
+                )
+                * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                  max by (namespace, persistentvolumeclaim, storageclass) (
+                    kube_persistentvolumeclaim_info{storageclass!=""}
+                  )
+              )
+            )
+
+        - record: storageclass:kme_vmi_io_latency_active:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  sum by (namespace, name, persistentvolumeclaim, operation) (
+                    increase(kubevirt_vmi_storage_io_latency_seconds_count{operation=~"read|write"}[5m])
+                  ) > 100
+                )
+                * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                  max by (namespace, persistentvolumeclaim, storageclass) (
+                    kube_persistentvolumeclaim_info{storageclass!=""}
+                  )
+              )
+            )
+
+        - record: storageclass:kme_vmi_flush_latency_affected:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  (
+                    (
+                      sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                        rate(kubevirt_vmi_storage_io_latency_seconds_count{operation="flush"}[5m])
+                      )
+                      -
+                      sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                        rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="flush",le="1"}[5m])
+                      )
+                    )
+                    /
+                    sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                      rate(kubevirt_vmi_storage_io_latency_seconds_count{operation="flush"}[5m])
+                    )
+                  ) > 0.01
+                  and
+                  sum by (namespace, name, disk, persistentvolumeclaim, operation) (
+                    increase(kubevirt_vmi_storage_io_latency_seconds_count{operation="flush"}[5m])
+                  ) > 100
+                )
+                * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                  max by (namespace, persistentvolumeclaim, storageclass) (
+                    kube_persistentvolumeclaim_info{storageclass!=""}
+                  )
+              )
+            )
+
+        - record: storageclass:kme_vmi_flush_latency_active:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  sum by (namespace, name, persistentvolumeclaim, operation) (
+                    increase(kubevirt_vmi_storage_io_latency_seconds_count{operation="flush"}[5m])
+                  ) > 100
+                )
+                * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                  max by (namespace, persistentvolumeclaim, storageclass) (
+                    kube_persistentvolumeclaim_info{storageclass!=""}
+                  )
+              )
+            )
+
+        - record: storageclass:kme_block_io_latency_affected:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  (
+                    (
+                      (
+                        sum by (namespace, pod, persistentvolumeclaim, operation) (
+                          rate(kme_block_io_latency_seconds_count{operation=~"read|write"}[5m])
+                        )
+                        -
+                        sum by (namespace, pod, persistentvolumeclaim, operation) (
+                          rate(kme_block_io_latency_seconds_bucket{operation=~"read|write",le="0.1"}[5m])
+                        )
+                      )
+                      /
+                      sum by (namespace, pod, persistentvolumeclaim, operation) (
+                        rate(kme_block_io_latency_seconds_count{operation=~"read|write"}[5m])
+                      )
+                    ) > 0.01
+                    and
+                    sum by (namespace, pod, persistentvolumeclaim, operation) (
+                      increase(kme_block_io_latency_seconds_count{operation=~"read|write"}[5m])
+                    ) > 100
+                  )
+                  * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                    max by (namespace, persistentvolumeclaim, storageclass) (
+                      kube_persistentvolumeclaim_info{storageclass!=""}
+                    )
+                )
+                * on (namespace, pod) group_left(name)
+                  label_replace(
+                    max by (namespace, vmi_pod, name) (
+                      kubevirt_vmi_info{phase="running",vmi_pod!=""}
+                    ),
+                    "pod", "$1", "vmi_pod", "(.*)"
+                  )
+              )
+            )
+
+        - record: storageclass:kme_block_io_latency_active:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  (
+                    sum by (namespace, pod, persistentvolumeclaim, operation) (
+                      increase(kme_block_io_latency_seconds_count{operation=~"read|write"}[5m])
+                    ) > 100
+                  )
+                  * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                    max by (namespace, persistentvolumeclaim, storageclass) (
+                      kube_persistentvolumeclaim_info{storageclass!=""}
+                    )
+                )
+                * on (namespace, pod) group_left(name)
+                  label_replace(
+                    max by (namespace, vmi_pod, name) (
+                      kubevirt_vmi_info{phase="running",vmi_pod!=""}
+                    ),
+                    "pod", "$1", "vmi_pod", "(.*)"
+                  )
+              )
+            )
+
+        - record: storageclass:kme_nfs_io_latency_affected:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  (
+                    (
+                      (
+                        sum by (namespace, pod, persistentvolumeclaim, operation) (
+                          rate(kme_nfs_io_latency_seconds_count{operation=~"read|write"}[5m])
+                        )
+                        -
+                        sum by (namespace, pod, persistentvolumeclaim, operation) (
+                          rate(kme_nfs_io_latency_seconds_bucket{operation=~"read|write",le="1"}[5m])
+                        )
+                      )
+                      /
+                      sum by (namespace, pod, persistentvolumeclaim, operation) (
+                        rate(kme_nfs_io_latency_seconds_count{operation=~"read|write"}[5m])
+                      )
+                    ) > 0.01
+                    and
+                    sum by (namespace, pod, persistentvolumeclaim, operation) (
+                      increase(kme_nfs_io_latency_seconds_count{operation=~"read|write"}[5m])
+                    ) > 100
+                  )
+                  * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                    max by (namespace, persistentvolumeclaim, storageclass) (
+                      kube_persistentvolumeclaim_info{storageclass!=""}
+                    )
+                )
+                * on (namespace, pod) group_left(name)
+                  label_replace(
+                    max by (namespace, vmi_pod, name) (
+                      kubevirt_vmi_info{phase="running",vmi_pod!=""}
+                    ),
+                    "pod", "$1", "vmi_pod", "(.*)"
+                  )
+              )
+            )
+
+        - record: storageclass:kme_nfs_io_latency_active:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (
+                  (
+                    sum by (namespace, pod, persistentvolumeclaim, operation) (
+                      increase(kme_nfs_io_latency_seconds_count{operation=~"read|write"}[5m])
+                    ) > 100
+                  )
+                  * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                    max by (namespace, persistentvolumeclaim, storageclass) (
+                      kube_persistentvolumeclaim_info{storageclass!=""}
+                    )
+                )
+                * on (namespace, pod) group_left(name)
+                  label_replace(
+                    max by (namespace, vmi_pod, name) (
+                      kubevirt_vmi_info{phase="running",vmi_pod!=""}
+                    ),
+                    "pod", "$1", "vmi_pod", "(.*)"
+                  )
+              )
+            )
+
+        - record: storageclass:kme_guest_latency_affected:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                (kubevirt_vmi_storage_guest_latency_avg_seconds > 0.1)
+                * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                  max by (namespace, persistentvolumeclaim, storageclass) (
+                    kube_persistentvolumeclaim_info{storageclass!=""}
+                  )
+              )
+            )
+
+        - record: storageclass:kme_guest_latency_active:count
+          expr: |
+            count by (storageclass, operation) (
+              group by (namespace, name, storageclass, operation) (
+                kubevirt_vmi_storage_guest_latency_avg_seconds
+                * on (namespace, persistentvolumeclaim) group_left(storageclass)
+                  max by (namespace, persistentvolumeclaim, storageclass) (
+                    kube_persistentvolumeclaim_info{storageclass!=""}
+                  )
+              )
+            )
+
     - name: kubevirt-storage-io
       rules:
-        - alert: VMIStorageWriteLatencyHigh
+        - alert: StorageClassVMILatencyHigh
           expr: |
-            histogram_quantile(0.99, sum by (namespace, name, disk, le) (
-              rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="write"}[5m])
-            )) > 0.1
+            storageclass:kme_vmi_io_latency_affected:count
+            and on (storageclass, operation) (
+              storageclass:kme_vmi_io_latency_affected:count > 10
+              or on (storageclass, operation) (
+                (
+                  storageclass:kme_vmi_io_latency_affected:count
+                  / on (storageclass, operation)
+                  storageclass:kme_vmi_io_latency_active:count
+                ) > 0.1
+                and on (storageclass, operation)
+                storageclass:kme_vmi_io_latency_affected:count >= 3
+              )
+            )
           for: 10m
           labels:
             severity: warning
+            namespace: kubevirt-metrics-exporter
           annotations:
-            summary: "High P99 write latency for VM {{ $labels.namespace }}/{{ $labels.name }} disk {{ $labels.disk }}"
-            description: >-
-              P99 hypervisor-side write latency for disk {{ $labels.disk }} on VM
-              {{ $labels.namespace }}/{{ $labels.name }} has exceeded 100ms for
-              10 minutes (current value: {{ $value | humanizeDuration }}).
-              Note: reported value is approximate due to histogram bucket granularity.
+            summary: "High {{ $labels.operation }} latency on storage class {{ $labels.storageclass }}"
+            description: "{{ $value | humanize }} VMIs on storage class {{ $labels.storageclass }} have more than 1% of {{ $labels.operation }} operations slower than 100ms. Fires when more than 10 VMIs are affected, or more than 10% of active VMIs are affected and at least 3 are affected."
 
-        - alert: VMIStorageReadLatencyHigh
+        - alert: StorageClassVMIFlushLatencyHigh
           expr: |
-            histogram_quantile(0.99, sum by (namespace, name, disk, le) (
-              rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="read"}[5m])
-            )) > 0.1
+            storageclass:kme_vmi_flush_latency_affected:count
+            and on (storageclass, operation) (
+              storageclass:kme_vmi_flush_latency_affected:count > 10
+              or on (storageclass, operation) (
+                (
+                  storageclass:kme_vmi_flush_latency_affected:count
+                  / on (storageclass, operation)
+                  storageclass:kme_vmi_flush_latency_active:count
+                ) > 0.1
+                and on (storageclass, operation)
+                storageclass:kme_vmi_flush_latency_affected:count >= 3
+              )
+            )
           for: 10m
           labels:
             severity: warning
+            namespace: kubevirt-metrics-exporter
           annotations:
-            summary: "High P99 read latency for VM {{ $labels.namespace }}/{{ $labels.name }} disk {{ $labels.disk }}"
-            description: >-
-              P99 hypervisor-side read latency for disk {{ $labels.disk }} on VM
-              {{ $labels.namespace }}/{{ $labels.name }} has exceeded 100ms for
-              10 minutes (current value: {{ $value | humanizeDuration }}).
-              Note: reported value is approximate due to histogram bucket granularity.
+            summary: "High flush latency on storage class {{ $labels.storageclass }}"
+            description: "{{ $value | humanize }} VMIs on storage class {{ $labels.storageclass }} have more than 1% of flush operations slower than 1s. Durability-sensitive workloads on this storage will see slow commits. Fires when more than 10 VMIs are affected, or more than 10% of active VMIs are affected and at least 3 are affected."
 
-        - alert: VMIStorageFlushLatencyHigh
+        - alert: StorageClassBlockLatencyHigh
           expr: |
-            histogram_quantile(0.99, sum by (namespace, name, disk, le) (
-              rate(kubevirt_vmi_storage_io_latency_seconds_bucket{operation="flush"}[10m])
-            )) > 0.5
-          for: 15m
+            storageclass:kme_block_io_latency_affected:count
+            and on (storageclass, operation) (
+              storageclass:kme_block_io_latency_affected:count > 10
+              or on (storageclass, operation) (
+                (
+                  storageclass:kme_block_io_latency_affected:count
+                  / on (storageclass, operation)
+                  storageclass:kme_block_io_latency_active:count
+                ) > 0.1
+                and on (storageclass, operation)
+                storageclass:kme_block_io_latency_affected:count >= 3
+              )
+            )
+          for: 10m
           labels:
             severity: warning
+            namespace: kubevirt-metrics-exporter
           annotations:
-            summary: "High P99 flush latency for VM {{ $labels.namespace }}/{{ $labels.name }} disk {{ $labels.disk }}"
-            description: >-
-              P99 flush latency for disk {{ $labels.disk }} on VM
-              {{ $labels.namespace }}/{{ $labels.name }} has exceeded 500ms for
-              15 minutes. Durability-sensitive workloads (databases, journaling)
-              using this disk will see slow commits/fsyncs.
+            summary: "High block {{ $labels.operation }} latency on storage class {{ $labels.storageclass }}"
+            description: "{{ $value | humanize }} VMIs on storage class {{ $labels.storageclass }} have more than 1% of block {{ $labels.operation }} operations slower than 100ms. Fires when more than 10 VMIs are affected, or more than 10% of active VMIs are affected and at least 3 are affected."
+
+        - alert: StorageClassNFSLatencyHigh
+          expr: |
+            storageclass:kme_nfs_io_latency_affected:count
+            and on (storageclass, operation) (
+              storageclass:kme_nfs_io_latency_affected:count > 10
+              or on (storageclass, operation) (
+                (
+                  storageclass:kme_nfs_io_latency_affected:count
+                  / on (storageclass, operation)
+                  storageclass:kme_nfs_io_latency_active:count
+                ) > 0.1
+                and on (storageclass, operation)
+                storageclass:kme_nfs_io_latency_affected:count >= 3
+              )
+            )
+          for: 10m
+          labels:
+            severity: warning
+            namespace: kubevirt-metrics-exporter
+          annotations:
+            summary: "High NFS {{ $labels.operation }} latency on storage class {{ $labels.storageclass }}"
+            description: "{{ $value | humanize }} VMIs on storage class {{ $labels.storageclass }} have more than 1% of NFS {{ $labels.operation }} operations slower than 1s. Fires when more than 10 VMIs are affected, or more than 10% of active VMIs are affected and at least 3 are affected."
+
+        - alert: StorageClassGuestLatencyHigh
+          expr: |
+            storageclass:kme_guest_latency_affected:count
+            and on (storageclass, operation) (
+              storageclass:kme_guest_latency_affected:count > 10
+              or on (storageclass, operation) (
+                (
+                  storageclass:kme_guest_latency_affected:count
+                  / on (storageclass, operation)
+                  storageclass:kme_guest_latency_active:count
+                ) > 0.1
+                and on (storageclass, operation)
+                storageclass:kme_guest_latency_affected:count >= 3
+              )
+            )
+          for: 10m
+          labels:
+            severity: warning
+            namespace: kubevirt-metrics-exporter
+          annotations:
+            summary: "High guest {{ $labels.operation }} latency on storage class {{ $labels.storageclass }}"
+            description: "{{ $value | humanize }} VMIs on storage class {{ $labels.storageclass }} have average guest {{ $labels.operation }} latency above 100ms. Fires when more than 10 VMIs are affected, or more than 10% of VMIs reporting guest latency on that storage class are affected and at least 3 are affected."
 
         - alert: NodeVMStorageLatencyWidespread
           expr: |
@@ -103,52 +432,6 @@ spec:
               disk={{ $labels.disk }}, PVC={{ $labels.persistentvolumeclaim }}{{ end }}) on VM
               {{ $labels.namespace }}/{{ $labels.name }} exceeds 90% across all
               queues, indicating sustained storage backpressure.
-
-        - alert: VMIGuestStorageLatencyHigh
-          expr: |
-            kubevirt_vmi_storage_guest_latency_avg_seconds > 0.1
-          for: 15m
-          labels:
-            severity: warning
-          annotations:
-            summary: "Guest-side storage latency high on {{ $labels.namespace }}/{{ $labels.name }}"
-            description: >-
-              Guest-observed average {{ $labels.operation }} latency for disk
-              {{ $labels.disk }} on VM {{ $labels.namespace }}/{{ $labels.name }}
-              has exceeded 100ms for 15 minutes.
-
-        - alert: PVCBlockLatencyHigh
-          expr: |
-            histogram_quantile(0.99, sum by (namespace, persistentvolumeclaim, pod, operation, le) (
-              rate(kme_block_io_latency_seconds_bucket{operation=~"read|write"}[5m])
-            )) > 0.1
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "High block {{ $labels.operation }} latency for PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} (pod {{ $labels.pod }})"
-            description: >-
-              P99 block {{ $labels.operation }} latency for PVC
-              {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}
-              in pod {{ $labels.pod }} has exceeded 100ms for 10 minutes.
-
-        # NFS P99 threshold is higher than block (250ms vs 100ms) because NFS baseline
-        # latency includes network round-trips; 100ms P99 can be normal on slow networks
-        # or spinning-disk NFS servers, making it a noise source in those environments.
-        - alert: PVCNFSLatencyHigh
-          expr: |
-            histogram_quantile(0.99, sum by (namespace, persistentvolumeclaim, pod, operation, le) (
-              rate(kme_nfs_io_latency_seconds_bucket{operation=~"read|write"}[5m])
-            )) > 0.25
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: "High NFS {{ $labels.operation }} latency for PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} (pod {{ $labels.pod }})"
-            description: >-
-              P99 NFS {{ $labels.operation }} latency for PVC
-              {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }}
-              in pod {{ $labels.pod }} has exceeded 250ms for 10 minutes.
 
     - name: kubevirt-overhead
       rules:

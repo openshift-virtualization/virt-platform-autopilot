@@ -53,7 +53,20 @@ except Exception as e:
     sys.exit(1)
 PYSCRIPT
 
+echo "Generating KME storage latency promtool fixtures..."
+python3 "${REPO_ROOT}/test/promtool/generate_kme_latency_tests.py"
+
 echo ""
+echo "Running promtool tests on KME storage latency alerts..."
+echo "File: test/promtool/kme_storage_latency_alert_tests.yml"
+echo ""
+if ! promtool test rules "${REPO_ROOT}/test/promtool/kme_storage_latency_alert_tests.yml"; then
+    echo "❌ KME storage latency alert tests failed"
+    exit 1
+fi
+echo "✓ KME storage latency alert tests passed"
+echo ""
+
 echo "Running promtool tests on alert rules..."
 echo "File: test/promtool/alert_tests.yml"
 echo ""

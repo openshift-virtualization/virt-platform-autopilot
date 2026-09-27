@@ -115,3 +115,6 @@ PROGRESS.md
 
 # Generated Prometheus rules for promtool testing
 test/promtool/prometheus-rules.yml
+test/promtool/kme-prometheus-rules.yml
+test/promtool/kme_storage_latency_alert_tests.yml
+test/promtool/__pycache__/
