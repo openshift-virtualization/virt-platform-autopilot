@@ -44,7 +44,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | MTV Operator | Migration Toolkit for Virtualization | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-mtv=true</code></details> | - |
 | MetalLB Operator | Bare-metal load balancer for services | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-metallb=true</code></details> | - |
 | PCI Passthrough | GPU/PCI device passthrough via VFIO | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/openshift=true</code><br><code>platform.kubevirt.io/enable-pci-passthrough=true</code></details> | - |
-| Transparent Huge Pages (THP) Tuning | Node-level THP madvise/defrag tuning, khugepaged scan rates, and max_ptes_none coordination with KSM. Optional sub-feature: enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot. | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-thp-tuning=true</code><br><code>platform.kubevirt.io/enable-thp-tuning-kernelcore=true</code></details> | - |
+| Transparent Huge Pages (THP) Tuning | Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on kernels that support it, khugepaged scan rates, and max_ptes_none coordination with KSM. Optional sub-feature: enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot. | DP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-thp-tuning=true</code><br><code>platform.kubevirt.io/enable-thp-tuning-kernelcore=true</code></details> | - |
 <!-- END FEATURE STATUS -->
 
 ## Quick Start
