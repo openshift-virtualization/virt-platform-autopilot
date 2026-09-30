@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
@@ -172,6 +173,9 @@ func buildMetricsServerOptions(metricsAddr string, caPool *metricstls.ClientCAPo
 // managed-by DefaultLabelSelector for unlabeled objects the operator must observe.
 func cacheByObjectExemptions(hcoForCache, kvForCache, mcpForCache, apiServerForCache client.Object, apiServerCRDInstalled, mcpCRDInstalled bool) map[client.Object]cache.ByObject {
 	byObject := map[client.Object]cache.ByObject{
+		&storagev1.StorageClass{}: {
+			Label: labels.Everything(),
+		},
 		// Watch all HCOs (labeled or not) to adopt pre-existing ones
 		hcoForCache: {
 			Label: labels.Everything(),

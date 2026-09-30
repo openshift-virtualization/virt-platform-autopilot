@@ -41,8 +41,9 @@ import (
 
 // Renderer handles template rendering with RenderContext
 type Renderer struct {
-	loader *assets.Loader
-	client client.Reader // Optional: for CRD introspection and object queries
+	loader       *assets.Loader
+	client       client.Reader // Optional: for CRD introspection and object queries
+	objectReader client.Reader
 }
 
 // NewRenderer creates a new template renderer
@@ -178,7 +179,7 @@ func safeFuncMap() template.FuncMap {
 		"cat", "indent", "nindent", "wrap", "wrapWith",
 
 		// Logic and flow control
-		"default", "empty", "coalesce", "ternary",
+		"default", "empty", "coalesce", "ternary", "fail",
 		"eq", "ne", "lt", "le", "gt", "ge",
 		"not", "and", "or",
 
@@ -279,6 +280,10 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// if multiple exist. Override with platform.kubevirt.io/sbr-storage-class annotation.
 		// Usage: {{ storageProfileRWXClass }}
 		"storageProfileRWXClass": r.storageProfileRWXClassFunc(),
+
+		"objectField":         r.objectField,
+		"defaultStorageClass": r.defaultStorageClass,
+		"storageClassExists":  r.storageClassExists,
 
 		// fromYaml parses a YAML string into a map
 		// Usage: {{ $data := fromYaml $yamlString }}
@@ -590,7 +595,6 @@ func (r *Renderer) prometheusRuleHasRecordingRuleFunc() func(string, string, str
 			Namespace: namespace,
 			Name:      name,
 		}, obj)
-
 		if err != nil {
 			return false
 		}

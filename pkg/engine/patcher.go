@@ -57,7 +57,8 @@ type Patcher struct {
 // For tests with fake clients, pass nil for apiReader
 func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader) *Patcher {
 	renderer := NewRenderer(loader)
-	renderer.SetClient(c) // Enable CRD introspection and object queries in templates
+	renderer.SetClient(c)
+	renderer.objectReader = apiReader
 
 	return &Patcher{
 		renderer:          renderer,
@@ -106,6 +107,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Step 1: Render asset template → Opinionated State
 	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
 	if err != nil {
+		if p.eventRecorder != nil && renderCtx.HCO != nil {
+			p.eventRecorder.RenderFailed(renderCtx.HCO, assetMeta.Name, err.Error())
+		}
 		return false, fmt.Errorf("failed to render asset %s: %w", assetMeta.Name, err)
 	}
 

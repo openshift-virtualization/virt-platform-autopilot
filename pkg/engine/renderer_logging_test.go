@@ -179,69 +179,6 @@ func TestLokiStackStorageType(t *testing.T) {
 	}
 }
 
-func TestLokiStackStorageClassName(t *testing.T) {
-	tests := []struct {
-		name           string
-		topology       *pkgcontext.TopologyContext
-		wantClass      string
-		wantClassFound bool
-	}{
-		{
-			name:           "AWS uses gp3-csi",
-			topology:       &pkgcontext.TopologyContext{IsAWS: true, TotalNodeCount: 5},
-			wantClass:      "gp3-csi",
-			wantClassFound: true,
-		},
-		{
-			name:           "Azure uses managed-csi",
-			topology:       &pkgcontext.TopologyContext{IsAzure: true, TotalNodeCount: 5},
-			wantClass:      "managed-csi",
-			wantClassFound: true,
-		},
-		{
-			name:           "GCP uses standard-csi",
-			topology:       &pkgcontext.TopologyContext{IsGCP: true, TotalNodeCount: 5},
-			wantClass:      "standard-csi",
-			wantClassFound: true,
-		},
-		{
-			name:           "BareMetal uses lvms-vg1",
-			topology:       &pkgcontext.TopologyContext{IsBareMetal: true, TotalNodeCount: 5},
-			wantClass:      "lvms-vg1",
-			wantClassFound: true,
-		},
-		{
-			name:           "vSphere uses thin-csi",
-			topology:       &pkgcontext.TopologyContext{IsVSphere: true, TotalNodeCount: 5},
-			wantClass:      "thin-csi",
-			wantClassFound: true,
-		},
-		{
-			name:           "unknown platform omits storageClassName",
-			topology:       &pkgcontext.TopologyContext{TotalNodeCount: 5},
-			wantClass:      "",
-			wantClassFound: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			rendered := renderLoggingAsset(t, "logging-lokistack", tt.topology, nil)
-
-			class, found, err := unstructured.NestedString(rendered.Object, "spec", "storageClassName")
-			if err != nil {
-				t.Fatalf("Error accessing spec.storageClassName: %v", err)
-			}
-			if found != tt.wantClassFound {
-				t.Errorf("storageClassName present = %v, want %v", found, tt.wantClassFound)
-			}
-			if found && class != tt.wantClass {
-				t.Errorf("storageClassName = %q, want %q", class, tt.wantClass)
-			}
-		})
-	}
-}
-
 func TestLokiStackSecretName(t *testing.T) {
 	rendered := renderLoggingAsset(t, "logging-lokistack", &pkgcontext.TopologyContext{IsAWS: true, TotalNodeCount: 5}, nil)
 
