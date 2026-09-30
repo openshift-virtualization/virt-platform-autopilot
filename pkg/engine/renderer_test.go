@@ -292,9 +292,9 @@ func TestCustomFuncMap(t *testing.T) {
 		}
 	})
 
-	t.Run("includes objectExists function", func(t *testing.T) {
-		if _, exists := funcMap["objectExists"]; !exists {
-			t.Error("customFuncMap() missing 'objectExists' function")
+	t.Run("includes objectField function", func(t *testing.T) {
+		if _, exists := funcMap["objectField"]; !exists {
+			t.Error("customFuncMap() missing 'objectField' function")
 		}
 	})
 

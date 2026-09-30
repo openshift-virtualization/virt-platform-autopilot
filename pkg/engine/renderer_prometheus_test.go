@@ -30,7 +30,7 @@ import (
 func TestPrometheusRuleIntrospection(t *testing.T) {
 	scheme := runtime.NewScheme()
 
-	t.Run("objectExists returns true when object exists", func(t *testing.T) {
+	t.Run("objectField returns the name when object exists", func(t *testing.T) {
 		// Create a fake PrometheusRule
 		prometheusRule := &unstructured.Unstructured{
 			Object: map[string]any{
@@ -53,15 +53,18 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		renderer.SetClient(fakeClient)
 
 		funcMap := renderer.customFuncMap()
-		objectExistsFunc := funcMap["objectExists"].(func(string, string, string) bool)
+		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
-		exists := objectExistsFunc("PrometheusRule", "openshift-kube-descheduler-operator", "descheduler-rules")
-		if !exists {
+		name, err := objectFieldFunc("monitoring.coreos.com/v1", "PrometheusRule", "openshift-kube-descheduler-operator", "descheduler-rules", "metadata", "name")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name == "" {
 			t.Error("Expected PrometheusRule to exist")
 		}
 	})
 
-	t.Run("objectExists returns false when object does not exist", func(t *testing.T) {
+	t.Run("objectField returns empty when object does not exist", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().
 			WithScheme(scheme).
 			Build()
@@ -71,10 +74,13 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		renderer.SetClient(fakeClient)
 
 		funcMap := renderer.customFuncMap()
-		objectExistsFunc := funcMap["objectExists"].(func(string, string, string) bool)
+		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
-		exists := objectExistsFunc("PrometheusRule", "openshift-kube-descheduler-operator", "descheduler-rules")
-		if exists {
+		name, err := objectFieldFunc("monitoring.coreos.com/v1", "PrometheusRule", "openshift-kube-descheduler-operator", "descheduler-rules", "metadata", "name")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if name != "" {
 			t.Error("Expected PrometheusRule to not exist")
 		}
 	})
@@ -209,7 +215,7 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		template := `{{- $devActualUtilizationProfile := "" -}}
 {{- if prometheusRuleHasRecordingRule "openshift-kube-descheduler-operator" "descheduler-rules" "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m" -}}
   {{- $devActualUtilizationProfile = "PrometheusCPUMemoryCombinedProfile" -}}
-{{- else if objectExists "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" -}}
+{{- else if objectField "monitoring.coreos.com/v1" "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" "metadata" "name" -}}
   {{- $devActualUtilizationProfile = "PrometheusCPUCombined" -}}
 {{- end -}}
 {{- if $devActualUtilizationProfile -}}
@@ -265,7 +271,7 @@ devActualUtilizationProfile: {{ $devActualUtilizationProfile }}
 		template := `{{- $devActualUtilizationProfile := "" -}}
 {{- if prometheusRuleHasRecordingRule "openshift-kube-descheduler-operator" "descheduler-rules" "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m" -}}
   {{- $devActualUtilizationProfile = "PrometheusCPUMemoryCombinedProfile" -}}
-{{- else if objectExists "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" -}}
+{{- else if objectField "monitoring.coreos.com/v1" "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" "metadata" "name" -}}
   {{- $devActualUtilizationProfile = "PrometheusCPUCombined" -}}
 {{- end -}}
 {{- if $devActualUtilizationProfile -}}
@@ -289,7 +295,7 @@ devActualUtilizationProfile: {{ $devActualUtilizationProfile }}
 	})
 }
 
-func TestGetConfigMapData(t *testing.T) {
+func TestObjectFieldConfigMapData(t *testing.T) {
 	scheme := runtime.NewScheme()
 
 	t.Run("returns data key from existing ConfigMap", func(t *testing.T) {
@@ -317,9 +323,12 @@ func TestGetConfigMapData(t *testing.T) {
 		renderer.SetClient(fakeClient)
 
 		funcMap := renderer.customFuncMap()
-		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
-		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
 		expected := "prometheusK8s:\n  retention: 24h\n"
 		if result != expected {
 			t.Errorf("Expected %q, got %q", expected, result)
@@ -336,9 +345,12 @@ func TestGetConfigMapData(t *testing.T) {
 		renderer.SetClient(fakeClient)
 
 		funcMap := renderer.customFuncMap()
-		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
-		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if result != "" {
 			t.Errorf("Expected empty string, got %q", result)
 		}
@@ -369,9 +381,12 @@ func TestGetConfigMapData(t *testing.T) {
 		renderer.SetClient(fakeClient)
 
 		funcMap := renderer.customFuncMap()
-		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
-		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if result != "" {
 			t.Errorf("Expected empty string, got %q", result)
 		}
@@ -382,9 +397,12 @@ func TestGetConfigMapData(t *testing.T) {
 		renderer := NewRenderer(loader)
 
 		funcMap := renderer.customFuncMap()
-		getDataFunc := funcMap["getConfigMapData"].(func(string, string, string) string)
+		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
-		result := getDataFunc("openshift-monitoring", "cluster-monitoring-config", "config.yaml")
+		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if result != "" {
 			t.Errorf("Expected empty string, got %q", result)
 		}
@@ -414,7 +432,7 @@ func TestGetConfigMapData(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		tmpl := `{{- $liveYAML := getConfigMapData "openshift-monitoring" "cluster-monitoring-config" "config.yaml" -}}
+		tmpl := `{{- $liveYAML := objectField "v1" "ConfigMap" "openshift-monitoring" "cluster-monitoring-config" "data" "config.yaml" -}}
 {{- $live := dict -}}
 {{- if $liveYAML -}}
   {{- $live = fromYaml $liveYAML -}}

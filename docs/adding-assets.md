@@ -249,7 +249,7 @@ If the CRD is missing:
 ### Check Object Existence
 
 ```yaml
-{{- if objectExists "PrometheusRule" "openshift-monitoring" "my-rules" }}
+{{- if objectField "monitoring.coreos.com/v1" "PrometheusRule" "openshift-monitoring" "my-rules" "metadata" "name" }}
 # Configuration that depends on the PrometheusRule
 {{- end }}
 ```
@@ -517,9 +517,13 @@ The following helper functions are available in templates:
 ### Resource Lookups
 
 - `crdExists "apiVersion"` - Check if CRD is installed
-- `objectExists "Kind" "Namespace" "Name"` - Check if object exists
+- `objectField "apiVersion" "Kind" "namespace" "name" "field" "subfield"` - Read a string field using literal path segments (for example, `"data" "config.yaml"`). Returns `""` when the API kind is unavailable or the object/field is missing; other read and field-type errors fail rendering. Unstructured reads bypass the cache with the current manager client configuration.
+- `defaultStorageClass` - Select the newest default StorageClass, with alphabetical name tie-breaking; fails rendering if none exists or discovery fails. Typed StorageClass reads use the cache, with a label-selector exemption for externally managed classes.
 - `crdHasEnum "crdName" "fieldPath" "enumValue"` - Check if CRD schema has enum value
 - `prometheusRuleHasRecordingRule "namespace" "name" "recordName"` - Check PrometheusRule
+
+Without a Kubernetes reader (offline rendering), `objectField` and
+`defaultStorageClass` return `""`.
 
 ### Data Access
 

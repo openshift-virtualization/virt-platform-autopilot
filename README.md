@@ -95,6 +95,8 @@ oc get mcp
 The same applies to other shared cluster objects the feature may have changed
 (for example `cluster-monitoring-config` for KSM monitoring).
 
+For logging storage configuration and collector permissions, see [Logging setup](docs/logging.md).
+
 ## Quick Start
 
 ### Prerequisites

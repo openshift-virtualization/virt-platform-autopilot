@@ -7,7 +7,7 @@
   ClusterMonitoring CRD (configv1alpha1). When that API goes GA, migrate
   this asset to manage the CR instead. See https://redhat.atlassian.net/browse/MON-3630
 */ -}}
-{{- $liveYAML := getConfigMapData "openshift-monitoring" "cluster-monitoring-config" "config.yaml" }}
+{{- $liveYAML := objectField "v1" "ConfigMap" "openshift-monitoring" "cluster-monitoring-config" "data" "config.yaml" }}
 {{- $live := dict }}
 {{- if $liveYAML }}
   {{- $live = fromYaml $liveYAML }}
