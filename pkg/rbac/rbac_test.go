@@ -17,6 +17,8 @@ limitations under the License.
 package rbac
 
 import (
+	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -27,8 +29,8 @@ import (
 
 func TestStaticRules_Count(t *testing.T) {
 	rules := StaticRules()
-	if len(rules) != 13 {
-		t.Errorf("expected 13 static rules, got %d", len(rules))
+	if len(rules) != 15 {
+		t.Errorf("expected 15 static rules, got %d", len(rules))
 	}
 }
 
@@ -637,5 +639,80 @@ rules:
 	transitiveRule := all[len(static)]
 	if transitiveRule.APIGroups[0] != "apps" {
 		t.Errorf("expected transitive rule with apiGroup 'apps' after static rules, got %q", transitiveRule.APIGroups[0])
+	}
+}
+
+func TestTransitiveRules_ClusterRoleBindingsDoNotGrantBind(t *testing.T) {
+	fsys := makeFS(map[string]string{
+		"active/logging/bindings.yaml": `
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: logging-collector-application
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: collect-application-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: second-binding-to-same-role
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: collect-application-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: future-privileged-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: invalid-binding
+roleRef:
+  apiGroup: other.example.com
+  kind: ClusterRole
+  name: must-not-grant
+`,
+		"tombstones/old-binding.yaml": `
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: removed-role
+`,
+	})
+	rules, err := TransitiveRules(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != 0 {
+		t.Fatalf("binding references must not generate permissions: %#v", rules)
+	}
+	rules, err = AllRules(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bindRules []Rule
+	for _, rule := range rules {
+		if slices.Contains(rule.Verbs, "bind") {
+			bindRules = append(bindRules, rule)
+		}
+	}
+	want := []Rule{{
+		APIGroups: []string{"rbac.authorization.k8s.io"}, Resources: []string{"clusterroles"},
+		ResourceNames: []string{"collect-application-logs", "collect-audit-logs", "collect-infrastructure-logs", "logging-collector-logs-writer"},
+		Verbs:         []string{"bind"},
+	}}
+	if !reflect.DeepEqual(bindRules, want) {
+		t.Fatalf("bind rules = %#v, want explicit allowlist %#v", bindRules, want)
 	}
 }

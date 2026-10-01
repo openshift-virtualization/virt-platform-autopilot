@@ -518,8 +518,15 @@ The following helper functions are available in templates:
 
 - `crdExists "apiVersion"` - Check if CRD is installed
 - `objectExists "Kind" "Namespace" "Name"` - Check if object exists
+- `objectField "apiVersion" "Kind" "namespace" "name" "field.path"` - Read a string field; returns `""` for a missing object or field. Reconciliation checks the unfiltered API reader only when the object is absent from the cache, so existing unlabeled objects can be preserved. Other read and field-type errors fail rendering.
+- `defaultStorageClass` - Select the newest default StorageClass, with alphabetical name tie-breaking; fails rendering if none exists or discovery fails. Supply an optional message (`defaultStorageClass "how to configure storage"`) to give asset-specific remediation when no default exists; API errors are still reported unchanged.
+- `storageClassExists "name"` - Validate an explicitly configured StorageClass; read errors fail rendering.
 - `crdHasEnum "crdName" "fieldPath" "enumValue"` - Check if CRD schema has enum value
 - `prometheusRuleHasRecordingRule "namespace" "name" "recordName"` - Check PrometheusRule
+
+Without a Kubernetes reader (offline rendering), `objectField` and
+`defaultStorageClass` return `""`, and `storageClassExists` skips validation.
+Use `fail "message"` to reject invalid configuration in a template.
 
 ### Data Access
 

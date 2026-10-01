@@ -128,6 +128,25 @@ rules:
       - get
       - patch
       - update
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resourceNames:
+      - collect-application-logs
+      - collect-audit-logs
+      - collect-infrastructure-logs
+      - logging-collector-logs-writer
+    resources:
+      - clusterroles
+    verbs:
+      - bind
   # ========================================
   # Transitive RBAC (from managed ClusterRole/Role assets)
   # ========================================
