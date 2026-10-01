@@ -47,6 +47,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/tlsprofile"
@@ -155,6 +156,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	hco, err := r.getHCO(ctx, req.NamespacedName)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			observability.RenderFailed.Reset()
 			logger.Info("HCO not found, skipping reconciliation")
 			return ctrl.Result{}, nil
 		}
@@ -174,6 +176,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// the annotation platform.kubevirt.io/autopilot on the HCO CR is explicitly set to
 	// "false".
 	if !overrides.IsAutopilotEnabled(hco) {
+		observability.RenderFailed.Reset()
 		logger.Info("Autopilot disabled via annotation, keeping idle.",
 			"annotation", overrides.AnnotationAutopilotEnabled,
 			"value", "false",

@@ -109,7 +109,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(warningGroup["name"]).To(Equal("virt-platform-autopilot.warning"))
 
 		warningRules := warningGroup["rules"].([]any)
-		Expect(warningRules).To(HaveLen(3), "warning group should have 3 alerts")
+		Expect(warningRules).To(HaveLen(4), "warning group should have 4 alerts")
 
 		// Verify thrashing alert
 		thrashingAlert := warningRules[0].(map[string]any)
@@ -123,8 +123,14 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(dependencyAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_dependency_opted_in == 1"))
 		Expect(dependencyAlert["for"]).To(Equal("5m"))
 
+		// Only the known logging storage configuration problem is actionable.
+		storageAlert := warningRules[2].(map[string]any)
+		Expect(storageAlert["alert"]).To(Equal("VirtPlatformAutopilotLoggingStorageNotConfigured"))
+		Expect(storageAlert["expr"]).To(ContainSubstring(`asset="logging-lokistack", reason="configuration", code="NoDefaultStorageClass"`))
+		Expect(storageAlert["for"]).To(Equal("15m"))
+
 		// Verify tombstone alert
-		tombstoneAlert := warningRules[2].(map[string]any)
+		tombstoneAlert := warningRules[3].(map[string]any)
 		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformAutopilotTombstoneStuck"))
 		Expect(tombstoneAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_tombstone_status < 0"))
 		Expect(tombstoneAlert["for"]).To(Equal("30m"))
@@ -139,7 +145,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(stagedAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_machineconfig_update_staged == 1"))
 		Expect(stagedAlert["for"]).To(Equal("5m"))
 		Expect(stagedAlert["labels"].(map[string]any)["severity"]).To(Equal("info"))
-		Expect(stagedAlert["annotations"].(map[string]any)).NotTo(HaveKey("runbook_url"))
+		Expect(stagedAlert["annotations"].(map[string]any)["runbook_url"]).To(Equal("https://kubevirt.io/monitoring/runbooks/VirtPlatformAutopilotMachineConfigUpdateStaged"))
 	})
 
 	It("should have proper labels and annotations on all alerts", func() {
@@ -173,11 +179,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 			Expect(annotationsExist).To(BeTrue(), "Alert %s should have annotations", alertName)
 			Expect(annotations["summary"]).ToNot(BeEmpty(), "Alert %s should have summary annotation", alertName)
 			Expect(annotations["description"]).ToNot(BeEmpty(), "Alert %s should have description annotation", alertName)
-			if alertName == "VirtPlatformAutopilotMachineConfigUpdateStaged" {
-				Expect(annotations).NotTo(HaveKey("runbook_url"), "informational staged-update alert has no action or runbook")
-			} else {
-				Expect(annotations["runbook_url"]).To(Equal("https://kubevirt.io/monitoring/runbooks/"+alertName), "Alert %s should have runbook_url pointing at the kubevirt.io runbook", alertName)
-			}
+			Expect(annotations["runbook_url"]).To(Equal("https://kubevirt.io/monitoring/runbooks/"+alertName), "Alert %s should have runbook_url pointing at the kubevirt.io runbook", alertName)
 		}
 	})
 
