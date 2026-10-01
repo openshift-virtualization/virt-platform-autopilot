@@ -1,0 +1,1470 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviations: PersesDashboard CR wrapper; thanos-querier datasource; stripped
+# unsupported timezone + querySettings[].stack; refreshInterval 1m (upstream 15s);
+# overview drilldowns use /monitoring/v2/dashboards/view?dashboard=...&project=kubevirt-metrics-exporter
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  name: memory
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app: kubevirt-metrics-exporter
+spec:
+  config:
+    display:
+      name: Memory
+    panels:
+      ClusterPressure:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster - Memory Pressure
+            description: |-
+              Memory Pressure Stall Information (PSI) showing time tasks spend waiting for and stalled on memory allocation. Waiting indicates tasks are delayed but making progress; stalled means completely blocked. Higher values indicate memory contention. Threshold: >10% moderate, >25% severe.
+
+              Answers: Are workloads experiencing memory contention?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - value: 0.1
+                  - color: '#FF9F1C'
+                    value: 0.25
+                  - color: '#EA4747'
+                    value: 0.5
+              yAxis:
+                format:
+                  shortValues: true
+                  unit: decimal
+                label: ""
+                max: 1
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(rate(node_pressure_memory_waiting_seconds_total{instance=~"$node"}[1m]))
+                    seriesNameFormat: Waiting
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(rate(node_pressure_memory_stalled_seconds_total{instance=~"$node"}[1m]))
+                    seriesNameFormat: Stalled
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      ClusterUtilizationHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Physical memory utilization & requests
+            description: |-
+              Total cluster physical memory utilization split between virtualization and non-virtualization workloads, compared against node capacity and memory requests. Shows actual memory usage versus what the scheduler sees as available. Gap between utilization and requests indicates unused reserved memory. Keep utilization below capacity; requests below 90% of capacity allows room for scheduling.
+
+              Answers: How much physical memory are workloads using compared to requests?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#8f8fff'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#EE6C6C'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#643535'
+                  queryIndex: 2
+                - colorMode: fixed
+                  colorValue: '#FFCC00'
+                  queryIndex: 3
+              yAxis:
+                format:
+                  unit: bytes
+                label: ""
+                min: 0
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(kube_node_status_capacity{resource="memory"})
+                    seriesNameFormat: Node memory capacity
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{temperature="hot", node=~"$node"})
+                    seriesNameFormat: Utilization - Node memory utilization (with virt)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{temperature="hot", node=~"$node"}) - sum(kubevirt_vmi_memory_used_bytes{node=~"$node"})
+                    seriesNameFormat: Utilization - Node memory utilization (without virt)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      (kube_node_status_capacity{resource="memory"} - kube_node_status_allocatable{resource="memory"})
+                      +
+                      sum(kube_pod_resource_request{resource="memory", node=~"$node"})
+                    seriesNameFormat: Plan - Memory requests
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      ClusterUtilizationHistorySummary:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster Utilization
+            description: |-
+              Stacked view of cluster memory utilization across tiers: Tier 0 shows system reserved and workload memory (hot, warm, free); Tier 2 shows swap usage when present. The committed line represents worst-case VM memory usage if all virtual memory were fully utilized. Exceeding capacity indicates overcommitment. Green (free) is healthy; minimal red (hot) headroom requires attention.
+
+              Answers: What is the current cluster memory utilization breakdown and overcommitment risk?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#B83232'
+                  queryIndex: 0
+                  lineStyle: dotted
+                - colorMode: fixed
+                  colorValue: '#B83232'
+                  queryIndex: 1
+                  lineStyle: dotted
+                - colorMode: fixed
+                  colorValue: '#EA4747'
+                  queryIndex: 2
+                - colorMode: fixed
+                  colorValue: '#FF9F1C'
+                  queryIndex: 3
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 4
+                - colorMode: fixed
+                  colorValue: '#FF9F1C'
+                  queryIndex: 5
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 6
+                - colorMode: fixed
+                  colorValue: '#6BB6FF'
+                  queryIndex: 7
+                  lineStyle: dashed
+                  areaOpacity: 0
+                - colorMode: fixed
+                  colorValue: '#6BB6FF'
+                  queryIndex: 8
+                  lineStyle: dotted
+                  areaOpacity: 0
+              thresholds:
+                steps: []
+              visual:
+                areaOpacity: 0.2
+                connectNulls: false
+                display: line
+                lineWidth: 1.5
+                pointRadius: 0
+                stack: all
+              yAxis:
+                format:
+                  unit: bytes
+                label: ""
+                min: 0
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{scope="system"})
+                    seriesNameFormat: System - Tier 0
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{tier="0", scope="workloads", utilized="true", usage="system-overflow"}) > 0
+                    seriesNameFormat: Workloads - Tier 0 - System Overflow
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{tier="0", scope="workloads", utilized="true", temperature="hot"})
+                    seriesNameFormat: Workloads - Tier 0 - Hot
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{tier="0", scope="workloads", utilized="true", temperature="warm"})
+                    seriesNameFormat: Workloads - Tier 0 - Warm
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{tier="0", scope="workloads", utilized="false"})
+                    seriesNameFormat: Workloads - Tier 0 - Free
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{tier="2", scope="workloads", utilized="true", temperature="warm"}) > 0
+                    seriesNameFormat: Workloads - Tier 2 - Warm (Swap used)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{tier="2", scope="workloads", utilized="false"}) > 0
+                    seriesNameFormat: Workloads - Tier 2 - Free (Swap free)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:vm:virtual:memory:bytes)
+                    seriesNameFormat: Virtual Committed
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{scope="system"}) + sum(openshift:cluster:memory:requests:bytes)
+                    seriesNameFormat: Requests
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      ClusterUtilizationNow:
+        kind: Panel
+        spec:
+          display:
+            name: Utilization
+            description: |-
+              Aggregated physical memory utilization across all cluster nodes as a percentage of allocatable memory. Most useful when node utilization is balanced (check Node Imbalance). Threshold: <70% green (healthy), 80-90% yellow (monitor), >90% red (critical). Keep it green.
+
+              Answers: What is the overall cluster memory utilization?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              thresholds:
+                steps:
+                  - value: 0.7
+                  - color: '#FFB249'
+                    value: 0.8
+                  - color: '#EE6C6C'
+                    value: 0.9
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:memory:bytes{scope="workloads", utilized="true"}) / sum(kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: Workloads - Physical Memory utilization
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      ClusterVirtualCommitedHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Virtual Memory assignment
+            description: |-
+              Historical trend of virtual memory assignment for VMs versus node capacity and actual utilization (excluding VMs). Shows worst-case scenario if all VMs utilized their full assigned virtual memory simultaneously. VM assigned virtual memory on top of non-virtualization utilization indicates total memory demand. Exceeding node capacity indicates overcommitment risk.
+
+              Answers: How much virtual memory is assigned to VMs compared to physical capacity?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#8f8fff'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#FFCC00'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#7c6400'
+                  queryIndex: 2
+              thresholds:
+                mode: percent
+                steps: []
+              visual:
+                areaOpacity: 0
+                connectNulls: false
+                display: line
+                lineWidth: 1.25
+                pointRadius: 2.75
+              yAxis:
+                format:
+                  unit: bytes
+                label: ""
+                min: 0
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    minStep: ""
+                    query: sum(kube_node_status_capacity{resource="memory"})
+                    seriesNameFormat: Node capacity
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      sum(openshift:node:memory:bytes{temperature="hot", node=~"$node"})
+                      -
+                      (kube_node_status_capacity{resource="memory"} - kube_node_status_allocatable{resource="memory"})
+                      +
+                      sum(kubevirt_vmi_memory_domain_bytes{node=~"$node"})
+                    seriesNameFormat: Plan - VM assigned virtual memory
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      sum(openshift:node:memory:bytes{temperature="hot", node=~"$node"})
+                      -
+                      sum(kubevirt_vmi_memory_used_bytes{node=~"$node"})
+                    seriesNameFormat: Utilization - Node memory utilization (without virt)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      ClusterVirtualCommitedNow:
+        kind: Panel
+        spec:
+          display:
+            name: Virtual Commitment
+            description: |-
+              Total committed virtual memory as a percentage of allocatable physical memory. Values >100% indicate memory overcommitment. Threshold: <150% green (VMs rarely use full allocation), 150-175% yellow (monitor VM usage), >175% red (high overcommitment risk). Overcommitment is safe only if VMs don't simultaneously reach peak usage.
+
+              Answers: Is the cluster overcommitting virtual memory?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              max: 2
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 1.5
+                    color: '#FFB249'
+                  - value: 1.75
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:vm:virtual:memory:bytes) / sum(kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: Virtual Memory commitment
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodePressureHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Node - Pressure
+            description: |-
+              Memory Pressure Stall Information (PSI) per node showing the rate of time tasks spend waiting for memory. Each line represents a node; higher values indicate that node is experiencing memory contention. Use to identify which specific nodes have memory pressure issues. Threshold: >0.1 moderate, >0.3 severe.
+
+              Answers: Which nodes are experiencing memory pressure?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              yAxis:
+                format:
+                  shortValues: true
+                  unit: decimal
+                label: ""
+                max: 2
+                min: 0
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum by (instance) (rate(node_pressure_memory_waiting_seconds_total{instance=~"$node"}[1m]))
+                    seriesNameFormat: instance
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodePressureMaxNow:
+        kind: Panel
+        spec:
+          display:
+            name: Pressure (PSI) - max
+            description: |-
+              Maximum Memory Pressure Stall Information (PSI) across all nodes. Shows the fraction of time tasks are waiting for memory to complete. Higher values indicate memory contention and performance degradation. Threshold: >10% moderate, >30% severe.
+
+              Answers: What is the maximum memory pressure across nodes?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              max: 1
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.1
+                    color: '#FFB249'
+                  - value: 0.3
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: max(openshift:node:memory:pressure:ratio{severity="some"} @ end())
+                    seriesNameFormat: Max memory pressure
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+          links:
+            - name: Red Hat Customer Portal Article
+              url: https://access.redhat.com/solutions/6987181
+              targetBlank: true
+            - name: Upstream Linux Kernel PSI Documentation
+              url: https://www.kernel.org/doc/html/latest/accounting/psi.html
+      MemoryImbalance:
+        kind: Panel
+        spec:
+          display:
+            name: Pressure Imbalance
+            description: |-
+              80th percentile of percentage point distance from mean memory pressure. Shows the spread: 80% of nodes are within this many percentage points of the mean. For example, 0.22 means 80% of nodes are within ±22pp of mean pressure. Threshold: <0.11 (±11pp) green (healthy balanced), 0.11-0.22 yellow (unhealthy balance), 0.22-0.33 orange (severely unbalanced), >0.33 red (critically unbalanced).
+
+              Answers: Within what percentage point band are 80% of nodes?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              max: 1
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.11
+                    color: '#FFB249'
+                  - value: 0.22
+                    color: '#FF9F1C'
+                  - value: 0.33
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:memory:imbalance:p80distance{scope="workloads"}
+                    seriesNameFormat: p80 distance from mean
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodeRequestsHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Plan - Pod requests per Node
+            description: |-
+              Memory requests per node as a percentage of allocatable memory. Shows what the scheduler has reserved for pods on each node, not actual usage. Each line is a node; crossing thresholds means the node has little room to schedule new pods. Threshold: <80% healthy, 80-90% yellow (limited capacity), >90% red (nearly full).
+
+              Answers: How much memory is requested on each node?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - color: '#FFB249'
+                    value: 0.8
+                  - color: '#EE6C6C'
+                    value: 0.9
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      sum by (node) (kube_pod_resource_request{resource="memory", node=~"$node"})
+
+                      / on (node)
+
+                      kube_node_status_allocatable{resource="memory"}
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodeRequestsMinmaxNow:
+        kind: Panel
+        spec:
+          display:
+            name: Node requests - min/max
+            description: |-
+              Minimum and maximum memory request percentages across all nodes. Shows the spread between the least and most requested nodes. Large gaps indicate imbalanced scheduling. Threshold: >80% on max node means limited scheduling capacity; large min/max gap suggests poor workload distribution.
+
+              Answers: What is the range of memory requests across nodes?
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+              sparkline: {}
+              thresholds:
+                steps:
+                  - color: '#FF9F1C'
+                    value: 0.8
+                  - color: '#EA4747'
+                    value: 0.9
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      min(
+                      sum by (node) (kube_pod_resource_request{resource="memory", node=~"$node"})
+
+                      / on (node)
+
+                      kube_node_status_allocatable{resource="memory"}
+                      )
+                    seriesNameFormat: Min
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      max(
+                      sum by (node) (kube_pod_resource_request{resource="memory", node=~"$node"})
+
+                      / on (node)
+
+                      kube_node_status_allocatable{resource="memory"}
+                      )
+                    seriesNameFormat: Max
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      IssueAlertHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Issues
+            description: |-
+              Count of active memory-related issues: nodes where system components exceed reserved memory (SystemMemoryExceedsReservation), metric collection failures (scrape targets down, kubelet/cAdvisor down), or missing metrics (node series). Any non-zero value indicates problems. System exceeding reservation is critical for loaded clusters as it risks system stability. Keep it at zero.
+
+              Answers: Are there any memory-related system issues or metric collection problems?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#EE6C6C'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#FF6B35'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#C92A2A'
+                  queryIndex: 2
+                - colorMode: fixed
+                  colorValue: '#FF4500'
+                  queryIndex: 3
+              visual:
+                display: line
+                lineWidth: 1.25
+                lineStyle: solid
+                areaOpacity: 0.3
+                pointRadius: 2.75
+                connectNulls: false
+                stack: all
+              legend:
+                position: bottom
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count(ALERTS{alertname="SystemMemoryExceedsReservation"}) > 0
+                    seriesNameFormat: System exceeding reservation
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count(ALERTS{alertname="TargetDown", job="kube-state-metrics"}) > 0
+                    seriesNameFormat: Invalid metrics (scrape target down)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count(up{job="kubelet",metrics_path="/metrics/cadvisor"} == 0) > 0
+                    seriesNameFormat: Invalid metrics (kubelet cAdvisor down)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: (count(node_memory_MemTotal_bytes) - count(sum by (node) (openshift:node:memory:bytes))) > 0
+                    seriesNameFormat: Missing node series
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+          links:
+            - name: KCS SystemMemoryExceedsReservation
+              url: https://access.redhat.com/solutions/5788171
+              targetBlank: true
+            - name: Runbook SystemMemoryExceedsReservation
+              url: https://github.com/openshift/runbooks/blob/master/alerts/machine-config-operator/SystemMemoryExceedsReservation.md
+              tooltip: Runbook
+            - name: Runbook TargetDown
+              url: https://github.com/openshift/runbooks/blob/master/alerts/cluster-monitoring-operator/TargetDown.md
+              tooltip: Runbook
+      NodeSystemReservedMinmaxHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Utilization - min/max
+            description: |-
+              Minimum and maximum system reserved memory utilization across nodes. Shows the range of how much of the reserved system memory (for OS, kubelet, container runtime) is actually being used. Threshold: >90% yellow (approaching limit), >100% red (exceeding reservation - triggers SystemMemoryExceedsReservation alert). Values >100% put system stability at risk.
+
+              Answers: What is the range of system reserved memory usage across nodes?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              querySettings: []
+              thresholds:
+                steps:
+                  - color: '#EE6C6C'
+                    value: 0.9
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      min (
+                      (
+                      sum by (node) (container_memory_rss{id="/system.slice"})
+
+                      / on (node)
+
+                      (
+                      kube_node_status_capacity{resource="memory"}
+                      -
+                      kube_node_status_allocatable{resource="memory"}
+                      )
+                      )
+                      )
+                    seriesNameFormat: min node
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      max(
+                      sum by (node) (container_memory_rss{id="/system.slice"})
+
+                      / on (node)
+
+                      (
+                      kube_node_status_capacity{resource="memory"}
+                      -
+                      kube_node_status_allocatable{resource="memory"}
+                      )
+
+                      )
+                    seriesNameFormat: max node
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodeSystemReservedUtilizationHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Utilization - Utilization of reserved system memory
+            description: |-
+              System reserved memory utilization per node (top 5) showing how much of the reserved memory for OS, kubelet, and container runtime is actually being used. Must stay below 100%; exceeding means the system is using more than reserved, putting system processes and cluster stability at risk. Threshold: <90% healthy, >90% yellow (approaching limit), >100% red (critical - triggers alert).
+
+              Answers: Are system components staying within their reserved memory allocation?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - value: 0.9
+                  - color: '#EE6C6C'
+                    value: 1
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    minStep: ""
+                    query: |-
+                      topk(5, (
+                      sum by (node) (container_memory_rss{id="/system.slice"})
+
+                      / on (node)
+
+                      (
+                      kube_node_status_capacity{resource="memory"}
+                      -
+                      kube_node_status_allocatable{resource="memory"}
+                      )
+                      ))
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodeUtilizationHistory:
+        kind: Panel
+        spec:
+          display:
+            name: Utilization - Actual overcommit level
+            description: |-
+              Actual memory utilization per node as a percentage of allocatable memory. Shows real memory consumption (not requests). Each line is a node; this reveals which nodes are actually under memory pressure versus just having high requests. Threshold: <80% healthy, 80-90% yellow (monitor), >90% red (memory pressure risk).
+
+              Answers: What is the actual memory utilization on each node?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - color: '#FFB249'
+                    value: 0.8
+                  - color: '#EE6C6C'
+                    value: 0.9
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum by (node) (openshift:node:memory:bytes{scope="workloads", temperature="hot", node=~"$node"}) / on (node) kube_node_status_allocatable{resource="memory"}
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodeUtilizationMaxNow:
+        kind: Panel
+        spec:
+          display:
+            name: Node Utilization - max
+            description: |-
+              Maximum actual memory utilization across all nodes. Shows the most heavily loaded node's memory consumption. High values indicate at least one node is under memory pressure. Threshold: <70% green, 70-80% acceptable, 80-90% yellow, >90% red (critical).
+
+              Answers: What is the highest memory utilization on any node?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 1
+              thresholds:
+                steps:
+                  - value: 0.7
+                  - value: 0.8
+                  - color: '#EE6C6C'
+                    value: 0.9
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: max(sum by (node) (openshift:node:memory:bytes{scope="workloads", temperature="hot", node=~"$node"}) / on (node) kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: Workloads - Max
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NodeUtilizationMinNow:
+        kind: Panel
+        spec:
+          display:
+            name: Node Utilization - min
+            description: |-
+              Minimum actual memory utilization across all nodes. Shows the least loaded node's memory consumption. Compare with max utilization to assess cluster balance. Very low values with high max utilization indicate poor workload distribution. Threshold: same as max, but focus on the min/max gap rather than absolute value.
+
+              Answers: What is the lowest memory utilization on any node?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 1
+              thresholds:
+                steps:
+                  - value: 0.7
+                  - value: 0.8
+                  - color: '#EE6C6C'
+                    value: 0.9
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: min(sum by (node) (openshift:node:memory:bytes{scope="workloads", temperature="hot", node=~"$node"}) / on (node) kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: Workloads - Min
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      NumberofrunningVMs:
+        kind: Panel
+        spec:
+          display:
+            name: Number of running VMs
+            description: |-
+              Total count of running virtual machines in the cluster. Use to understand VM workload density and correlate VM count changes with memory utilization and overcommitment trends.
+
+              Answers: How many VMs are currently running?
+          plugin:
+            kind: TimeSeriesChart
+            spec: {}
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count(kubevirt_vmi_memory_domain_bytes)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      PlanMinmax:
+        kind: Panel
+        spec:
+          display:
+            name: Node virtual - min/max
+            description: |-
+              Minimum and maximum virtual memory commitment per node (workload utilization + VM virtual assignments). Shows the spread of worst-case memory demand if all VMs used their full allocation. Threshold: <120% acceptable, 120-150% yellow, 150-200% orange, >200% red (severe overcommitment). Large spread indicates uneven VM distribution.
+
+              Answers: What is the range of virtual memory commitment across nodes?
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+              sparkline: {}
+              thresholds:
+                steps:
+                  - value: 1.2
+                  - color: '#FF9F1C'
+                    value: 1.5
+                  - color: '#EA4747'
+                    value: 2
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: min((sum by (node) (openshift:node:memory:bytes{scope="workloads", temperature="hot", node=~"$node"}) + sum by (node) (kubevirt_vmi_memory_domain_bytes)) / on (node) kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: max((sum by (node) (openshift:node:memory:bytes{scope="workloads", temperature="hot", node=~"$node"}) + sum by (node) (kubevirt_vmi_memory_domain_bytes)) / on (node) kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      Swap:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster - Aggregated Swap
+            description: |-
+              Total swap space available and used across all nodes. Swap provides tier-2 memory but with performance penalties. Used swap indicates memory pressure; workloads are spilling to disk. High swap usage degrades performance. Keep used swap minimal; presence indicates the cluster needs more physical memory or workload reduction.
+
+              Answers: How much swap is available and being used?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#FFB249'
+                  queryIndex: 1
+              yAxis:
+                format:
+                  unit: bytes
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      sum(
+                      label_replace(
+                        (node_memory_SwapTotal_bytes{instance=~"$node"}),
+                        "node", "$1",
+                        "instance", "(.+)"
+                      )
+                      )
+                    seriesNameFormat: Available
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      sum(
+                      label_replace(
+                        (node_memory_SwapTotal_bytes{instance=~"$node"} - node_memory_SwapFree_bytes{instance=~"$node"}),
+                        "node", "$1",
+                        "instance", "(.+)"
+                      )
+                      )
+                    seriesNameFormat: Used
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      UtilizationDsitribution:
+        kind: Panel
+        spec:
+          display:
+            name: Plan - Virtual memory commit level
+            description: |-
+              Virtual memory commitment per node showing actual utilization plus uncommitted VM virtual memory (VM assigned minus VM used). Represents worst-case scenario for each node if all VMs reached full allocation. Threshold: <120% acceptable, 120-150% yellow, 150-200% orange, >200% red. Values >100% indicate overcommitment.
+
+              Answers: What is the virtual memory commitment level on each node?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - value: 1.2
+                  - color: '#FF9F1C'
+                    value: 1.5
+                  - color: '#EA4747'
+                    value: 2
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      (
+                      (
+                      sum by (node) (openshift:node:memory:bytes{utilized="true", node=~"$node"} )
+                      - on (node)
+                      (
+                      kube_node_status_capacity{resource="memory"}
+                      -
+                      kube_node_status_allocatable{resource="memory"}
+                      )
+                      )
+                      +
+                      sum by (node) (0-kubevirt_vmi_memory_used_bytes + kubevirt_vmi_memory_domain_bytes)
+                      )
+
+
+                      /
+
+                      kube_node_status_allocatable{resource="memory"}
+                    seriesNameFormat: node - Virtual Memory committment
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      VMs:
+        kind: Panel
+        spec:
+          display:
+            name: VM overcommit ratio
+            description: |-
+              Per-VM ratio of assigned virtual memory to pod memory request. Values >100% indicate the VM has more virtual memory assigned than the virt-launcher pod requested. Values >100% are expected and normal for VM overcommitment; this allows VMs to use more memory than requested from Kubernetes. Monitor VMs with very high ratios (>200%) during memory pressure.
+
+              Answers: Which VMs are overcommitting their pod requests?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - value: 1
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: |-
+                      #kubevirt_vmi_memory_domain_bytes{kubernetes_vmi_label_vm_kubevirt_io_name!=""}
+                      (label_replace(kubevirt_vmi_memory_domain_bytes, "label_vm_kubevirt_io_name", "$1", "name", "(.+)"))
+
+                      / on (namespace, label_vm_kubevirt_io_name) group_left()
+
+                      max by (namespace, label_vm_kubevirt_io_name) (
+                        kube_pod_resource_request{resource="memory"}
+                        * on(namespace, pod) group_left(label_vm_kubevirt_io_name)
+                        group by(namespace, pod, label_vm_kubevirt_io_name) (
+                          kube_pod_labels{label_vm_kubevirt_io_name!=""}
+                        )
+                      )
+                    seriesNameFormat: namespace/label_vm_kubevirt_io_name
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      VMvirtualmemoryutiliztaionhostvmurilization:
+        kind: Panel
+        spec:
+          display:
+            name: VM virtual memory utiliztaion vs host vm urilization
+            description: |-
+              Ratio of VM-reported memory usage (from inside the VM) to host-side container memory usage (top 10 VMs). Values around 1.0 indicate VM and host see similar memory usage. Values <1.0 suggest the VM is using less than the host measures (caching, buffers). Values >1.0 may indicate measurement discrepancies. Use to validate memory accounting and identify VMs with unusual memory patterns.
+
+              Answers: Do VM internal and host-side memory measurements agree?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - value: 1
+              visual:
+                areaOpacity: 0
+                connectNulls: false
+                display: line
+                lineWidth: 1.25
+                pointRadius: 2.75
+              yAxis:
+                format:
+                  unit: decimal
+                label: ""
+                min: 0
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    minStep: ""
+                    query: |-
+                      #kubevirt_vmi_memory_domain_bytes{kubernetes_vmi_label_vm_kubevirt_io_name!=""}
+                      topk(10, (label_replace(kubevirt_vmi_memory_used_bytes@end(), "label_vm_kubevirt_io_name", "$1", "name", "(.+)"))
+
+                      / on (namespace, label_vm_kubevirt_io_name) group_left()
+
+                      sum by (namespace, label_vm_kubevirt_io_name) (
+                        container_memory_usage_bytes
+                        * on(namespace, pod) group_left(label_vm_kubevirt_io_name)
+                        group by(namespace, pod, label_vm_kubevirt_io_name) (
+                          kube_pod_labels{label_vm_kubevirt_io_name!=""}
+                        )
+                      )
+                      )
+                    seriesNameFormat: namespace/label_vm_kubevirt_io_name
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      VmVirtualCommitedNow:
+        kind: Panel
+        spec:
+          display:
+            name: VM Virtual commited
+            description: |-
+              Average VM memory overcommit ratio across nodes. Shows the typical level of VM virtual memory assignment relative to actual VM memory usage. Threshold: <150% green (healthy), 150-175% yellow (moderate overcommit), >175% red (aggressive overcommit). Higher values indicate VMs are assigned significantly more memory than they're using.
+
+              Answers: What is the average VM overcommit level?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                decimalPlaces: 1
+                unit: percent-decimal
+              max: 2
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 1.5
+                    color: '#FFB249'
+                  - color: '#EE6C6C'
+                    value: 1.75
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: avg(openshift:vm:memory:overcommit:ratio)
+                    seriesNameFormat: Average VM overcommit ratio
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+    layouts:
+      - kind: Grid
+        spec:
+          display:
+            title: At a Glance - Memory
+            collapse:
+              open: true
+          items:
+            - x: 0
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/ClusterUtilizationNow'
+            - x: 6
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/NodePressureMaxNow'
+            - x: 12
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/MemoryImbalance'
+            - x: 18
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/ClusterVirtualCommitedNow'
+            - x: 0
+              y: 6
+              width: 24
+              height: 9
+              content:
+                $ref: '#/spec/panels/ClusterUtilizationHistorySummary'
+      - kind: Grid
+        spec:
+          display:
+            title: Cluster
+            collapse:
+              open: false
+          items:
+            - x: 0
+              y: 0
+              width: 15
+              height: 7
+              content:
+                $ref: '#/spec/panels/ClusterUtilizationHistory'
+            - x: 15
+              y: 0
+              width: 7
+              height: 7
+              content:
+                $ref: '#/spec/panels/ClusterUtilizationNow'
+            - x: 0
+              y: 7
+              width: 15
+              height: 7
+              content:
+                $ref: '#/spec/panels/ClusterVirtualCommitedHistory'
+            - x: 15
+              y: 7
+              width: 7
+              height: 7
+              content:
+                $ref: '#/spec/panels/ClusterVirtualCommitedNow'
+            - x: 0
+              y: 14
+              width: 15
+              height: 5
+              content:
+                $ref: '#/spec/panels/ClusterPressure'
+            - x: 0
+              y: 19
+              width: 15
+              height: 6
+              content:
+                $ref: '#/spec/panels/Swap'
+            - x: 0
+              y: 25
+              width: 24
+              height: 5
+              content:
+                $ref: '#/spec/panels/IssueAlertHistory'
+      - kind: Grid
+        spec:
+          display:
+            title: Nodes
+            collapse:
+              open: false
+          items:
+            - x: 0
+              y: 0
+              width: 15
+              height: 8
+              content:
+                $ref: '#/spec/panels/NodeUtilizationHistory'
+            - x: 15
+              y: 0
+              width: 7
+              height: 8
+              content:
+                $ref: '#/spec/panels/NodeUtilizationMinNow'
+            - x: 0
+              y: 8
+              width: 15
+              height: 8
+              content:
+                $ref: '#/spec/panels/NodeRequestsHistory'
+            - x: 15
+              y: 16
+              width: 7
+              height: 8
+              content:
+                $ref: '#/spec/panels/PlanMinmax'
+            - x: 15
+              y: 8
+              width: 7
+              height: 8
+              content:
+                $ref: '#/spec/panels/NodeRequestsMinmaxNow'
+            - x: 0
+              y: 16
+              width: 15
+              height: 8
+              content:
+                $ref: '#/spec/panels/UtilizationDsitribution'
+            - x: 0
+              y: 24
+              width: 15
+              height: 6
+              content:
+                $ref: '#/spec/panels/NodePressureHistory'
+            - x: 15
+              y: 24
+              width: 7
+              height: 6
+              content:
+                $ref: '#/spec/panels/NodePressureMaxNow'
+      - kind: Grid
+        spec:
+          display:
+            title: System Reserved
+            collapse:
+              open: false
+          items:
+            - x: 0
+              y: 0
+              width: 14
+              height: 8
+              content:
+                $ref: '#/spec/panels/NodeSystemReservedUtilizationHistory'
+            - x: 14
+              y: 0
+              width: 7
+              height: 8
+              content:
+                $ref: '#/spec/panels/NodeSystemReservedMinmaxHistory'
+      - kind: Grid
+        spec:
+          display:
+            title: Workloads
+            collapse:
+              open: false
+          items:
+            - x: 0
+              y: 0
+              width: 14
+              height: 6
+              content:
+                $ref: '#/spec/panels/VMs'
+            - x: 14
+              y: 6
+              width: 7
+              height: 6
+              content:
+                $ref: '#/spec/panels/NumberofrunningVMs'
+            - x: 0
+              y: 6
+              width: 14
+              height: 6
+              content:
+                $ref: '#/spec/panels/VMvirtualmemoryutiliztaionhostvmurilization'
+            - x: 14
+              y: 0
+              width: 7
+              height: 6
+              content:
+                $ref: '#/spec/panels/VmVirtualCommitedNow'
+    duration: 1h
+    refreshInterval: 1m

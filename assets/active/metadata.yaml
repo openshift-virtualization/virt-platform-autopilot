@@ -952,6 +952,33 @@ assets:
     reconcile_order: 3
     conditions: *kubevirt-metrics-exporter-conditions
 
+  - name: kubevirt-metrics-exporter-prometheusrule-recording-cpu
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/prometheusrule-recording-cpu.yaml
+    phase: 1
+    install: opt-in
+    component: PrometheusRule
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-prometheusrule-recording-io
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/prometheusrule-recording-io.yaml
+    phase: 1
+    install: opt-in
+    component: PrometheusRule
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-prometheusrule-recording-memory
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/prometheusrule-recording-memory.yaml
+    phase: 1
+    install: opt-in
+    component: PrometheusRule
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
   - name: kubevirt-metrics-exporter-datasource
     group: kubevirt-metrics-exporter
     path: active/kubevirt-metrics-exporter/datasource.yaml
@@ -964,6 +991,51 @@ assets:
   - name: kubevirt-metrics-exporter-dashboard
     group: kubevirt-metrics-exporter
     path: active/kubevirt-metrics-exporter/dashboard.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDashboard
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-dashboard-cpu
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/dashboard-cpu.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDashboard
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-dashboard-io
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/dashboard-io.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDashboard
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-dashboard-memory
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/dashboard-memory.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDashboard
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-dashboard-io-latency
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/dashboard-io-latency.yaml
+    phase: 1
+    install: opt-in
+    component: PersesDashboard
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-dashboard-memory-detailed
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/dashboard-memory-detailed.yaml
     phase: 1
     install: opt-in
     component: PersesDashboard

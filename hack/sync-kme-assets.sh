@@ -46,8 +46,16 @@ declare -a ASSETS=(
 	"daemonset|4|deploy/base/daemonset.yaml|kubevirt-metrics-exporter.yaml.tpl"
 	"copy|4|deploy/openshift/metrics-servicemonitor.yaml|servicemonitor.yaml"
 	"copy|3|deploy/prometheus-rules/prometheusrule.yaml|prometheusrule.yaml"
+	"copy|3|deploy/prometheus-rules/recording/cpu.yaml|prometheusrule-recording-cpu.yaml"
+	"copy|3|deploy/prometheus-rules/recording/io.yaml|prometheusrule-recording-io.yaml"
+	"copy|3|deploy/prometheus-rules/recording/memory.yaml|prometheusrule-recording-memory.yaml"
 	"copy|3|deploy/openshift/datasource.yaml|datasource.yaml"
-	"copy|3|deploy/openshift/dashboard.yaml|dashboard.yaml"
+	"copy|3|deploy/openshift/dashboard-overview.yaml|dashboard.yaml"
+	"copy|3|deploy/openshift/dashboard-cpu.yaml|dashboard-cpu.yaml"
+	"copy|3|deploy/openshift/dashboard-io.yaml|dashboard-io.yaml"
+	"copy|3|deploy/openshift/dashboard-memory.yaml|dashboard-memory.yaml"
+	"copy|3|deploy/openshift/dashboard-io-latency.yaml|dashboard-io-latency.yaml"
+	"copy|3|deploy/openshift/dashboard-memory-detailed.yaml|dashboard-memory-detailed.yaml"
 )
 
 cleanup() {

@@ -1,0 +1,517 @@
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  name: kubevirt-vm-memory
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app: kubevirt-metrics-exporter
+spec:
+  config:
+    display:
+      name: KubeVirt VM Memory Details (Dev Preview)
+      description: THP and resident memory ratios per VM, plus node khugepaged, ksmd, KSM profit, and THP activity
+    duration: 24h
+
+    variables:
+      - kind: ListVariable
+        spec:
+          name: node
+          display:
+            name: Node
+          defaultValue:
+            - "$__all"
+          allowAllValue: true
+          allowMultiple: true
+          customAllValue: ".*"
+          sort: alphabetical-asc
+          plugin:
+            kind: PrometheusLabelValuesVariable
+            spec:
+              datasource:
+                kind: PrometheusDatasource
+                name: thanos-querier
+              labelName: node
+              matchers:
+                - "kube_node_info{}"
+
+      - kind: ListVariable
+        spec:
+          name: numa
+          display:
+            name: NUMA (THP readiness)
+          defaultValue:
+            - "$__all"
+          allowAllValue: true
+          allowMultiple: true
+          customAllValue: ".*"
+          sort: alphabetical-asc
+          plugin:
+            kind: PrometheusLabelValuesVariable
+            spec:
+              datasource:
+                kind: PrometheusDatasource
+                name: thanos-querier
+              labelName: numa
+              matchers:
+                - 'kme_node_buddy_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node"}'
+
+      - kind: ListVariable
+        spec:
+          name: namespace
+          display:
+            name: Namespace (VM panels)
+          defaultValue:
+            - "$__all"
+          allowAllValue: true
+          allowMultiple: true
+          customAllValue: ".*"
+          sort: alphabetical-asc
+          plugin:
+            kind: PrometheusLabelValuesVariable
+            spec:
+              datasource:
+                kind: PrometheusDatasource
+                name: thanos-querier
+              labelName: namespace
+              matchers:
+                - 'kubevirt_vmi_info{node=~"$node"}'
+
+      - kind: ListVariable
+        spec:
+          name: vmi
+          display:
+            name: VM (VM panels)
+          defaultValue:
+            - "$__all"
+          allowAllValue: true
+          allowMultiple: true
+          customAllValue: ".*"
+          sort: alphabetical-asc
+          plugin:
+            kind: PrometheusLabelValuesVariable
+            spec:
+              datasource:
+                kind: PrometheusDatasource
+                name: thanos-querier
+              labelName: name
+              matchers:
+                - 'kubevirt_vmi_info{node=~"$node", namespace=~"$namespace"}'
+
+      - kind: ListVariable
+        spec:
+          name: topk
+          display:
+            name: Limit
+          allowAllValue: false
+          allowMultiple: false
+          defaultValue: "5"
+          plugin:
+            kind: StaticListVariable
+            spec:
+              values:
+                - "5"
+                - "10"
+                - "25"
+                - "50"
+                - "100"
+
+      - kind: ListVariable
+        spec:
+          name: interval
+          display:
+            name: Rate Interval
+          allowAllValue: false
+          allowMultiple: false
+          defaultValue: "5m"
+          plugin:
+            kind: StaticListVariable
+            spec:
+              values:
+                - "1m"
+                - "2m"
+                - "5m"
+                - "10m"
+
+      - kind: ListVariable
+        spec:
+          name: kernelcore_zoneinfo_gate
+          display:
+            hidden: true
+          allowAllValue: false
+          allowMultiple: false
+          defaultValue:
+            - movable_present
+          plugin:
+            kind: StaticListVariable
+            spec:
+              values:
+                - label: movable_present
+                  value: '* on(node, numa) group_left() (sum by (node, numa) (kme_node_zone_present_bytes{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa", zone="Movable"}) > bool 0)'
+                - label: always
+                  value: '* 1'
+
+    panels:
+      thp_resident_ratio:
+        kind: Panel
+        spec:
+          display:
+            name: THP / Resident
+            description: >-
+              Share of each VM's resident memory (RSS) already backed by transparent
+              huge pages. Rising lines mean more guest RAM is in huge pages — from
+              khugepaged collapse or page fault-time allocation. Low values mean most
+              RSS is still in 4 KiB pages. Uses QEMU cgroup anon_thp + shmem_thp over
+              actual guest RAM RSS - it is slightly inaccurate as the cgroup also
+              includes virt-launcher pod overhead. Limit caps to the top VMs by
+              current THP/resident % (most useful with All nodes).
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              yAxis:
+                show: true
+                format:
+                  unit: percent
+                  decimalPlaces: 1
+              legend:
+                position: bottom
+                mode: table
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'topk($topk, 100 * (sum without (pod) (container_memory_anon_thp_bytes{job="kubevirt-metrics-exporter", node=~"$node", namespace=~"$namespace", name=~"$vmi"}) + sum without (pod) (container_memory_shmem_thp_bytes{job="kubevirt-metrics-exporter", node=~"$node", namespace=~"$namespace", name=~"$vmi"})) / on (namespace, name, node) group_left() max by (namespace, name, node) (kubevirt_vmi_memory_resident_bytes{node=~"$node", namespace=~"$namespace", name=~"$vmi"} and on (namespace, name, node) kubevirt_vmi_info{phase="running", node=~"$node", namespace=~"$namespace", name=~"$vmi"}))'
+                    minStep: "30s"
+                    seriesNameFormat: "{{name}}"
+
+      resident_configured_ratio:
+        kind: Panel
+        spec:
+          display:
+            name: Resident / Configured
+            description: >-
+              How much of each VM's configured guest memory size is actually resident
+              in RAM right now. Not a THP metric — use it for footprint context
+              alongside the THP panel. A low ratio with a large configured size means
+              much of the VM's assigned memory is not currently in RAM (returned by Free
+              Page Reporting, guest never using it, or merged by KSM). Limit caps to
+              the top VMs by current resident/configured % (most useful with All nodes).
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              yAxis:
+                show: true
+                format:
+                  unit: percent
+                  decimalPlaces: 1
+              legend:
+                position: bottom
+                mode: table
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'topk($topk, 100 * max by (namespace, name, node) (kubevirt_vmi_memory_resident_bytes{node=~"$node", namespace=~"$namespace", name=~"$vmi"} and on (namespace, name, node) kubevirt_vmi_info{phase="running", node=~"$node", namespace=~"$namespace", name=~"$vmi"}) / on (namespace, name, node) group_left() max by (namespace, name, node) (kubevirt_vmi_memory_domain_bytes{node=~"$node", namespace=~"$namespace", name=~"$vmi"} and on (namespace, name, node) kubevirt_vmi_info{phase="running", node=~"$node", namespace=~"$namespace", name=~"$vmi"}))'
+                    minStep: "30s"
+                    seriesNameFormat: "{{name}}"
+
+      node_thp_readiness_movable:
+        kind: Panel
+        spec:
+          display:
+            name: THP readiness (Movable zone)
+            description: >-
+              Per-NUMA buddy stock in the Movable zone (Normal if no Movable).
+              ≥2 MiB Movable = buddy − unmovable − isolate at orders ≥9.
+              Movable total = same formula, all orders.
+              Buddy free total = buddyinfo block sum.
+              Non-THP-movable freelist = buddy − movable (Unmovable + Isolate in the
+              THP zone). Dashed: MemAvailable (node-wide reclaim). Limit keeps the top
+              node·NUMA pairs by buddy free total (MemAvailable: top nodes by reclaim).
+          links:
+            - name: Node memory pressure (detail)
+              url: '/monitoring/v2/dashboards/view?dashboard=memory&project=kubevirt-metrics-exporter&node=$node'
+              targetBlank: true
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              yAxis:
+                show: true
+                label: Buddy stock (bytes)
+                format:
+                  shortValues: true
+                  unit: bytes
+              legend:
+                position: bottom
+                mode: table
+              querySettings:
+                - queryIndex: 4
+                  lineStyle: dashed
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'kme_node_movable_bytes_order_ge_9{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"} and on (node, numa) topk($topk, kme_node_buddy_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"})'
+                    minStep: "30s"
+                    seriesNameFormat: "≥2 MiB Movable - {{node}} · NUMA {{numa}}"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'kme_node_movable_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"} and on (node, numa) topk($topk, kme_node_buddy_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"})'
+                    minStep: "30s"
+                    seriesNameFormat: "Movable total - {{node}} · NUMA {{numa}}"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'topk($topk, kme_node_buddy_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"})'
+                    minStep: "30s"
+                    seriesNameFormat: "Buddy free total - {{node}} · NUMA {{numa}}"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: '(kme_node_buddy_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"} - kme_node_movable_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"}) and on (node, numa) topk($topk, kme_node_buddy_bytes_all_orders{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa"})'
+                    minStep: "30s"
+                    seriesNameFormat: "Non-THP-movable freelist (buddy − movable) - {{node}} · NUMA {{numa}}"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'topk($topk, label_replace(node_memory_MemAvailable_bytes{job="node-exporter", instance=~"$node"}, "node", "$1", "instance", "(.*)"))'
+                    minStep: "30s"
+                    seriesNameFormat: "MemAvailable - node-wide reclaim estimate · {{node}}"
+
+      node_thp_readiness_unmovable:
+        kind: Panel
+        spec:
+          display:
+            name: THP readiness (Kernelcore pool)
+            description: >-
+              Split-layout hosts only (kernelcore= with populated Movable zone). Structural
+              kernelcore pool from zoneinfo (DMA + DMA32 + Normal). Per NUMA: free + used
+              = sum(zone present) ≈ kernelcore= budget. Used = sum(present) − sum(pages
+              free). THP-ineligible; mostly kernel/slab/page-table. Empty on fallback hosts
+              (no Movable zone) — use the Movable zone panel instead; its Non-THP-movable
+              line covers the small unmovable freelist there.
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              yAxis:
+                show: true
+                label: Kernelcore zone memory (bytes)
+                format:
+                  shortValues: true
+                  unit: bytes
+              legend:
+                position: bottom
+                mode: table
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'sum by (node, numa) (kme_node_zone_free_bytes{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa", zone=~"DMA|DMA32|Normal"}) $kernelcore_zoneinfo_gate'
+                    minStep: "30s"
+                    seriesNameFormat: "Kernelcore free - {{node}} · NUMA {{numa}}"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: '(sum by (node, numa) (kme_node_zone_present_bytes{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa", zone=~"DMA|DMA32|Normal"}) - sum by (node, numa) (kme_node_zone_free_bytes{job="kubevirt-metrics-exporter", node=~"$node", numa=~"$numa", zone=~"DMA|DMA32|Normal"})) $kernelcore_zoneinfo_gate'
+                    minStep: "30s"
+                    seriesNameFormat: "Kernelcore used - {{node}} · NUMA {{numa}}"
+
+      node_kernel_activity:
+        kind: Panel
+        spec:
+          display:
+            name: Node khugepaged & ksmd CPU / KSM profit
+            description: >-
+              Left axis: approximate % of one CPU core. khugepaged = THP collapse/scan;
+              ksmd = page merging (separate from THP). Right axis (dashed): KSM general
+              profit bytes (net memory saved after rmap_item overhead; negative = overhead
+              exceeds savings). Limit ranks nodes by khugepaged + ksmd CPU % and shows
+              CPU + profit for each selected node.
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              yAxis:
+                show: true
+                label: "% of one CPU core"
+              legend:
+                position: bottom
+                mode: table
+              querySettings:
+                - queryIndex: 2
+                  format:
+                    shortValues: true
+                    unit: bytes
+                  lineStyle: dashed
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: '100 * rate(kme_cgroup_khugepaged_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) and on (node) topk($topk, 100 * rate(kme_cgroup_khugepaged_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) + 100 * rate(kme_cgroup_ksmd_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]))'
+                    minStep: "30s"
+                    seriesNameFormat: "khugepaged CPU % ({{node}})"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: '100 * rate(kme_cgroup_ksmd_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) and on (node) topk($topk, 100 * rate(kme_cgroup_khugepaged_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) + 100 * rate(kme_cgroup_ksmd_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]))'
+                    minStep: "30s"
+                    seriesNameFormat: "ksmd CPU % ({{node}})"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: 'sum by (node) (node_ksmd_general_profit_bytes{job="kubevirt-metrics-exporter"} * on (namespace, pod) group_left(node) max by (namespace, pod, node) (kube_pod_info{node=~"$node"})) and on (node) topk($topk, 100 * rate(kme_cgroup_khugepaged_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) + 100 * rate(kme_cgroup_ksmd_cpu_seconds_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]))'
+                    minStep: "30s"
+                    seriesNameFormat: "KSM general profit ({{node}})"
+
+      node_thp_activity:
+        kind: Panel
+        spec:
+          display:
+            name: Node THP split & collapse
+            description: >-
+              vmstat THP counters as events per minute. split_pmd = huge pages torn
+              down; collapse_alloc = khugepaged collapses. Limit ranks nodes by split
+              + collapse rate and shows both lines for each selected node.
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              yAxis:
+                show: true
+              legend:
+                position: bottom
+                mode: table
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: '60 * rate(kme_node_thp_split_pmd_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) and on (node) topk($topk, 60 * rate(kme_node_thp_split_pmd_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) + 60 * rate(kme_node_thp_collapse_alloc_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]))'
+                    minStep: "30s"
+                    seriesNameFormat: "split_pmd/min ({{node}})"
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+                    query: '60 * rate(kme_node_thp_collapse_alloc_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) and on (node) topk($topk, 60 * rate(kme_node_thp_split_pmd_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]) + 60 * rate(kme_node_thp_collapse_alloc_total{job="kubevirt-metrics-exporter", node=~"$node"}[$interval]))'
+                    minStep: "30s"
+                    seriesNameFormat: "collapse_alloc/min ({{node}})"
+
+    layouts:
+      - kind: Grid
+        spec:
+          display:
+            title: VM Memory
+            collapse:
+              open: true
+          items:
+            - x: 0
+              "y": 0
+              width: 12
+              height: 14
+              content:
+                $ref: '#/spec/panels/thp_resident_ratio'
+            - x: 12
+              "y": 0
+              width: 12
+              height: 14
+              content:
+                $ref: '#/spec/panels/resident_configured_ratio'
+
+      - kind: Grid
+        spec:
+          display:
+            title: Node
+            collapse:
+              open: true
+          items:
+            - x: 0
+              "y": 0
+              width: 12
+              height: 14
+              content:
+                $ref: '#/spec/panels/node_thp_readiness_movable'
+            - x: 12
+              "y": 0
+              width: 12
+              height: 14
+              content:
+                $ref: '#/spec/panels/node_thp_readiness_unmovable'
+            - x: 0
+              "y": 14
+              width: 12
+              height: 14
+              content:
+                $ref: '#/spec/panels/node_kernel_activity'
+            - x: 12
+              "y": 14
+              width: 12
+              height: 14
+              content:
+                $ref: '#/spec/panels/node_thp_activity'

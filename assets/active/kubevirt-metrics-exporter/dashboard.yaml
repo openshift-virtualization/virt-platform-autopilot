@@ -1,661 +1,622 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviations: PersesDashboard CR wrapper; thanos-querier datasource; stripped
+# unsupported timezone + querySettings[].stack; refreshInterval 1m (upstream 15s);
+# overview drilldowns use /monitoring/v2/dashboards/view?dashboard=...&project=kubevirt-metrics-exporter
 apiVersion: perses.dev/v1alpha2
 kind: PersesDashboard
 metadata:
-  name: kubevirt-metrics-exporter
+  name: overview
   namespace: kubevirt-metrics-exporter
   labels:
     app: kubevirt-metrics-exporter
 spec:
   config:
     display:
-      name: KubeVirt Storage Latency
-      description: Storage I/O latency from QMP and eBPF subsystems
+      name: Overview
     duration: 1h
-
-
-    variables:
-      - kind: ListVariable
-        spec:
-          name: node
-          display:
-            name: Node
-          defaultValue:
-            - "$__all"
-          allowAllValue: true
-          allowMultiple: true
-          customAllValue: ".*"
-          plugin:
-            kind: PrometheusLabelValuesVariable
-            spec:
-              datasource:
-                kind: PrometheusDatasource
-                name: thanos-querier
-              labelName: node
-              matchers:
-                - "kube_node_info{}"
-
-      - kind: ListVariable
-        spec:
-          name: namespace
-          display:
-            name: Namespace
-          defaultValue:
-            - "$__all"
-          allowAllValue: true
-          allowMultiple: true
-          customAllValue: ".*"
-          plugin:
-            kind: PrometheusLabelValuesVariable
-            spec:
-              datasource:
-                kind: PrometheusDatasource
-                name: thanos-querier
-              labelName: namespace
-              matchers:
-                - "kube_namespace_labels{}"
-
-      - kind: ListVariable
-        spec:
-          name: vmi
-          display:
-            name: VMI
-          defaultValue:
-            - "$__all"
-          allowAllValue: true
-          allowMultiple: true
-          customAllValue: ".*"
-          plugin:
-            kind: PrometheusLabelValuesVariable
-            spec:
-              datasource:
-                kind: PrometheusDatasource
-                name: thanos-querier
-              labelName: name
-              matchers:
-                - 'kubevirt_vmi_info{node=~"$node", namespace=~"$namespace"}'
-
-      - kind: ListVariable
-        spec:
-          name: persistentvolumeclaim
-          display:
-            name: Volume
-          defaultValue:
-            - "$__all"
-          allowAllValue: true
-          allowMultiple: true
-          customAllValue: ".*"
-          plugin:
-            kind: PrometheusLabelValuesVariable
-            spec:
-              datasource:
-                kind: PrometheusDatasource
-                name: thanos-querier
-              labelName: persistentvolumeclaim
-              matchers:
-                - 'kube_persistentvolumeclaim_info{namespace=~"$namespace"}'
-
-      - kind: ListVariable
-        spec:
-          name: operation
-          display:
-            name: Operation
-          defaultValue:
-            - "$__all"
-          allowAllValue: true
-          allowMultiple: true
-          customAllValue: ".*"
-          plugin:
-            kind: StaticListVariable
-            spec:
-              values:
-                - read
-                - write
-                - flush
-                - discard
-                - open
-                - getattr
-
-      - kind: ListVariable
-        spec:
-          name: interval
-          display:
-            name: Rate Interval
-          allowAllValue: false
-          allowMultiple: false
-          defaultValue: "5m"
-          plugin:
-            kind: StaticListVariable
-            spec:
-              values:
-                - "1m"
-                - "2m"
-                - "5m"
-                - "10m"
-
-      - kind: ListVariable
-        spec:
-          name: topk
-          display:
-            name: Limit
-          allowAllValue: false
-          allowMultiple: false
-          defaultValue: "25"
-          plugin:
-            kind: StaticListVariable
-            spec:
-              values:
-                - "10"
-                - "25"
-                - "50"
-                - "100"
-
+    refreshInterval: 1m
     panels:
-      qmp_ratio:
+      memory_utilization:
         kind: Panel
         spec:
           display:
-            name: QEMU to Device
+            name: Memory - Utilization
+            description: |-
+              Aggregated physical memory utilization across all cluster nodes as a percentage of allocatable memory. Threshold: <70% green (healthy), 80-90% yellow (monitor), >90% red (critical).
+
+              Answers: What is the overall cluster memory utilization?
+          links:
+            - name: View Memory Dashboard
+              tooltip: Drill down to Memory dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=memory&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: percent
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - color: '#FFB249'
+                    value: 0.7
+                  - color: '#EE6C6C'
+                    value: 0.85
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: sum(openshift:node:memory:bytes{tier="0", scope="workloads", utilized="true"}) / sum(kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: Memory utilization
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval])) - sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_bucket{le="0.01", node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]))) / sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval])) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 10ms ({{name}} / {{disk}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval])) - sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_bucket{le="0.1", node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]))) / sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval])) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 100ms ({{name}} / {{disk}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval])) - sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_bucket{le="1", node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]))) / sum by (name, disk) (rate(kubevirt_vmi_storage_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval])) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 1s ({{name}} / {{disk}})"
-
-      qmp_p99:
+      memory_pressure:
         kind: Panel
         spec:
           display:
-            name: QEMU to Device (p99)
+            name: Memory - Pressure (PSI) - max
+            description: |-
+              Maximum Memory Pressure Stall Information (PSI) across all nodes. Shows the fraction of time tasks are waiting for memory to complete. Threshold: >10% moderate, >30% severe.
+
+              Answers: What is the maximum memory pressure across nodes?
+          links:
+            - name: View Memory Dashboard
+              tooltip: Drill down to Memory dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=memory&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: seconds
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.1
+                    color: '#FFB249'
+                  - value: 0.3
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: max(openshift:node:memory:pressure:ratio{severity="some"} @ end())
+                    seriesNameFormat: Max memory pressure
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, histogram_quantile(0.99, sum by (name, disk, le) (rate(kubevirt_vmi_storage_io_latency_seconds_bucket{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]))))'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{disk}}"
-
-      block_ratio:
+      memory_imbalance:
         kind: Panel
         spec:
           display:
-            name: Kernel to Device
+            name: Memory - Pressure Imbalance
+            description: |-
+              80th percentile of percentage point distance from mean memory pressure. Shows the spread: 80% of nodes are within this many percentage points of the mean. Threshold: <11% green (healthy balanced), 11-22% yellow (unhealthy balance), 22-33% orange (severely unbalanced), >33% red (critically unbalanced).
+
+              Answers: Within what percentage point band are 80% of nodes?
+          links:
+            - name: View Memory Dashboard
+              tooltip: Drill down to Memory dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=memory&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: percent
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.11
+                    color: '#FFB249'
+                  - value: 0.22
+                    color: '#FF9F1C'
+                  - value: 0.33
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: openshift:cluster:memory:imbalance:p80distance{scope="workloads"}
+                    seriesNameFormat: p80 distance from mean
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_bucket{le="0.01", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 10ms ({{name}} / {{persistentvolumeclaim}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_bucket{le="0.1", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 100ms ({{name}} / {{persistentvolumeclaim}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_bucket{le="1", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_block_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 1s ({{name}} / {{persistentvolumeclaim}})"
-
-      block_p99:
+      memory_virtual_commitment:
         kind: Panel
         spec:
           display:
-            name: Kernel to Device (p99)
+            name: Memory - Virtual Commitment
+            description: |-
+              Total committed virtual memory as a percentage of allocatable physical memory. Threshold: <150% green (acceptable), 150-175% yellow (monitor VM usage), >175% red (high overcommitment risk).
+
+              Answers: Is the cluster overcommitting virtual memory?
+          links:
+            - name: View Memory Dashboard
+              tooltip: Drill down to Memory dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=memory&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: seconds
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                decimalPlaces: 0
+                unit: percent-decimal
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 1.5
+                    color: '#FFB249'
+                  - value: 1.75
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: sum(openshift:vm:virtual:memory:bytes) / sum(kube_node_status_allocatable{resource="memory"})
+                    seriesNameFormat: Virtual memory commitment
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, histogram_quantile(0.99, sum by (name, persistentvolumeclaim, le) (rate(kme_block_io_latency_seconds_bucket{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))))'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{persistentvolumeclaim}}"
-
-      nfs_ratio:
+      cpu_utilization:
         kind: Panel
         spec:
           display:
-            name: NFS Client to Server
+            name: CPU - Utilization
+            description: |-
+              Percentage of cluster CPU capacity currently in use by workloads. Threshold: <70% green (healthy capacity), 70-85% yellow (monitor usage), >85% red (high utilization).
+
+              Answers: How much of the cluster's CPU is being used?
+          links:
+            - name: View CPU Dashboard
+              tooltip: Drill down to CPU dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=cpu&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: percent
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.7
+                    color: '#FFB249'
+                  - value: 0.85
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: openshift:cluster:cpu:utilization:ratio{scope="workloads"}
+                    seriesNameFormat: CPU utilization
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_bucket{le="0.01", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 10ms ({{name}} / {{persistentvolumeclaim}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_bucket{le="0.1", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 100ms ({{name}} / {{persistentvolumeclaim}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_bucket{le="1", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_nfs_io_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 1s ({{name}} / {{persistentvolumeclaim}})"
-
-      nfs_p99:
+      cpu_pressure:
         kind: Panel
         spec:
           display:
-            name: NFS Client to Server (p99)
+            name: CPU - Pressure (PSI) - max
+            description: |-
+              Maximum CPU Pressure Stall Information (PSI) across all nodes. Shows the fraction of time tasks are waiting for CPU. Threshold: <10% green (healthy), 10-30% yellow (moderate pressure), >30% red (high contention).
+
+              Answers: What is the worst-case CPU pressure in the cluster?
+          links:
+            - name: View CPU Dashboard
+              tooltip: Drill down to CPU dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=cpu&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: seconds
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.1
+                    color: '#FFB249'
+                  - value: 0.3
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: max(openshift:node:cpu:pressure:ratio{severity="some"} @ end())
+                    seriesNameFormat: Max CPU pressure
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, histogram_quantile(0.99, sum by (name, persistentvolumeclaim, le) (rate(kme_nfs_io_latency_seconds_bucket{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))))'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{persistentvolumeclaim}}"
-
-      nfs_vfs_ratio:
+      cpu_imbalance:
         kind: Panel
         spec:
           display:
-            name: VFS to NFS Server
+            name: CPU - Pressure Imbalance
+            description: |-
+              80th percentile of percentage point distance from mean CPU pressure. Shows the spread: 80% of nodes are within this many percentage points of the mean. Threshold: <11% green (healthy balanced), 11-22% yellow (unhealthy balance), 22-33% orange (severely unbalanced), >33% red (critically unbalanced).
+
+              Answers: Within what percentage point band are 80% of nodes?
+          links:
+            - name: View CPU Dashboard
+              tooltip: Drill down to CPU dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=cpu&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: percent
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.11
+                    color: '#FFB249'
+                  - value: 0.22
+                    color: '#FF9F1C'
+                  - value: 0.33
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: openshift:cluster:cpu:imbalance:p80distance{scope="workloads"}
+                    seriesNameFormat: p80 distance from mean
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_bucket{le="0.01", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 10ms ({{name}} / {{persistentvolumeclaim}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_bucket{le="0.1", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 100ms ({{name}} / {{persistentvolumeclaim}})"
-            - kind: TimeSeriesQuery
-              spec:
-                plugin:
-                  kind: PrometheusTimeSeriesQuery
-                  spec:
-                    datasource:
-                      kind: PrometheusDatasource
-                      name: thanos-querier
-                    query: 'topk($topk, clamp_min((sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) - sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_bucket{le="1", node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))) / sum by (name, persistentvolumeclaim) (rate(kme_nfs_vfs_latency_seconds_count{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)")) * 100, 0))'
-                    minStep: "30s"
-                    seriesNameFormat: "> 1s ({{name}} / {{persistentvolumeclaim}})"
-
-      nfs_vfs_p99:
+      cpu_virtual_commitment:
         kind: Panel
         spec:
           display:
-            name: VFS to NFS Server (p99)
+            name: CPU - Virtual Commitment
+            description: |-
+              Total virtual CPUs assigned to VMs as a percentage of physical CPU capacity. Threshold: <150% green (acceptable), 150-175% yellow (monitor VM usage), >175% red (high overcommit risk).
+
+              Answers: Is the cluster overcommitting virtual CPUs?
+          links:
+            - name: View CPU Dashboard
+              tooltip: Drill down to CPU dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=cpu&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: seconds
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 1.5
+                    color: '#FFB249'
+                  - value: 1.75
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: openshift:cluster:cpu:overcommit:ratio{scope="virtual"}
+                    seriesNameFormat: vCPU overcommit
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, histogram_quantile(0.99, sum by (name, persistentvolumeclaim, le) (rate(kme_nfs_vfs_latency_seconds_bucket{node=~"$node", namespace=~"$namespace", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"}[$interval]) * on(namespace, pod) group_left(name) label_replace(max by (namespace, vmi_pod, name) (kubevirt_vmi_info{phase="running", name=~"$vmi", node=~"$node"}), "pod", "$1", "vmi_pod", "(.*)"))))'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{persistentvolumeclaim}}"
-
-      qga_latency:
+      io_utilization:
         kind: Panel
         spec:
           display:
-            name: Windows Guest to Device
+            name: I/O - Utilization
+            description: |-
+              Cluster-wide storage device busy time as a percentage. Shows the fraction of wall-clock time when at least one I/O request was in flight. Threshold: <70% green (healthy capacity), 70-85% yellow (monitor usage), >85% red (high utilization).
+
+              Answers: How busy are the storage devices?
+          links:
+            - name: View I/O Dashboard
+              tooltip: Drill down to I/O dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=io&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: seconds
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.7
+                    color: '#FFB249'
+                  - value: 0.85
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: openshift:cluster:io:utilization:ratio
+                    seriesNameFormat: Device busy time
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, kubevirt_vmi_storage_guest_latency_avg_seconds{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"})'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{disk}} ({{drive}} {{operation}})"
-
-      qga_iops:
+      io_pressure:
         kind: Panel
         spec:
           display:
-            name: Windows Guest IOPs
+            name: I/O - Pressure (PSI) - max
+            description: |-
+              Maximum I/O Pressure Stall Information (PSI) across all nodes. Shows the fraction of time tasks are waiting for I/O to complete. Threshold: >10% moderate, >30% severe.
+
+              Answers: How much time are tasks waiting for I/O?
+          links:
+            - name: View I/O Dashboard
+              tooltip: Drill down to I/O dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=io&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                label: IOPs
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.1
+                    color: '#FFB249'
+                  - value: 0.3
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: max(openshift:node:io:pressure:ratio{severity="some"} @ end())
+                    seriesNameFormat: Max IO pressure
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, kubevirt_vmi_storage_guest_iops{node=~"$node", namespace=~"$namespace", name=~"$vmi", operation=~"$operation", persistentvolumeclaim=~"$persistentvolumeclaim"})'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{disk}} ({{drive}} {{operation}})"
-
-      virtqueue_utilization:
+      io_imbalance:
         kind: Panel
         spec:
           display:
-            name: Virtqueue Utilization
+            name: I/O - Pressure Imbalance
+            description: |-
+              80th percentile of percentage point distance from mean I/O pressure. Shows the spread: 80% of nodes are within this many percentage points of the mean. Threshold: <11% green (healthy balanced), 11-22% yellow (unhealthy balance), 22-33% orange (severely unbalanced), >33% red (critically unbalanced).
+
+              Answers: Within what percentage point band are 80% of nodes?
+          links:
+            - name: View I/O Dashboard
+              tooltip: Drill down to I/O dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=io&project=kubevirt-metrics-exporter
           plugin:
-            kind: TimeSeriesChart
+            kind: StatChart
             spec:
-              yAxis:
-                show: true
-                format:
-                  unit: percent
-              legend:
-                position: bottom
-                mode: table
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.11
+                    color: '#FFB249'
+                  - value: 0.22
+                    color: '#FF9F1C'
+                  - value: 0.33
+                    color: '#EE6C6C'
           queries:
             - kind: TimeSeriesQuery
               spec:
                 plugin:
                   kind: PrometheusTimeSeriesQuery
                   spec:
+                    query: openshift:cluster:io:imbalance:p80distance
+                    seriesNameFormat: p80 distance from mean
                     datasource:
                       kind: PrometheusDatasource
                       name: thanos-querier
-                    query: 'topk($topk, sum by (name, disk) (kubevirt_vmi_storage_queue_inuse{node=~"$node", namespace=~"$namespace", name=~"$vmi", persistentvolumeclaim=~"$persistentvolumeclaim"}) / (sum by (name, disk) (kubevirt_vmi_storage_queue_size{node=~"$node", namespace=~"$namespace", name=~"$vmi", persistentvolumeclaim=~"$persistentvolumeclaim"}) > 0) * 100)'
-                    minStep: "30s"
-                    seriesNameFormat: "{{name}} / {{disk}}"
+      io_latency:
+        kind: Panel
+        spec:
+          display:
+            name: I/O - Latency (p95)
+            description: |-
+              Storage I/O p95 latency percentile. 95% of operations complete within this time. Threshold: <30ms green, 30-60ms yellow, >60ms red.
 
+              Answers: What is the current storage p95 latency?
+          links:
+            - name: View I/O Dashboard
+              tooltip: Drill down to I/O dashboard
+              targetBlank: false
+              url: /monitoring/v2/dashboards/view?dashboard=io&project=kubevirt-metrics-exporter
+          plugin:
+            kind: StatChart
+            spec:
+              calculation: last-number
+              sparkline:
+                color: blue-grey
+              format:
+                unit: seconds
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.03
+                    color: '#FFB249'
+                  - value: 0.06
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p95
+                    seriesNameFormat: p95 latency
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
     layouts:
       - kind: Grid
         spec:
           display:
-            title: QEMU to Device
+            title: Memory
             collapse:
               open: true
           items:
             - x: 0
-              "y": 0
-              width: 12
-              height: 12
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/qmp_ratio'
+                $ref: '#/spec/panels/memory_utilization'
+            - x: 6
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/memory_pressure'
             - x: 12
-              "y": 0
-              width: 12
-              height: 12
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/qmp_p99'
-
+                $ref: '#/spec/panels/memory_imbalance'
+            - x: 18
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/memory_virtual_commitment'
       - kind: Grid
         spec:
           display:
-            title: Windows Guest (QGA)
+            title: CPU
             collapse:
               open: true
           items:
             - x: 0
-              "y": 0
-              width: 12
-              height: 12
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/qga_latency'
+                $ref: '#/spec/panels/cpu_utilization'
+            - x: 6
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/cpu_pressure'
             - x: 12
-              "y": 0
-              width: 12
-              height: 12
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/qga_iops'
-
+                $ref: '#/spec/panels/cpu_imbalance'
+            - x: 18
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/cpu_virtual_commitment'
       - kind: Grid
         spec:
           display:
-            title: Virtqueue Utilization
+            title: I/O
             collapse:
               open: true
           items:
             - x: 0
-              "y": 0
-              width: 24
-              height: 12
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/virtqueue_utilization'
-
-      - kind: Grid
-        spec:
-          display:
-            title: Kernel to Device
-            collapse:
-              open: true
-          items:
-            - x: 0
-              "y": 0
-              width: 12
-              height: 12
+                $ref: '#/spec/panels/io_utilization'
+            - x: 6
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/block_ratio'
+                $ref: '#/spec/panels/io_pressure'
             - x: 12
-              "y": 0
-              width: 12
-              height: 12
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/block_p99'
-
-      - kind: Grid
-        spec:
-          display:
-            title: NFS Client to Server
-            collapse:
-              open: true
-          items:
-            - x: 0
-              "y": 0
-              width: 12
-              height: 12
+                $ref: '#/spec/panels/io_imbalance'
+            - x: 18
+              y: 0
+              width: 6
+              height: 6
               content:
-                $ref: '#/spec/panels/nfs_ratio'
-            - x: 12
-              "y": 0
-              width: 12
-              height: 12
-              content:
-                $ref: '#/spec/panels/nfs_p99'
-
-      - kind: Grid
-        spec:
-          display:
-            title: VFS to NFS Server
-            collapse:
-              open: true
-          items:
-            - x: 0
-              "y": 0
-              width: 12
-              height: 12
-              content:
-                $ref: '#/spec/panels/nfs_vfs_ratio'
-            - x: 12
-              "y": 0
-              width: 12
-              height: 12
-              content:
-                $ref: '#/spec/panels/nfs_vfs_p99'
+                $ref: '#/spec/panels/io_latency'

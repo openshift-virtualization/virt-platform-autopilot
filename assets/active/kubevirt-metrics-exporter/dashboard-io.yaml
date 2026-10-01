@@ -1,0 +1,505 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviations: PersesDashboard CR wrapper; thanos-querier datasource; stripped
+# unsupported timezone + querySettings[].stack; refreshInterval 1m (upstream 15s);
+# overview drilldowns use /monitoring/v2/dashboards/view?dashboard=...&project=kubevirt-metrics-exporter
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  name: io
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app: kubevirt-metrics-exporter
+spec:
+  config:
+    display:
+      name: I/O
+    panels:
+      53d12c6d478148e7b910be6a52e0ef52:
+        kind: Panel
+        spec:
+          display:
+            name: Pressure Imbalance
+            description: |-
+              80th percentile of percentage point distance from mean I/O pressure. Shows the spread: 80% of nodes are within this many percentage points of the mean. For example, 0.22 means 80% of nodes are within ±22pp of mean pressure. Threshold: <0.11 (±11pp) green (healthy balanced), 0.11-0.22 yellow (unhealthy balance), 0.22-0.33 orange (severely unbalanced), >0.33 red (critically unbalanced).
+
+              Answers: Within what percentage point band are 80% of nodes?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              max: 1
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.11
+                    color: '#FFB249'
+                  - value: 0.22
+                    color: '#FF9F1C'
+                  - value: 0.33
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:imbalance:p80distance
+                    seriesNameFormat: p80 distance from mean
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      a7c3d8e1f2b4456789abcdef01234567:
+        kind: Panel
+        spec:
+          display:
+            name: Pressure (PSI) - max
+            description: |-
+              Maximum I/O Pressure Stall Information (PSI) across all nodes. Shows the fraction of time tasks are waiting for I/O to complete. Higher values indicate I/O contention and performance degradation. Threshold: >10% moderate, >30% severe.
+
+              Answers: How much time are tasks waiting for I/O?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.1
+                    color: '#FFB249'
+                  - value: 0.3
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: max(openshift:node:io:pressure:ratio{severity="some"} @ end())
+                    seriesNameFormat: Max IO pressure
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      latency_quantiles_gauge:
+        kind: Panel
+        spec:
+          display:
+            name: Latency Quantiles
+            description: |-
+              I/O latency percentiles: p50 shows typical latency (50% of operations complete within this time), p95 indicates SLA performance (95% complete within this time), p99 shows tail latency (worst-case for 99% of operations). Lower is better.
+
+              Answers: What are the current I/O latency percentiles?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: seconds
+                decimalPlaces: 1
+              max: 0.1
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.03
+                    color: '#FFB249'
+                  - value: 0.06
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p50
+                    seriesNameFormat: p50 (median)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p95
+                    seriesNameFormat: p95
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p99
+                    seriesNameFormat: p99
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      storage_utilization:
+        kind: Panel
+        spec:
+          display:
+            name: Utilization
+            description: |-
+              Cluster-wide I/O device busy time as a percentage. Shows the fraction of wall-clock time when at least one I/O request was in flight on the busiest device. Threshold: <70% green (healthy capacity), 70-85% yellow (monitor usage), >85% red (high utilization).
+
+              Answers: How busy are the I/O devices?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.7
+                    color: '#FFB249'
+                  - value: 0.85
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:utilization:ratio
+                    seriesNameFormat: Device busy time
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      storage_utilization_history:
+        kind: Panel
+        spec:
+          display:
+            name: I/O Utilization History
+            description: |-
+              Historical trend of I/O device utilization and latency. Busy Max (orange) shows worst-case device pressure, Busy Avg (green) shows typical cluster-wide utilization. Latency p95 (yellow, dashed) shows 95th percentile response time on the right axis. Correlated spikes indicate I/O saturation.
+
+              Answers: How have I/O utilization and latency changed over time?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#FF9F1C'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#FFB249'
+                  queryIndex: 2
+                  lineStyle: dashed
+                  areaOpacity: 0
+                  format:
+                    unit: seconds
+              visual:
+                areaOpacity: 0.2
+                connectNulls: false
+                display: line
+                lineWidth: 1.5
+                pointRadius: 0
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: Device Busy Time
+                max: 1
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: max(openshift:node:io:utilization:ratio)
+                    seriesNameFormat: Busy Max
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: avg(openshift:node:io:utilization:ratio)
+                    seriesNameFormat: Busy Avg
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p95
+                    seriesNameFormat: Latency p95
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      859fb288b6a546a0bea31d734264727c:
+        kind: Panel
+        spec:
+          display:
+            name: Latency Distribution
+            description: |-
+              Percentage distribution of I/O operations by latency buckets (host-to-device). Stacked areas show what portion of operations complete in each time range. Ideal: most operations in 0-10ms (green), minimal in >100ms (red). Shift toward slower buckets indicates I/O performance degradation.
+
+              Answers: How are I/O operations distributed across latency buckets?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#FFCC00'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#FFB249'
+                  queryIndex: 2
+                - colorMode: fixed
+                  colorValue: '#EE6C6C'
+                  queryIndex: 3
+              visual:
+                areaOpacity: 0.3
+                connectNulls: false
+                display: line
+                lineStyle: solid
+                lineWidth: 1.25
+                pointRadius: 2.75
+                stack: all
+              yAxis:
+                format:
+                  unit: percent-decimal
+                label: ""
+                max: 1
+                min: 0
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency_bucket:ratio{le="0.01"}
+                    seriesNameFormat: 0ms - 10ms
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency_bucket:ratio{le="0.1",g="0.01"}
+                    seriesNameFormat: 10ms - 100ms
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency_bucket:ratio{le="1.0",g="0.1"}
+                    seriesNameFormat: 100ms - 1s
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency_bucket:ratio{le="+Inf",g="1.0"}
+                    seriesNameFormat: '> 1s'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      latency_quantiles_history:
+        kind: Panel
+        spec:
+          display:
+            name: Latency Quantiles History
+            description: |-
+              Historical trend of storage I/O latency percentiles over time. Shows how p50 (median), p95, and p99 latencies evolve, helping identify performance degradation patterns and track the impact of changes. Rising trends indicate worsening I/O performance.
+
+              Answers: How have I/O latency percentiles changed over time?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#FFB249'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#EE6C6C'
+                  queryIndex: 2
+              visual:
+                connectNulls: false
+                display: line
+                lineStyle: solid
+                lineWidth: 1.5
+                pointRadius: 0
+              yAxis:
+                format:
+                  unit: seconds
+                label: ""
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p50
+                    seriesNameFormat: p50 (median)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p95
+                    seriesNameFormat: p95
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:io:latency:p99
+                    seriesNameFormat: p99
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      bb254c2f0b9c4fd5bc45f03e39813b16:
+        kind: Panel
+        spec:
+          display:
+            name: Latency Alerts History
+            description: |-
+              Historical view of I/O latency alerts per node. Shows when and which nodes experienced high latency. Stacked areas indicate multiple nodes firing simultaneously. Use to correlate latency issues with specific events or changes.
+
+              Answers: Which nodes have experienced latency alerts and when?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              visual:
+                areaOpacity: 0.3
+                connectNulls: false
+                display: line
+                lineStyle: solid
+                lineWidth: 1.25
+                pointRadius: 2.75
+                stack: all
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count by (instance) (ALERTS{alertname=~".*Latency.*High"})
+                    seriesNameFormat: '{{instance}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+    layouts:
+      - kind: Grid
+        spec:
+          display:
+            title: At a Glance - I/O
+            collapse:
+              open: true
+          items:
+            - x: 0
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/storage_utilization'
+            - x: 6
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/a7c3d8e1f2b4456789abcdef01234567'
+            - x: 12
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/53d12c6d478148e7b910be6a52e0ef52'
+            - x: 18
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/latency_quantiles_gauge'
+            - x: 0
+              y: 6
+              width: 24
+              height: 9
+              content:
+                $ref: '#/spec/panels/storage_utilization_history'
+      - kind: Grid
+        spec:
+          display:
+            title: Latency Distribution
+            collapse:
+              open: true
+          items:
+            - x: 0
+              y: 0
+              width: 24
+              height: 13
+              content:
+                $ref: '#/spec/panels/859fb288b6a546a0bea31d734264727c'
+            - x: 0
+              y: 13
+              width: 24
+              height: 9
+              content:
+                $ref: '#/spec/panels/latency_quantiles_history'
+      - kind: Grid
+        spec:
+          display:
+            title: Nodes
+            collapse:
+              open: true
+          items:
+            - x: 0
+              y: 0
+              width: 24
+              height: 6
+              content:
+                $ref: '#/spec/panels/bb254c2f0b9c4fd5bc45f03e39813b16'
+    duration: 1h
+    refreshInterval: 1m
