@@ -34,8 +34,10 @@ try:
     # Read the PrometheusRule CRD
     with open('assets/active/observability/prometheus-rules.yaml.tpl') as f:
         content = f.read()
-    # Replace Go template expressions with placeholder values so YAML parses cleanly
-    content = re.sub(r'\{\{[^}]*\}\}', 'placeholder', content)
+    # Preserve escaped Prometheus expressions before replacing Go expressions.
+    # A flat regex otherwise leaves trailing backticks/braces in annotations.
+    content = re.sub(r'\{\{`(.*?)`\}\}', lambda match: match.group(1), content, flags=re.DOTALL)
+    content = re.sub(r'\{\{(?!\s*\$)[^}]*\}\}', 'placeholder', content)
     crd = yaml.safe_load(content)
 
     # Extract just the groups (what promtool expects)
@@ -54,6 +56,9 @@ except Exception as e:
 PYSCRIPT
 
 echo ""
+# Configuration alert coverage is strict, including its remediation annotations.
+promtool test rules "${REPO_ROOT}/test/promtool/logging_storage_tests.yml"
+
 echo "Running promtool tests on alert rules..."
 echo "File: test/promtool/alert_tests.yml"
 echo ""
