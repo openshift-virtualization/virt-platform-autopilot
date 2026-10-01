@@ -109,7 +109,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(warningGroup["name"]).To(Equal("virt-platform-autopilot.warning"))
 
 		warningRules := warningGroup["rules"].([]any)
-		Expect(warningRules).To(HaveLen(3), "warning group should have 3 alerts")
+		Expect(warningRules).To(HaveLen(4), "warning group should have 4 alerts")
 
 		// Verify thrashing alert
 		thrashingAlert := warningRules[0].(map[string]any)
@@ -124,7 +124,7 @@ var _ = Describe("Prometheus Alert Rules", Ordered, func() {
 		Expect(dependencyAlert["for"]).To(Equal("5m"))
 
 		// Verify tombstone alert
-		tombstoneAlert := warningRules[2].(map[string]any)
+		tombstoneAlert := warningRules[3].(map[string]any)
 		Expect(tombstoneAlert["alert"]).To(Equal("VirtPlatformAutopilotTombstoneStuck"))
 		Expect(tombstoneAlert["expr"]).To(ContainSubstring("kubevirt_autopilot_tombstone_status < 0"))
 		Expect(tombstoneAlert["for"]).To(Equal("30m"))

@@ -413,12 +413,14 @@ The autopilot exposes Prometheus metrics over HTTPS (mTLS) on port 8443 (`/metri
 - `kubevirt_autopilot_asset_apply_total` - Successful applies per asset
 - `kubevirt_autopilot_drift_detected_total` - Drift detections per asset
 - `kubevirt_autopilot_throttle_delayed_total` - Reconciliations delayed by throttling
+- `kubevirt_autopilot_render_failed` - Per-asset rendering failure (1=failed, 0=rendered successfully); removed when the asset is excluded
 
 ### Alerts
 
 The autopilot fires alerts only when user intervention is required:
 
 - **VirtPlatformAutopilotSyncFailed**: Asset reconciliation failing repeatedly
+- **VirtPlatformAutopilotRenderFailed**: Asset rendering failing for five minutes, before a desired resource is available for reconciliation
 - **VirtPlatformAutopilotDependencyMissing**: Required CRD or dependency not found
 - **VirtPlatformAutopilotThrashingDetected**: Excessive reconciliation indicating configuration issue
 - **VirtPlatformAutopilotTombstoneStuck**: Tombstone deletion failing

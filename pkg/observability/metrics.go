@@ -30,6 +30,16 @@ const (
 )
 
 var (
+	RenderFailed = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "render_failed",
+			Help:      "Asset rendering failure status (1=failed, 0=rendered successfully)",
+		},
+		[]string{"asset"},
+	)
+
 	// ComplianceStatus tracks whether each managed resource is in sync with desired state.
 	// See the Compliance* constants for the values.
 	// This is the core health indicator used by the VirtPlatformAutopilotSyncFailed alert.
@@ -176,6 +186,7 @@ func init() {
 	// This registry is automatically exposed over HTTPS (mTLS) on :8443/metrics
 	// by the manager
 	metrics.Registry.MustRegister(
+		RenderFailed,
 		ComplianceStatus,
 		ThrashingTotal,
 		PausedResources,
@@ -252,6 +263,10 @@ func ClearCustomization(obj *unstructured.Unstructured, customizationType string
 func SetDependency(group, version, kind string, missing bool, optedIn bool) {
 	MissingDependency.WithLabelValues(group, version, kind).Set(boolToFloat(missing))
 	DependencyOptedIn.WithLabelValues(group, version, kind).Set(boolToFloat(optedIn))
+}
+
+func SetRenderFailed(asset string, failed bool) {
+	RenderFailed.WithLabelValues(asset).Set(boolToFloat(failed))
 }
 
 func boolToFloat(b bool) float64 {
