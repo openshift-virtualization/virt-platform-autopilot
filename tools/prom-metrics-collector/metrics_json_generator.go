@@ -42,6 +42,11 @@ func typePtr(t dto.MetricType) *dto.MetricType { return &t }
 // Keep this in sync with pkg/observability/metrics.go.
 var metricFamilies = []*dto.MetricFamily{
 	{
+		Name: strPtr("kubevirt_autopilot_render_failed"),
+		Help: strPtr("Asset rendering failure status (1=failed, 0=rendered successfully)"),
+		Type: typePtr(dto.MetricType_GAUGE),
+	},
+	{
 		Name: strPtr("kubevirt_autopilot_compliance_status"),
 		Help: strPtr("Compliance status of managed resources (1=synced, 0=drifted/failed, 2=staged)"),
 		Type: typePtr(dto.MetricType_GAUGE),

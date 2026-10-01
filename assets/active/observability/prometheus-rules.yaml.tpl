@@ -108,6 +108,29 @@ spec:
               this alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation.
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotDependencyMissing" }}"
 
+        - alert: VirtPlatformAutopilotRenderFailed
+          expr: |
+            kubevirt_autopilot_render_failed == 1
+          for: 5m
+          labels:
+            severity: warning
+            namespace: {{ .HCO.GetNamespace | default "openshift-cnv" }}
+            operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: warning
+          annotations:
+            summary: "virt-platform-autopilot failed to render asset {{`{{ $labels.asset }}`}}"
+            description: |-
+              virt-platform-autopilot has failed to render asset
+              {{`{{ $labels.asset }}`}} for 5 minutes. Its desired configuration
+              cannot be applied until rendering succeeds.
+
+              Check the operator logs for "failed to render asset" and the
+              affected asset name. Correct the configuration or restore the
+              API read permissions identified in the error, following the runbook.
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotRenderFailed" }}"
+
         - alert: VirtPlatformAutopilotTombstoneStuck
           # Tombstone cleanup indicator: Tombstone deletion failed or skipped
           # Expr: kubevirt_autopilot_tombstone_status < 0
