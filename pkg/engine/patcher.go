@@ -80,6 +80,7 @@ func (p *Patcher) SetEventRecorder(recorder *util.EventRecorder) {
 // DeleteAssetMetrics. Silently returns if rendering fails or yields nothing — the metric
 // series either never existed or the template cannot resolve, both are safe to ignore.
 func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) {
+	observability.SetRenderFailure(assetMeta.Name, "", "")
 	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
 	if err != nil || desired == nil {
 		return
@@ -105,7 +106,12 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 	// Step 1: Render asset template → Opinionated State
 	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
+	reason, code := renderFailureLabels(err)
+	observability.SetRenderFailure(assetMeta.Name, reason, code)
 	if err != nil {
+		if p.eventRecorder != nil && renderCtx.HCO != nil {
+			p.eventRecorder.RenderFailed(renderCtx.HCO, assetMeta.Name, err.Error())
+		}
 		return false, fmt.Errorf("failed to render asset %s: %w", assetMeta.Name, err)
 	}
 

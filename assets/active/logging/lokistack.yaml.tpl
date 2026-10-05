@@ -1,3 +1,6 @@
+{{- $sc := dig "metadata" "annotations" "platform.kubevirt.io/logging-storage-class" "" .HCO.Object -}}
+{{- if not $sc }}{{ $sc = objectField "loki.grafana.com/v1" "LokiStack" "openshift-logging" "logging-loki" "spec" "storageClassName" }}{{ end -}}
+{{- if not $sc }}{{ $sc = defaultStorageClass }}{{ end -}}
 apiVersion: loki.grafana.com/v1
 kind: LokiStack
 metadata:
@@ -26,16 +29,8 @@ spec:
       {{- else }}
       type: s3
       {{- end }}
-  {{- if .Topology.IsAWS }}
-  storageClassName: gp3-csi
-  {{- else if .Topology.IsAzure }}
-  storageClassName: managed-csi
-  {{- else if .Topology.IsGCP }}
-  storageClassName: standard-csi
-  {{- else if .Topology.IsBareMetal }}
-  storageClassName: lvms-vg1
-  {{- else if .Topology.IsVSphere }}
-  storageClassName: thin-csi
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
   {{- end }}
   tenants:
     mode: openshift-logging

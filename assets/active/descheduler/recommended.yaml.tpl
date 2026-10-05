@@ -15,7 +15,7 @@
 {{- $devActualUtilizationProfile := "" -}}
 {{- if prometheusRuleHasRecordingRule "openshift-kube-descheduler-operator" "descheduler-rules" "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m" -}}
   {{- $devActualUtilizationProfile = "PrometheusCPUMemoryCombinedProfile" -}}
-{{- else if objectExists "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" -}}
+{{- else if objectField "monitoring.coreos.com/v1" "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" "metadata" "name" -}}
   {{- $devActualUtilizationProfile = "PrometheusCPUCombined" -}}
 {{- end -}}
 apiVersion: operator.openshift.io/v1

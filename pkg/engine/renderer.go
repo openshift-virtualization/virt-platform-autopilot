@@ -243,15 +243,6 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// Usage: {{ crdHasEnum "kubedeschedulers.operator.openshift.io" "spec.profiles" "KubeVirtRelieveAndMigrate" }}
 		"crdHasEnum": r.crdHasEnumFunc(),
 
-		// objectExists checks if a Kubernetes object exists
-		// Usage: {{ objectExists "PrometheusRule" "openshift-kube-descheduler-operator" "descheduler-rules" }}
-		"objectExists": r.objectExistsFunc(),
-
-		// getConfigMapData reads a data key from a live ConfigMap
-		// Returns empty string if CM doesn't exist or key is missing
-		// Usage: {{ getConfigMapData "openshift-monitoring" "cluster-monitoring-config" "config.yaml" }}
-		"getConfigMapData": r.getConfigMapDataFunc(),
-
 		// prometheusRuleHasRecordingRule checks if a PrometheusRule contains a specific recording rule
 		// Usage: {{ prometheusRuleHasRecordingRule "openshift-kube-descheduler-operator" "descheduler-rules" "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m" }}
 		"prometheusRuleHasRecordingRule": r.prometheusRuleHasRecordingRuleFunc(),
@@ -279,6 +270,9 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// if multiple exist. Override with platform.kubevirt.io/sbr-storage-class annotation.
 		// Usage: {{ storageProfileRWXClass }}
 		"storageProfileRWXClass": r.storageProfileRWXClassFunc(),
+
+		"objectField":         r.objectField,
+		"defaultStorageClass": r.defaultStorageClass,
 
 		// fromYaml parses a YAML string into a map
 		// Usage: {{ $data := fromYaml $yamlString }}
@@ -523,57 +517,6 @@ func splitFieldPath(path string) []string {
 	return parts
 }
 
-// objectExistsFunc returns a function that checks if a Kubernetes object exists
-func (r *Renderer) objectExistsFunc() func(string, string, string) bool {
-	return func(kind, namespace, name string) bool {
-		if r.client == nil {
-			return false
-		}
-
-		obj := &unstructured.Unstructured{}
-		obj.SetKind(kind)
-		obj.SetAPIVersion("monitoring.coreos.com/v1") // Default for PrometheusRule
-
-		err := r.client.Get(context.Background(), types.NamespacedName{
-			Namespace: namespace,
-			Name:      name,
-		}, obj)
-
-		return err == nil
-	}
-}
-
-// getConfigMapDataFunc returns a function that reads a data key from a live ConfigMap
-func (r *Renderer) getConfigMapDataFunc() func(string, string, string) string {
-	return func(namespace, name, key string) string {
-		if r.client == nil {
-			return ""
-		}
-
-		obj := &unstructured.Unstructured{}
-		obj.SetKind("ConfigMap")
-		obj.SetAPIVersion("v1")
-
-		err := r.client.Get(context.Background(), types.NamespacedName{
-			Namespace: namespace,
-			Name:      name,
-		}, obj)
-		if err != nil {
-			return ""
-		}
-
-		data, ok := obj.Object["data"].(map[string]any)
-		if !ok {
-			return ""
-		}
-		val, ok := data[key].(string)
-		if !ok {
-			return ""
-		}
-		return val
-	}
-}
-
 // prometheusRuleHasRecordingRuleFunc returns a function that checks if a PrometheusRule contains a recording rule
 func (r *Renderer) prometheusRuleHasRecordingRuleFunc() func(string, string, string) bool {
 	return func(namespace, name, recordName string) bool {
@@ -590,7 +533,6 @@ func (r *Renderer) prometheusRuleHasRecordingRuleFunc() func(string, string, str
 			Namespace: namespace,
 			Name:      name,
 		}, obj)
-
 		if err != nil {
 			return false
 		}
