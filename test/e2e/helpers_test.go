@@ -152,6 +152,29 @@ func installCRDFromFile(relativePath string) {
 		fmt.Sprintf("kubectl apply failed for %s: %s", absPath, string(output)))
 }
 
+// installCRDAndWaitForOperatorRestart installs a CRD and waits for the
+// operator to restart itself in reaction. Only managed CRDs trigger the
+// self-restart, and the restart baseline must be captured before the
+// install, so this stays separate from waitForCRDEstablished. Callers must
+// ensure the install produces a genuine create event (remove any
+// pre-installed CRD first).
+func installCRDAndWaitForOperatorRestart(relativePath, crdName string) {
+	prevCount := getManagerRestartCount()
+	installCRDFromFile(relativePath)
+	waitForCRDEstablished(crdName)
+	waitForOperatorRestart(prevCount)
+}
+
+// removeCRDAndWaitForOperatorRestart removes a CRD and waits for the operator
+// self-restart that deleting a managed CRD triggers. Callers must ensure the
+// CRD is installed first: deleting an absent CRD fires no event, so the
+// restart wait would time out.
+func removeCRDAndWaitForOperatorRestart(crdName string) {
+	prevCount := getManagerRestartCount()
+	removeCRD(crdName)
+	waitForOperatorRestart(prevCount)
+}
+
 // removeCRD deletes a CRD and waits for it to be fully removed.
 func removeCRD(name string) {
 	By(fmt.Sprintf("removing CRD %s", name))
