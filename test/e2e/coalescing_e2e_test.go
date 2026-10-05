@@ -53,7 +53,6 @@ const (
 // Coalescing tests manipulate MachineConfigPool status directly via a fake CRD.
 // They are incompatible with real OpenShift clusters where MCO owns MCP state.
 var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
-
 	BeforeAll(func() {
 		if isOpenShiftCluster() {
 			Skip("coalescing tests run on Kind only — MCP status manipulation conflicts with real MCO")
@@ -61,9 +60,17 @@ var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
 		ensureHCOExists()
 		patchAutopilotAndWait(autopilotEnabled)
 
+		// install-crds pre-installs every CRD under test/crds, so remove the
+		// MCP CRD first when present: reinstalling it then produces a genuine
+		// create event, and the operator restarts itself to configure the MCP
+		// watch and cache exemption (mirroring crd_lifecycle_test.go).
+		By("removing any pre-installed MachineConfigPool CRD")
+		if crdExists(machineConfigPoolCRDName) {
+			removeCRDAndWaitForOperatorRestart(machineConfigPoolCRDName)
+		}
+
 		By("installing MachineConfigPool CRD for coalescing tests")
-		installCRDFromFile(machineConfigPoolCRDFile)
-		waitForCRDEstablished(machineConfigPoolCRDName)
+		installCRDAndWaitForOperatorRestart(machineConfigPoolCRDFile, machineConfigPoolCRDName)
 
 		By("waiting for all coalescing assets to be compliant")
 		for _, asset := range coalescingAssetsUnderTest {
@@ -73,7 +80,12 @@ var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
 
 	AfterAll(func() {
 		deleteStagingConfigMap()
-		removeCRD(machineConfigPoolCRDName)
+		// Removing the MCP CRD triggers the operator's self-restart; wait it
+		// out so subsequent suites see a healthy operator instead of racing
+		// a terminating pod.
+		if crdExists(machineConfigPoolCRDName) {
+			removeCRDAndWaitForOperatorRestart(machineConfigPoolCRDName)
+		}
 	})
 
 	// All coalescing assets are tampered in parallel; each must reach compliance_status=2,

@@ -290,7 +290,7 @@ func runController(
 		apiServerCRDInstalled = false
 	}
 	mcpCRDInstalled, err := util.NewCRDChecker(bootstrapClient).IsCRDInstalled(
-		context.Background(), "machineconfigpools.machineconfiguration.openshift.io")
+		context.Background(), controller.MachineConfigPoolCRDName)
 	if err != nil {
 		setupLog.Error(err, "failed to check for MachineConfigPool CRD; MachineConfig update coalescing watch will be disabled")
 		mcpCRDInstalled = false
