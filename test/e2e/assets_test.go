@@ -193,6 +193,15 @@ var assetsUnderTest = initAssets([]testAsset{
 		GateCRDs:      []string{"persesdashboards.perses.dev", "kubedeschedulers.operator.openshift.io"},
 		ClusterScoped: false,
 	},
+	{
+		// No Override: PersesDashboard has no user-facing field outside SSA ownership.
+		GVK:           schema.GroupVersionKind{Group: "perses.dev", Version: "v1alpha2", Kind: "PersesDashboard"},
+		Plural:        "persesdashboards",
+		Name:          "autopilot-asset-health",
+		Namespace:     "openshift-cnv",
+		GateCRDs:      []string{"persesdashboards.perses.dev"},
+		ClusterScoped: false,
+	},
 })
 
 func initAssets(assets []testAsset) []testAsset {
