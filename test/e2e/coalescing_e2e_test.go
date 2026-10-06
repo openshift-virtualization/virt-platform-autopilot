@@ -72,6 +72,9 @@ var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
 	})
 
 	AfterAll(func() {
+		if isOpenShiftCluster() {
+			return
+		}
 		deleteStagingConfigMap()
 		removeCRD(machineConfigPoolCRDName)
 	})
