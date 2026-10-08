@@ -1,0 +1,244 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviation: CR name/labels/namespace for KME; groups/exprs from upstream.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubevirt-metrics-exporter-recording-cpu
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app.kubernetes.io/name: kubevirt-metrics-exporter
+spec:
+  groups:
+    - name: cluster_operator_cpu.rules
+      rules:
+        - record: openshift:node:cpu:count
+          labels:
+            scope: system
+            unit: count
+          expr: |
+            kube_node_status_capacity{resource="cpu"} - kube_node_status_allocatable{resource="cpu"}
+        - record: openshift:node:cpu:seconds
+          labels:
+            scope: system
+            utilized: "true"
+            unit: seconds
+          expr: |
+            sum by (node) (rate(container_cpu_usage_seconds_total{id="/system.slice"}[2m]))
+        - record: openshift:node:cpu:seconds
+          labels:
+            scope: system
+            utilized: "false"
+            unit: seconds
+          expr: |
+            openshift:node:cpu:count{scope="system"}
+
+            - on (node)
+
+            sum by (node) (openshift:node:cpu:seconds{scope="system", utilized="true"})
+        - record: openshift:node:cpu:seconds
+          labels:
+            scope: workloads
+            utilized: "true"
+            usage: system-overflow
+            unit: seconds
+          expr: |
+            clamp_min(
+              sum by (node) (openshift:node:cpu:seconds{scope="system", utilized="true"})
+
+              - on (node) group_left()
+
+              sum by (node) (openshift:node:cpu:count{scope="system"}),
+              0
+            )
+        - record: openshift:node:cpu:count
+          labels:
+            scope: workloads
+            unit: count
+          expr: |
+            kube_node_status_allocatable{resource="cpu"}
+        - record: openshift:node:cpu:seconds
+          labels:
+            scope: workloads
+            utilized: "true"
+            unit: seconds
+          expr: |
+            sum by (node) (rate(container_cpu_usage_seconds_total{id="/kubepods.slice"}[2m]))
+        - record: openshift:node:cpu:seconds
+          labels:
+            scope: workloads
+            utilized: "false"
+            unit: seconds
+          expr: |
+            openshift:node:cpu:count{scope="workloads"}
+
+            - on (node)
+
+            sum by (node) (openshift:node:cpu:seconds{scope="workloads", utilized="true"})
+        - record: openshift:node:cpu:overcommit:ratio
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum by (node) (openshift:vm:virtual:cpu:seconds{scope="workloads"})
+
+            / on (node)
+
+            sum by (node) (openshift:node:cpu:count{scope="workloads"})
+        - record: openshift:node:cpu:utilization:ratio
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            openshift:node:cpu:seconds{scope="workloads", utilized="true"}
+
+            / on (node)
+
+            sum by (node) (openshift:node:cpu:seconds{scope="workloads"})
+        - record: openshift:node:cpu:pressure:ratio
+          labels:
+            severity: some
+            unit: ratio
+          expr: |
+            label_replace(
+              rate(node_pressure_cpu_waiting_seconds_total[2m]),
+              "node", "$1", "instance", "(.+)"
+            )
+    - name: cluster_operator_cluster_cpu.rules
+      rules:
+        - record: openshift:cluster:cpu:count
+          labels:
+            scope: system
+            unit: count
+          expr: |
+            sum(openshift:node:cpu:count{scope="system"})
+        - record: openshift:cluster:cpu:seconds
+          labels:
+            scope: system
+            utilized: "true"
+            unit: seconds
+          expr: |
+            sum(openshift:node:cpu:seconds{scope="system", utilized="true"})
+        - record: openshift:cluster:cpu:seconds
+          labels:
+            scope: system
+            utilized: "false"
+            unit: seconds
+          expr: |
+            sum(openshift:node:cpu:seconds{scope="system", utilized="false"})
+        - record: openshift:cluster:cpu:count
+          labels:
+            scope: workloads
+            unit: count
+          expr: |
+            sum(openshift:node:cpu:count{scope="workloads"})
+        - record: openshift:cluster:cpu:seconds
+          labels:
+            scope: workloads
+            utilized: "true"
+            unit: seconds
+          expr: |
+            sum(openshift:node:cpu:seconds{scope="workloads", utilized="true"})
+        - record: openshift:cluster:cpu:seconds
+          labels:
+            scope: workloads
+            utilized: "true"
+            usage: system-overflow
+            unit: seconds
+          expr: |
+            sum(openshift:node:cpu:seconds{scope="workloads", utilized="true", usage="system-overflow"})
+        - record: openshift:cluster:cpu:seconds
+          labels:
+            scope: workloads
+            utilized: "false"
+            unit: seconds
+          expr: |
+            sum(openshift:node:cpu:seconds{scope="workloads", utilized="false"})
+        - record: openshift:node:virtual:cpu:seconds
+          labels:
+            scope: workloads
+            unit: seconds
+          expr: |
+            sum by (node) (openshift:vm:virtual:cpu:seconds{scope="workloads"})
+        - record: openshift:cluster:virtual:cpu:seconds
+          labels:
+            scope: workloads
+            unit: seconds
+          expr: |
+            sum(openshift:node:virtual:cpu:seconds{scope="workloads"})
+        - record: openshift:cluster:cpu:overcommit:ratio
+          labels:
+            scope: virtual
+            unit: ratio
+          expr: |
+            sum(openshift:cluster:virtual:cpu:seconds)
+
+            /
+
+            sum(openshift:cluster:cpu:seconds)
+        - record: openshift:cluster:cpu:utilization:ratio
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum(openshift:node:cpu:seconds{scope="workloads", utilized="true"})
+            /
+            sum(openshift:node:cpu:seconds{scope="workloads"})
+        - record: openshift:cluster:cpu:imbalance:p80distance
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            quantile(0.80,
+              abs(
+                openshift:node:cpu:pressure:ratio{severity="some"}
+                -
+                scalar(avg(openshift:node:cpu:pressure:ratio{severity="some"}))
+              )
+            )
+        - record: openshift:node:cpu:requests:count
+          labels:
+            unit: count
+          expr: |
+            sum by (node) (
+              kube_pod_resource_request{resource="cpu"}
+              * on(namespace, pod) group_left()
+              kube_pod_status_phase{phase="Running"}
+            )
+            * on(node) group_left(role)
+            max by (node) (kube_node_role{role=~".+"})
+        - record: openshift:cluster:cpu:requests:count
+          labels:
+            unit: count
+          expr: |
+            sum(openshift:node:cpu:requests:count)
+    - name: cluster_operator_vm_cpu.rules
+      rules:
+        - record: openshift:vm:virtual:cpu:seconds
+          labels:
+            scope: workloads
+            unit: seconds
+          expr: |
+            count by (name, namespace, node) (kubevirt_vmi_vcpu_seconds_total)
+        - record: openshift:vm:cpu:requested:count
+          labels:
+            unit: count
+          expr: |
+            sum by (name, namespace, node) (
+              sum by (pod, namespace, node) (
+                kube_pod_container_resource_requests{resource="cpu", pod=~"virt-launcher-.*"}
+              )
+              * on (namespace, pod) group_left(name)
+              label_replace(
+                max by (name, namespace, node, vmi_pod) (kubevirt_vmi_info{vmi_pod!=""}),
+                "pod", "$1", "vmi_pod", "(.*)"
+              )
+            )
+        - record: openshift:vm:cpu:overcommit:ratio
+          labels:
+            unit: ratio
+          expr: |
+            openshift:vm:virtual:cpu:seconds
+
+            / on (name, namespace)
+
+            openshift:vm:cpu:requested:count

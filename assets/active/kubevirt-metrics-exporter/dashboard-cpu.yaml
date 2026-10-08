@@ -1,0 +1,623 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviations: PersesDashboard CR wrapper; thanos-querier datasource; stripped
+# unsupported timezone + querySettings[].stack; refreshInterval 1m (upstream 15s);
+# overview drilldowns use /monitoring/v2/dashboards/view?dashboard=...&project=kubevirt-metrics-exporter
+apiVersion: perses.dev/v1alpha2
+kind: PersesDashboard
+metadata:
+  name: cpu
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app: kubevirt-metrics-exporter
+spec:
+  config:
+    display:
+      name: CPU
+    panels:
+      # FIXME: query openshift:cluster:cpu:capacity:count — recorded as openshift:cluster:cpu:count?
+      cluster_cpu_capacity:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster CPU Capacity
+            description: |-
+              Total physical CPU cores available across all nodes in the cluster. This represents the aggregate hardware CPU capacity before any system reservations or overcommitment.
+
+              Answers: How many physical CPU cores does the cluster have?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: decimal
+                decimalPlaces: 1
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:capacity:count
+                    seriesNameFormat: Physical CPU cores
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      # FIXME: query openshift:cluster:cpu:vcpu:count — no matching recording rule name.
+      cluster_vcpu_count:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster vCPU Count
+            description: |-
+              Total virtual CPUs allocated across all VMs running in the cluster. This is the sum of all vCPUs configured for virtual machines, regardless of actual usage.
+
+              Answers: How many virtual CPUs are allocated to VMs cluster-wide?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: decimal
+                decimalPlaces: 1
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:vcpu:count
+                    seriesNameFormat: Total vCPUs
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      cluster_cpu_overcommit:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster CPU Overcommit
+            description: |-
+              Ratio of total virtual CPUs to physical CPU cores across the cluster. Values below 150% indicate conservative allocation (green), 150-175% shows moderate overcommit (yellow), and above 175% indicates aggressive overcommit that may impact performance (red).
+
+              Answers: What is the cluster-wide CPU overcommit ratio?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 1
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 1.5
+                    color: '#FFB249'
+                  - value: 1.75
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:overcommit:ratio
+                    seriesNameFormat: Overcommit ratio
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      cluster_cpu_utilization:
+        kind: Panel
+        spec:
+          display:
+            name: Utilization
+            description: |-
+              Percentage of cluster CPU capacity currently in use by workloads. Shows aggregate utilization across all nodes. Threshold: <70% green (healthy capacity), 70-85% yellow (monitor usage), >85% red (high utilization).
+
+              Answers: How much of the cluster's CPU is being used?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.7
+                    color: '#FFB249'
+                  - value: 0.85
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:utilization:ratio{scope="workloads"}
+                    seriesNameFormat: CPU utilization
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      node_cpu_imbalance:
+        kind: Panel
+        spec:
+          display:
+            name: Pressure Imbalance
+            description: |-
+              80th percentile of percentage point distance from mean CPU pressure. Shows the spread: 80% of nodes are within this many percentage points of the mean. For example, 0.22 means 80% of nodes are within ±22pp of mean pressure. Threshold: <0.11 (±11pp) green (healthy balanced), 0.11-0.22 yellow (unhealthy balance), 0.22-0.33 orange (severely unbalanced), >0.33 red (critically unbalanced).
+
+              Answers: Within what percentage point band are 80% of nodes?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              max: 1
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.11
+                    color: '#FFB249'
+                  - value: 0.22
+                    color: '#FF9F1C'
+                  - value: 0.33
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:imbalance:p80distance{scope="workloads"}
+                    seriesNameFormat: p80 distance from mean
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      cpu_pressure:
+        kind: Panel
+        spec:
+          display:
+            name: Pressure (PSI) - max
+            description: |-
+              Maximum CPU Pressure Stall Information (PSI) across all nodes. Shows the fraction of time tasks are waiting for CPU on the most pressured node. Higher values indicate CPU contention and performance degradation. Threshold: <10% green (healthy), 10-30% yellow (moderate pressure), >30% red (high contention).
+
+              Answers: What is the worst-case CPU pressure in the cluster?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 0.1
+                    color: '#FFB249'
+                  - value: 0.3
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: max(openshift:node:cpu:pressure:ratio{severity="some"} @ end())
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      vcpu_overcommit:
+        kind: Panel
+        spec:
+          display:
+            name: Virtual Commitment
+            description: |-
+              Total virtual CPUs assigned to VMs as a percentage of physical CPU capacity. Values >100% indicate CPU overcommitment. Threshold: <150% green (acceptable), 150-175% yellow (monitor VM usage), >175% red (high overcommit risk). Overcommitment is safe when VMs don't simultaneously reach peak CPU usage.
+
+              Answers: Is the cluster overcommitting virtual CPUs?
+          plugin:
+            kind: GaugeChart
+            spec:
+              calculation: last-number
+              format:
+                unit: percent-decimal
+                decimalPlaces: 0
+              max: 2
+              thresholds:
+                steps:
+                  - value: 0
+                    color: '#59CC8D'
+                  - value: 1.5
+                    color: '#FFB249'
+                  - value: 1.75
+                    color: '#EE6C6C'
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:overcommit:ratio{scope="virtual"}
+                    seriesNameFormat: vCPU overcommit
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      cluster_cpu_utilization_history:
+        kind: Panel
+        spec:
+          display:
+            name: Cluster CPU Utilization History
+            description: |-
+              Historical trend of cluster-wide CPU utilization showing busy and idle CPU time. Stacked areas show CPU time consumed by system components (red), workload processes (orange), and idle workload capacity (green). The blue dashed line shows committed virtual CPUs - worst-case demand if all VMs used their full vCPU allocation. Rising busy trends indicate growing CPU demand.
+
+              Answers: How has cluster CPU utilization changed over time for system and workloads?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#B83232'
+                  queryIndex: 0
+                  lineStyle: dotted
+                - colorMode: fixed
+                  colorValue: '#B83232'
+                  queryIndex: 1
+                  lineStyle: dotted
+                - colorMode: fixed
+                  colorValue: '#FF9F1C'
+                  queryIndex: 2
+                - colorMode: fixed
+                  colorValue: '#59CC8D'
+                  queryIndex: 3
+                - colorMode: fixed
+                  colorValue: '#6BB6FF'
+                  queryIndex: 4
+                  lineStyle: dashed
+                  areaOpacity: 0
+                - colorMode: fixed
+                  colorValue: '#6BB6FF'
+                  queryIndex: 5
+                  lineStyle: dotted
+                  areaOpacity: 0
+              visual:
+                areaOpacity: 0.2
+                connectNulls: false
+                display: line
+                lineWidth: 1.5
+                pointRadius: 0
+                stack: all
+              yAxis:
+                format:
+                  unit: seconds
+                label: CPU Utilization
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:cluster:cpu:seconds{scope="system"})
+                    seriesNameFormat: System
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:cluster:cpu:seconds{scope="workloads", utilized="true", usage="system-overflow"}) > 0
+                    seriesNameFormat: Workloads - System Overflow
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:cluster:cpu:seconds{scope="workloads", utilized="true"})
+                    seriesNameFormat: Workloads - Busy
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:cluster:cpu:seconds{scope="workloads", utilized="false"}
+                    seriesNameFormat: Workloads - Idle
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:cluster:virtual:cpu:seconds)
+                    seriesNameFormat: Virtual Committed
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: sum(openshift:node:cpu:count{scope="system"}) + sum(openshift:cluster:cpu:requests:count)
+                    seriesNameFormat: Requests
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      # FIXME: query openshift:node:cpu:capacity:count — recorded as openshift:node:cpu:count?
+      node_cpu_capacity:
+        kind: Panel
+        spec:
+          display:
+            name: Node CPU Capacity
+            description: |-
+              Physical CPU core count per node over time. Shows the hardware capacity available on each node. Use this to identify nodes with different CPU configurations and track capacity changes when nodes are added or removed.
+
+              Answers: How many physical CPU cores does each node have?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              visual:
+                connectNulls: false
+                display: line
+                lineStyle: solid
+                lineWidth: 1.5
+                pointRadius: 0
+              yAxis:
+                format:
+                  unit: decimal
+                label: CPU cores
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:node:cpu:capacity:count
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      node_vcpu_overcommit:
+        kind: Panel
+        spec:
+          display:
+            name: Node vCPU Overcommit
+            description: |-
+              Virtual CPU overcommit ratio per node over time. Shows the ratio of VM vCPUs to physical cores on each node. Values above 1.0 indicate overcommitment. Threshold: <150% green, 150-175% yellow, >175% red. Use this to identify hotspots where VMs may compete for CPU resources and to balance VM placement across nodes.
+
+              Answers: What is the vCPU overcommit ratio on each node?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              thresholds:
+                steps:
+                  - value: 1.5
+                  - value: 1.75
+                    color: '#EA4747'
+              visual:
+                connectNulls: false
+                display: line
+                lineStyle: solid
+                lineWidth: 1.5
+                pointRadius: 0
+              yAxis:
+                format:
+                  unit: decimal
+                label: Overcommit ratio
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: openshift:node:cpu:overcommit:ratio
+                    seriesNameFormat: '{{node}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      # FIXME: query openshift:vm:cpu:vcpu:count — recorded as openshift:vm:cpu:requested:count?
+      vm_vcpu_count:
+        kind: Panel
+        spec:
+          display:
+            name: VM vCPU Count
+            description: |-
+              Virtual CPU count per VM over time, showing the top VMs by vCPU allocation. Helps identify VMs with high CPU requirements and track vCPU allocation changes. Use this to understand which VMs consume the most CPU resources and plan capacity accordingly.
+
+              Answers: Which VMs have the most vCPUs allocated?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              legend:
+                position: bottom
+              visual:
+                connectNulls: false
+                display: line
+                lineStyle: solid
+                lineWidth: 1.5
+                pointRadius: 0
+              yAxis:
+                format:
+                  unit: decimal
+                label: vCPUs
+                show: true
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: topk(10, openshift:vm:cpu:vcpu:count)
+                    seriesNameFormat: '{{namespace}}/{{name}}'
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+      issues:
+        kind: Panel
+        spec:
+          display:
+            name: Issues
+            description: |-
+              Count of active CPU-related issues: metric collection failures (scrape targets down, kubelet/cAdvisor down), or missing CPU metrics (node series). Any non-zero value indicates problems that may affect CPU monitoring accuracy.
+
+              Answers: Are there any CPU-related system issues or metric collection problems?
+          plugin:
+            kind: TimeSeriesChart
+            spec:
+              querySettings:
+                - colorMode: fixed
+                  colorValue: '#FF6B35'
+                  queryIndex: 0
+                - colorMode: fixed
+                  colorValue: '#C92A2A'
+                  queryIndex: 1
+                - colorMode: fixed
+                  colorValue: '#FF4500'
+                  queryIndex: 2
+              visual:
+                display: line
+                lineWidth: 1.25
+                lineStyle: solid
+                areaOpacity: 0.3
+                pointRadius: 2.75
+                connectNulls: false
+                stack: all
+              legend:
+                position: bottom
+          queries:
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count(ALERTS{alertname="TargetDown", job="kube-state-metrics"}) > 0
+                    seriesNameFormat: Invalid metrics (scrape target down)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: count(up{job="kubelet",metrics_path="/metrics/cadvisor"} == 0) > 0
+                    seriesNameFormat: Invalid metrics (kubelet cAdvisor down)
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+            - kind: TimeSeriesQuery
+              spec:
+                plugin:
+                  kind: PrometheusTimeSeriesQuery
+                  spec:
+                    query: (count(kube_node_status_allocatable{resource="cpu"}) - count(openshift:node:cpu:count{scope="workloads"})) > 0
+                    seriesNameFormat: Missing node CPU series
+                    datasource:
+                      kind: PrometheusDatasource
+                      name: thanos-querier
+          links:
+            - name: Runbook TargetDown
+              url: https://github.com/openshift/runbooks/blob/master/alerts/cluster-monitoring-operator/TargetDown.md
+              tooltip: Runbook
+    layouts:
+      - kind: Grid
+        spec:
+          display:
+            title: At a Glance - CPU
+            collapse:
+              open: true
+          items:
+            - x: 0
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/cluster_cpu_utilization'
+            - x: 6
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/cpu_pressure'
+            - x: 12
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/node_cpu_imbalance'
+            - x: 18
+              y: 0
+              width: 6
+              height: 6
+              content:
+                $ref: '#/spec/panels/vcpu_overcommit'
+            - x: 0
+              y: 6
+              width: 24
+              height: 9
+              content:
+                $ref: '#/spec/panels/cluster_cpu_utilization_history'
+      - kind: Grid
+        spec:
+          display:
+            title: Per Node
+            collapse:
+              open: false
+          items:
+            - x: 0
+              y: 0
+              width: 12
+              height: 9
+              content:
+                $ref: '#/spec/panels/node_cpu_capacity'
+            - x: 12
+              y: 0
+              width: 12
+              height: 9
+              content:
+                $ref: '#/spec/panels/node_vcpu_overcommit'
+            - x: 0
+              y: 9
+              width: 24
+              height: 5
+              content:
+                $ref: '#/spec/panels/issues'
+      - kind: Grid
+        spec:
+          display:
+            title: VMs
+            collapse:
+              open: false
+          items:
+            - x: 0
+              y: 0
+              width: 24
+              height: 9
+              content:
+                $ref: '#/spec/panels/vm_vcpu_count'
+    duration: 1h
+    refreshInterval: 1m

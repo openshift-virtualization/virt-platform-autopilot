@@ -1,0 +1,147 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviation: CR name/labels/namespace for KME; groups/exprs from upstream.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubevirt-metrics-exporter-recording-io
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app.kubernetes.io/name: kubevirt-metrics-exporter
+spec:
+  groups:
+    - name: io.rules
+      rules:
+        - record: openshift:node:io:utilization:ratio
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: ratio
+          expr: |
+            label_replace(
+              rate(node_disk_io_time_seconds_total{device=~"nvme.*|sd.*"}[2m]),
+              "node", "$1", "instance", "(.+)"
+            )
+        - record: openshift:cluster:io:utilization:ratio
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: ratio
+          expr: |
+            max(openshift:node:io:utilization:ratio)
+        - record: openshift:node:io:latency:rate
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: seconds
+          expr: |
+            rate(kme_system_block_io_latency_seconds_bucket[2m])
+        - record: openshift:cluster:io:latency_bucket:ratio
+          labels:
+            segment: host_to_device
+            protocol: block
+            le: "0.01"
+            unit: ratio
+          expr: |
+            sum(rate(kme_system_block_io_latency_seconds_bucket{le="0.01"}[2m]))
+            /
+            sum(rate(kme_system_block_io_latency_seconds_count[2m]))
+        - record: openshift:cluster:io:latency_bucket:ratio
+          labels:
+            segment: host_to_device
+            protocol: block
+            le: "0.1"
+            g: "0.01"
+            unit: ratio
+          expr: |
+            (
+              sum(rate(kme_system_block_io_latency_seconds_bucket{le="0.1"}[2m]))
+              - sum(rate(kme_system_block_io_latency_seconds_bucket{le="0.01"}[2m]))
+            )
+            /
+            sum(rate(kme_system_block_io_latency_seconds_count[2m]))
+        - record: openshift:cluster:io:latency_bucket:ratio
+          labels:
+            segment: host_to_device
+            protocol: block
+            le: "1.0"
+            g: "0.1"
+            unit: ratio
+          expr: |
+            (
+              sum(rate(kme_system_block_io_latency_seconds_bucket{le="1.0"}[2m]))
+              - sum(rate(kme_system_block_io_latency_seconds_bucket{le="0.1"}[2m]))
+            )
+            /
+            sum(rate(kme_system_block_io_latency_seconds_count[2m]))
+        - record: openshift:cluster:io:latency_bucket:ratio
+          labels:
+            segment: host_to_device
+            protocol: block
+            le: +Inf
+            g: "1.0"
+            unit: ratio
+          expr: |
+            (
+              sum(rate(kme_system_block_io_latency_seconds_bucket{le="+Inf"}[2m]))
+              - sum(rate(kme_system_block_io_latency_seconds_bucket{le="1.0"}[2m]))
+            )
+            /
+            sum(rate(kme_system_block_io_latency_seconds_count[2m]))
+        - record: openshift:cluster:io:latency:p50
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: seconds
+          expr: |
+            histogram_quantile(0.5,
+              sum(rate(kme_system_block_io_latency_seconds_bucket[2m])) by (le)
+            )
+        - record: openshift:cluster:io:latency:p95
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: seconds
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(kme_system_block_io_latency_seconds_bucket[2m])) by (le)
+            )
+        - record: openshift:cluster:io:latency:p99
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: seconds
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(kme_system_block_io_latency_seconds_bucket[2m])) by (le)
+            )
+        - record: openshift:node:io:latency:p95
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: seconds
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(kme_system_block_io_latency_seconds_bucket[2m])) by (le, node)
+            )
+        - record: openshift:cluster:io:imbalance:p80distance
+          labels:
+            segment: host_to_device
+            protocol: block
+            unit: ratio
+          expr: |
+            quantile(0.80,
+              abs(
+                openshift:node:io:pressure:ratio{severity="some"}
+                -
+                scalar(avg(openshift:node:io:pressure:ratio{severity="some"}))
+              )
+            )
+        - record: openshift:node:io:pressure:ratio
+          labels:
+            severity: some
+            unit: ratio
+          expr: |
+            label_replace(
+              rate(node_pressure_io_waiting_seconds_total[2m]),
+              "node", "$1", "instance", "(.+)"
+            )

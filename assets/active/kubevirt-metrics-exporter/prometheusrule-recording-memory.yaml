@@ -1,0 +1,408 @@
+# Synced from fabiand/perses-dashboards@587367e2ba7d640a801692a395e9d3395121c55c
+# Deviation: CR name/labels/namespace for KME; groups/exprs from upstream.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubevirt-metrics-exporter-recording-memory
+  namespace: kubevirt-metrics-exporter
+  labels:
+    app.kubernetes.io/name: kubevirt-metrics-exporter
+spec:
+  groups:
+    - name: cluster_operator_node_memory_base.rules
+      rules:
+        - record: openshift:node:memory:tier:info
+          expr: |
+            up * 0 + 1  # Constant 1
+          labels:
+            tier: "0"
+            technology: dram
+            latency_hint: ~100ns
+            addressable: "true"
+        - record: openshift:node:memory:tier:info
+          expr: |
+            up * 0 + 1  # Constant 1
+          labels:
+            tier: "1"
+            technology: cxl
+            latency_hint: ~200ns
+            addressable: "true"
+        - record: openshift:node:memory:tier:info
+          expr: |
+            up * 0 + 1  # Constant 1
+          labels:
+            tier: "2"
+            technology: swap
+            latency_hint: ~ms
+            addressable: "false"
+    - name: cluster_operator_memory_tier0.rules
+      rules:
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: system
+            utilized: "true"
+            temperature: hot
+            unit: bytes
+          expr: |
+            sum by (node) (
+              container_memory_working_set_bytes{id="/system.slice"}
+            )
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: system
+            utilized: "true"
+            temperature: warm
+            unit: bytes
+          expr: |
+            sum by (node) (
+              container_memory_total_inactive_file_bytes{id="/system.slice"}
+            )
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: system
+            utilized: "false"
+            unit: bytes
+          expr: |
+            (kube_node_status_capacity{resource="memory"} - kube_node_status_allocatable{resource="memory"})
+
+            - on (node)
+            sum by (node) (openshift:node:memory:bytes{tier="0", scope="system", utilized="true"})
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: workloads
+            utilized: "true"
+            usage: system-overflow
+            unit: bytes
+          expr: |
+            clamp_min(
+              sum by (node) (openshift:node:memory:bytes{tier="0", scope="system", utilized="true"})
+
+              - on (node) group_left()
+              (kube_node_status_capacity{resource="memory"} - kube_node_status_allocatable{resource="memory"}),
+              0
+            )
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: workloads
+            utilized: "true"
+            temperature: hot
+            unit: bytes
+          expr: |
+            sum by (node) (
+              # container_memory_working_set_bytes{container!="", id=~"/kubepods.*"}
+              container_memory_working_set_bytes{id="/kubepods.slice"}
+            )
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: workloads
+            utilized: "true"
+            temperature: warm
+            unit: bytes
+          expr: |
+            sum by (node) (
+              # container_memory_total_inactive_file_bytes{container!="", id=~"/kubepods.*"}
+              container_memory_total_inactive_file_bytes{id="/kubepods.slice"}
+            )
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "0"
+            scope: workloads
+            utilized: "false"
+            unit: bytes
+          expr: |
+            kube_node_status_allocatable{resource="memory"}
+
+            - on (node)
+
+            sum by (node) (openshift:node:memory:bytes{tier="0", scope="workloads", utilized="true"})
+        - record: openshift:node:memory:utilization:ratio
+          labels:
+            tier: "0"
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum by (node) (openshift:node:memory:bytes{scope="workloads", utilized="true"})
+
+            / on (node)
+
+            kube_node_status_allocatable{resource="memory"}
+    - name: cluster_operator_memory_tier2.rules
+      rules:
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "2"
+            scope: workloads
+            utilized: "true"
+            unit: bytes
+          expr: |
+            sum by (node) (
+              container_memory_swap{id="/kubepods.slice"}
+            )
+        - record: openshift:node:memory:bytes
+          labels:
+            tier: "2"
+            scope: workloads
+            utilized: "false"
+            unit: bytes
+          expr: |
+            label_replace(
+              node_memory_SwapTotal_bytes,
+              "node", "$1", "instance", "(.+)"
+            )
+
+            - on (node)
+            openshift:node:memory:bytes{tier="2", scope="workloads", utilized="true"}
+    - name: cluster_operator_memory_ratio.rules
+      rules:
+        - record: openshift:node:memory:pressure:ratio
+          labels:
+            severity: some
+            unit: ratio
+          expr: |
+            label_replace(
+              rate(node_pressure_memory_waiting_seconds_total[2m]),
+              "node", "$1", "instance", "(.+)"
+            )
+        - record: openshift:cluster:memory:utilization:ratio
+          labels:
+            tier: "0"
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum(openshift:node:memory:bytes{scope="workloads", utilized="true"})
+
+            /
+
+            sum(kube_node_status_allocatable{resource="memory"})
+        - record: openshift:cluster:memory:imbalance:p80distance
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            # p80 quantile of percentage point distance from mean pressure
+            # Shows the spread: 80% of nodes are within this many percentage points of the mean
+            # Values: <0.11 (±11pp) = healthy balanced, 0.11-0.22 = unhealthy balance, 0.22-0.33 = severely unbalanced, >0.33 = critically unbalanced
+            quantile(0.80,
+              abs(
+                openshift:node:memory:pressure:ratio{severity="some"}
+                -
+                scalar(avg(openshift:node:memory:pressure:ratio{severity="some"}))
+              )
+            )
+        - record: openshift:cluster:memory:overcommit:ratio
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum(openshift:vm:virtual:memory:bytes)
+
+            /
+
+            sum(kube_node_status_allocatable{resource="memory"})
+        - record: openshift:node:memory:overcommit:ratio
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum by (node) (openshift:vm:virtual:memory:bytes)
+
+            / on (node)
+
+            kube_node_status_allocatable{resource="memory"}
+        - record: openshift:node:memory:requests:bytes
+          labels:
+            unit: bytes
+          expr: |
+            sum by (node) (
+              kube_pod_resource_request{resource="memory"}
+              * on(namespace, pod) group_left()
+              kube_pod_status_phase{phase="Running"}
+            )
+            * on(node) group_left(role)
+            max by (node) (kube_node_role{role=~".+"})
+        - record: openshift:cluster:memory:requests:bytes
+          labels:
+            unit: bytes
+          expr: |
+            sum(openshift:node:memory:requests:bytes)
+    - name: cluster_operator_virtual_memory.rules
+      rules:
+        - record: openshift:cluster:virtual:memory:bytes
+          labels:
+            scope: workloads
+            unit: ratio
+          expr: |
+            sum(openshift:vm:virtual:memory:bytes)
+    - name: cluster_operator_kubevirt_vm_memory.rules
+      rules:
+        - record: openshift:vm:memory:bytes
+          labels:
+            tier: "0"
+            utilized: "true"
+            temperature: hot
+            unit: bytes
+          expr: |
+            max by (name, namespace, node) (
+              max by (pod, namespace, node) (
+                container_memory_working_set_bytes{pod=~"virt-launcher-.*", container=""}
+              )
+              * on (namespace, pod) group_left(name)
+              label_replace(
+                max by (name, namespace, node, vmi_pod) (kubevirt_vmi_info{vmi_pod!=""}),
+                "pod", "$1", "vmi_pod", "(.*)"
+              )
+            )
+        - record: openshift:vm:memory:bytes
+          labels:
+            tier: "0"
+            utilized: "true"
+            temperature: warm
+            unit: bytes
+          expr: |
+            max by (name, namespace, node) (
+              max by (pod, namespace, node) (
+                container_memory_total_inactive_file_bytes{pod=~"virt-launcher-.*", container=""}
+              )
+              * on (namespace, pod) group_left(name)
+              label_replace(
+                max by (name, namespace, node, vmi_pod) (kubevirt_vmi_info{vmi_pod!=""}),
+                "pod", "$1", "vmi_pod", "(.*)"
+              )
+            )
+        - record: openshift:vm:memory:bytes
+          labels:
+            tier: "0"
+            utilized: "false"
+            unit: bytes
+          expr: |
+            max by (name, namespace, node) (
+              openshift:vm:memory:requested:bytes
+
+              - on (name, namespace, node)
+
+              sum by (name, namespace, node) (openshift:vm:memory:bytes{utilized="true"})
+            )
+        - record: openshift:vm:memory:bytes
+          labels:
+            tier: "2"
+            utilized: "true"
+            unit: bytes
+          expr: |
+            max by (name, namespace, node) (
+              max by (pod, namespace, node) (
+                container_memory_swap{pod=~"virt-launcher-.*", container=""}
+              )
+              * on (namespace, pod) group_left(name)
+              label_replace(
+                max by (name, namespace, node, vmi_pod) (kubevirt_vmi_info{vmi_pod!=""}),
+                "pod", "$1", "vmi_pod", "(.*)"
+              )
+            )
+        - record: openshift:vm:memory:requested:bytes
+          labels:
+            unit: bytes
+          expr: |
+            sum by (name, namespace, node) (
+              sum by (pod, namespace, node) (
+                kube_pod_container_resource_requests{resource="memory", pod=~"virt-launcher-.*"}
+              )
+              * on (namespace, pod) group_left(name)
+              label_replace(
+                max by (name, namespace, node, vmi_pod) (kubevirt_vmi_info{vmi_pod!=""}),
+                "pod", "$1", "vmi_pod", "(.*)"
+              )
+            )
+        - record: openshift:vm:virtual:memory:bytes
+          labels:
+            unit: bytes
+          expr: |
+            max by (name, namespace, node) (
+              kubevirt_vmi_memory_domain_bytes
+            )
+        - record: openshift:vm:memory:utilization:ratio
+          labels:
+            unit: ratio
+          expr: |
+            max by (name, namespace, node) (
+
+              # VM memory in use: hot + warm (same as openshift:vm:memory:bytes{utilized="true"})
+              sum by (name, namespace, node) (openshift:vm:memory:bytes{utilized="true"})
+
+              / on (name, namespace, node)
+
+              # VM memory requested (same as openshift:vm:memory:requested:bytes)
+              openshift:vm:memory:requested:bytes
+            )
+        - record: openshift:vm:memory:overcommit:ratio
+          labels:
+            unit: ratio
+          expr: |
+            max by (name, namespace, node) (
+              openshift:vm:virtual:memory:bytes
+
+              / on (name, namespace, node)
+
+              openshift:vm:memory:requested:bytes
+            )
+    - name: legacy.memorydashboard.rules
+      rules:
+        - record: openshift:node:system:memory:reserved
+          expr: |
+            sum(kube_node_status_capacity{resource="memory"} - kube_node_status_allocatable{resource="memory"})
+            by (node, prometheus)
+          labels:
+            unit: bytes
+            DevelopmentPreview: "true"
+        - record: openshift:node:system:memory:utilization
+          expr: |
+            sum (container_memory_rss{id="/system.slice"})
+            by (node, prometheus)
+          labels:
+            unit: bytes
+            DevelopmentPreview: "true"
+        - record: openshift:node:workloads:memory:allocatable
+          expr: |
+            sum(kube_node_status_allocatable{resource="memory"})
+            by (node, prometheus)
+          labels:
+            unit: bytes
+            DevelopmentPreview: "true"
+        - record: openshift:node:workloads:memory:utilization
+          expr: |
+            # FIXME this should actually be
+            # container_memory_total_Active_anon_bytes + container_memory_total_Inactive_anon_bytes + container_memory_total_Active_file_bytes
+            # but cri/cadvisor does not provide these metrics today.
+            # https://github.com/google/cadvisor/pull/3750/changes
+            sum(label_replace((node_memory_Active_anon_bytes + node_memory_Inactive_anon_bytes + node_memory_Active_file_bytes),
+                          "node", "$1",
+                          "instance", "(.*)"))
+            by (node, prometheus)
+          labels:
+            unit: bytes
+            DevelopmentPreview: "true"
+        - record: openshift:node:workloads:swap
+          expr: |
+            sum(container_memory_swap{id="/kubepods.slice"})
+            by (node, prometheus)
+          labels:
+            unit: bytes
+            DevelopmentPreview: "true"
+        - record: openshift:node:virtual:memory:bytes
+          labels:
+            scope: workloads
+            unit: bytes
+          expr: |
+            sum(kubevirt_vmi_memory_domain_bytes)
+            by (node, prometheus)
+        - record: openshift:node:virtualization:memory:overcommitted
+          expr: |
+            openshift:node:virtualization:memory:allocated - openshift:node:workloads:memory:allocatable
+        - record: openshift:node:virtualization:overcommitted:ratio
+          expr: |
+            openshift:node:virtualization:memory:overcommitted / openshift:node:workloads:memory:allocatable
