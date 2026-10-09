@@ -216,6 +216,18 @@ assets:
       - type: topology
         field: hasSchedulableMasters
 
+  # Phase 1: Opt-in - live-migration downtime tuning (stun time) for all VMs
+  - name: stun-time
+    path: active/migration/stun-time.yaml
+    phase: 1
+    install: opt-in
+    component: MigrationPolicy
+    reconcile_order: 1
+    conditions:
+      - type: annotation
+        key: platform.kubevirt.io/enable-stun-time
+        value: "true"
+
   # Phase 1: OpenShift Kubelet (MachineConfig dropping files to /etc/openshift/kubelet.conf.d)
   - name: kubelet-perf-settings
     path: active/machine-config/03-kubelet-perf-settings.yaml.tpl
@@ -1222,6 +1234,15 @@ features:
       (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot.
     maturity: dp
     groups: [thp-tuning]
+
+  - name: Stun Time
+    description: >-
+      Cluster-wide MigrationPolicy enabling KubeVirt live-migration downtime
+      tuning for all VMs (empty selectors, lowest precedence). Ramps guest
+      switchover stun toward maxDowntimeMs=1050 with default downtimeTuning
+      parameters; more specific MigrationPolicies still override.
+    maturity: dp
+    assets: [stun-time]
 
   - name: NHC with FAR remediator and SBR detection-mode config
     description: Node health checks with fence-agents remediation and storage-based remediation in detection-only mode

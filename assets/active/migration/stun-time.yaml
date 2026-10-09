@@ -1,0 +1,12 @@
+# Cluster-wide default MigrationPolicy enabling KubeVirt downtime tuning
+# (live-migration "stun time" ramping). Empty selectors match every VMI at
+# the lowest precedence so more specific policies still win.
+apiVersion: migrations.kubevirt.io/v1alpha1
+kind: MigrationPolicy
+metadata:
+  name: stun-time
+spec:
+  selectors: {}
+  maxDowntimeMs: 1050
+  experimental:
+    downtimeTuning: {}
