@@ -48,6 +48,7 @@ type Patcher struct {
 	throttle          *throttling.TokenBucket
 	thrashingDetector *throttling.ThrashingDetector
 	client            client.Client
+	apiReader         client.Reader
 	eventRecorder     *util.EventRecorder
 	staging           machineConfigStagingStore
 }
@@ -59,6 +60,10 @@ func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader)
 	renderer := NewRenderer(loader)
 	renderer.SetClient(c) // Enable CRD introspection and object queries in templates
 
+	if apiReader == nil {
+		apiReader = c
+	}
+
 	return &Patcher{
 		renderer:          renderer,
 		applier:           NewApplier(c, apiReader),
@@ -66,6 +71,7 @@ func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader)
 		throttle:          throttling.NewTokenBucket(),
 		thrashingDetector: throttling.NewThrashingDetector(),
 		client:            c,
+		apiReader:         apiReader,
 	}
 }
 
@@ -325,7 +331,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// desired, so hashing its output would let drift on the live side restart the
 	// staging clock of an update that has not itself changed.
 	machineConfigHash := ""
-	if liveExists && isMachineConfig(desired) {
+	if isMachineConfig(desired) {
 		machineConfigHash, err = machineConfigDesiredHash(desired)
 		if err != nil {
 			return false, fmt.Errorf("machineconfig rollout coalescing: %w", err)
@@ -391,8 +397,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 	// Existing MachineConfigs are expensive because each update can reboot a
 	// pool. Stage them until an MCP is already Updating, unless explicitly
-	// bypassed. New MachineConfigs remain immediate.
-	if liveExists {
+	// bypassed. New MachineConfigs stay immediate by default, but an explicit HCO
+	// opt-in also stages their creation while VMs are running.
+	if isMachineConfig(desired) {
 		apply, err := p.coalesceMachineConfigUpdate(ctx, desired, live, machineConfigHash, renderCtx)
 		if err != nil {
 			return false, fmt.Errorf("machineconfig rollout coalescing: %w", err)

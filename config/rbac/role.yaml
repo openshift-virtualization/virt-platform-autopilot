@@ -129,6 +129,12 @@ rules:
       - patch
       - update
   - apiGroups:
+      - kubevirt.io
+    resources:
+      - virtualmachineinstances
+    verbs:
+      - list
+  - apiGroups:
       - storage.k8s.io
     resources:
       - storageclasses

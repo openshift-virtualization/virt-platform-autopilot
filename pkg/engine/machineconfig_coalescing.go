@@ -40,12 +40,20 @@ const (
 	// MachineConfigCoalescingBypassAnnotation opts one managed MachineConfig out
 	// of staging. It is deliberately read from (and preserved on) the live MC.
 	MachineConfigCoalescingBypassAnnotation = "platform.kubevirt.io/bypass-mcp-rollout-coalescing"
-	machineConfigStagingConfigMap           = "virt-platform-autopilot-mc-staging"
-	machineConfigGroup                      = "machineconfiguration.openshift.io"
-	machineConfigKind                       = "MachineConfig"
+	// MachineConfigCreationStagingAnnotation opts the HCO into staging new
+	// MachineConfigs while at least one VMI is running. Creation remains immediate
+	// unless this explicitly conservative mode is enabled.
+	MachineConfigCreationStagingAnnotation = "platform.kubevirt.io/stage-machineconfig-creation-with-running-vms"
+	machineConfigStagingConfigMap          = "virt-platform-autopilot-mc-staging"
+	machineConfigGroup                     = "machineconfiguration.openshift.io"
+	machineConfigKind                      = "MachineConfig"
+	virtualMachineInstancePhaseRunning     = "Running"
 )
 
-var machineConfigPoolGVK = schema.GroupVersionKind{Group: machineConfigGroup, Version: "v1", Kind: "MachineConfigPool"}
+var (
+	machineConfigPoolGVK      = schema.GroupVersionKind{Group: machineConfigGroup, Version: "v1", Kind: "MachineConfigPool"}
+	virtualMachineInstanceGVK = schema.GroupVersionKind{Group: "kubevirt.io", Version: "v1", Kind: "VirtualMachineInstance"}
+)
 
 // MachineConfigPoolRolloutConditionTypes are the MachineConfigPool status
 // conditions that decide whether a staged MachineConfig update is released.
@@ -78,9 +86,10 @@ func isMachineConfig(obj *unstructured.Unstructured) bool {
 	return obj != nil && obj.GetKind() == machineConfigKind && obj.GroupVersionKind().Group == machineConfigGroup
 }
 
-// coalesceMachineConfigUpdate returns true when an existing MC update may be
-// applied. Creation is never staged. The first matching MCP that releases the
-// update wins; this intentionally avoids waiting forever for every MCP which can
+// coalesceMachineConfigUpdate returns true when an MC change may be applied.
+// Updates are staged by default. Creation is staged only when the HCO opts in
+// and at least one VMI is running. The first matching MCP that releases the
+// change wins; this intentionally avoids waiting forever for every MCP which can
 // select the same MachineConfig.
 //
 // desiredHash identifies the update being staged. It is computed by the caller
@@ -88,7 +97,10 @@ func isMachineConfig(obj *unstructured.Unstructured) bool {
 // values read from the live object, so hashing the masked result would let drift
 // on the live side reset the staging timestamp.
 func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live *unstructured.Unstructured, desiredHash string, renderCtx *pkgcontext.RenderContext) (bool, error) {
-	if !isMachineConfig(desired) || live == nil {
+	if !isMachineConfig(desired) {
+		return true, nil
+	}
+	if renderCtx == nil || renderCtx.HCO == nil {
 		return true, nil
 	}
 	namespace := renderCtx.HCO.GetNamespace()
@@ -96,9 +108,19 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 		return true, nil
 	}
 
-	p.copyMachineConfigBypassAnnotation(desired, live)
-	if machineConfigCoalescingBypassed(live) {
-		return true, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
+	if live == nil {
+		apply, err := p.machineConfigCreationMayApply(ctx, renderCtx.HCO)
+		if err != nil {
+			return false, err
+		}
+		if apply {
+			return true, nil
+		}
+	} else {
+		p.copyMachineConfigBypassAnnotation(desired, live)
+		if machineConfigCoalescingBypassed(live) {
+			return true, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
+		}
 	}
 
 	// Include pools selected by the live labels as well as by the proposed
@@ -156,6 +178,53 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 	// the obsolete pool series would otherwise linger.
 	observability.ClearMachineConfigUpdateStaged(desired.GetName())
 	observability.SetMachineConfigUpdateStaged(desired.GetName(), names, stage.StagedAt)
+	return false, nil
+}
+
+func machineConfigCreationStagingEnabled(hco *unstructured.Unstructured) bool {
+	if hco == nil {
+		return false
+	}
+	enabled, err := strconv.ParseBool(hco.GetAnnotations()[MachineConfigCreationStagingAnnotation])
+	return err == nil && enabled
+}
+
+// machineConfigCreationMayApply reports whether a new MachineConfig should be
+// created now. Creation remains immediate unless the HCO explicitly opts into
+// staging and a VMI is running. KubeVirt is optional, so an unavailable VMI API
+// also retains the normal immediate-creation behavior.
+func (p *Patcher) machineConfigCreationMayApply(ctx context.Context, hco *unstructured.Unstructured) (bool, error) {
+	if !machineConfigCreationStagingEnabled(hco) {
+		return true, nil
+	}
+	running, err := p.hasRunningVirtualMachineInstance(ctx)
+	if err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	return !running, nil
+}
+
+// hasRunningVirtualMachineInstance checks the API reader instead of the
+// controller cache: VMIs are not Autopilot-managed and are deliberately absent
+// from the cache's managed-by label selector.
+func (p *Patcher) hasRunningVirtualMachineInstance(ctx context.Context) (bool, error) {
+	instances := &unstructured.UnstructuredList{}
+	instances.SetGroupVersionKind(virtualMachineInstanceGVK.GroupVersion().WithKind("VirtualMachineInstanceList"))
+	if err := p.apiReader.List(ctx, instances); err != nil {
+		return false, err
+	}
+	for i := range instances.Items {
+		phase, _, err := unstructured.NestedString(instances.Items[i].Object, "status", "phase")
+		if err != nil {
+			return false, fmt.Errorf("read VirtualMachineInstance %s status.phase: %w", instances.Items[i].GetName(), err)
+		}
+		if phase == virtualMachineInstancePhaseRunning {
+			return true, nil
+		}
+	}
 	return false, nil
 }
 

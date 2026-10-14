@@ -39,6 +39,29 @@ an extreme compatibility corner case. In that case Autopilot has no rollout
 signal to coalesce against, so it retains normal immediate MachineConfig
 reconciliation rather than leaving updates staged indefinitely.
 
+## Staging creation while VMs run
+
+New MachineConfigs are normally applied immediately: delaying one can leave a
+new feature unavailable until a later maintenance window. For a particularly
+cautious minor-version upgrade, enable this HCO annotation:
+
+```yaml
+metadata:
+  annotations:
+    platform.kubevirt.io/stage-machineconfig-creation-with-running-vms: "true"
+```
+
+With that opt-in, Autopilot stages a new MachineConfig when at least one
+`VirtualMachineInstance` has `status.phase: Running`, and creates it when a
+matching MCP begins updating. If no VMs are running, or the KubeVirt VMI API is
+unavailable, creation remains immediate. This control is intentionally opt-in;
+it does not change the default availability-first behavior.
+
+Treat the annotation as a temporary minor-upgrade safety mode, not a permanent
+cluster policy. Remove it after the upgrade window: leaving it enabled can defer
+a future GA MachineConfig-backed capability indefinitely on a cluster where VMs
+normally remain running and no matching MCP rollout is started.
+
 ## Bypass staging
 
 For a time-sensitive change, add this annotation to the live Autopilot-managed MachineConfig:
