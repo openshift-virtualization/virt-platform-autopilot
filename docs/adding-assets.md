@@ -518,6 +518,7 @@ The following helper functions are available in templates:
 
 - `crdExists "apiVersion"` - Check if CRD is installed
 - `objectField "apiVersion" "Kind" "namespace" "name" "field" "subfield"` - Read a string field using literal path segments (for example, `"data" "config.yaml"`). Returns `""` when the API kind is unavailable or the object/field is missing; other read and field-type errors fail rendering. It does not configure a watch for the referenced object, so changes are observed only on the next existing reconciliation trigger.
+- `nodeDisruptionPolicyReady (fromYaml (readAsset "machine-config/policy.yaml"))` - Return true only when MCO has published matching entries and ordered actions from the referenced `MachineConfiguration` asset in `MachineConfiguration/cluster`'s effective node disruption policy. Omit either `files` or `units` from the asset when it is not required. Returns true during offline rendering, where MCO status is unavailable.
 - `defaultStorageClass` - Select the newest default StorageClass, with alphabetical name tie-breaking; fails rendering if none exists or discovery fails. Typed StorageClass reads use the cache, with a label-selector exemption for externally managed classes.
 - `crdHasEnum "crdName" "fieldPath" "enumValue"` - Check if CRD schema has enum value
 - `prometheusRuleHasRecordingRule "namespace" "name" "recordName"` - Check PrometheusRule

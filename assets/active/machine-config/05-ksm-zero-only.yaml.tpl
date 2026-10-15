@@ -1,6 +1,11 @@
+{{- if nodeDisruptionPolicyReady (fromYaml (readAsset "machine-config/05-ksm-zero-only-node-disruption-policy.yaml")) }}
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
 metadata:
+  annotations:
+    # The companion MachineConfiguration NodeDisruptionPolicy applies these
+    # changes without a node reboot.
+    platform.kubevirt.io/bypass-mcp-rollout-coalescing: "true"
   labels:
     machineconfiguration.openshift.io/role: {{ .Params.role }}
   name: 99-{{ .Params.role }}-ksm-zero-only
@@ -34,3 +39,4 @@ spec:
           WantedBy=multi-user.target
         enabled: true
         name: kubevirt-ksm-tune.service
+{{- end }}

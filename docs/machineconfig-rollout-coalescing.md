@@ -59,6 +59,11 @@ safe, manage that setting in a companion Autopilot asset. Keeping the singleton
 change and bypassed MachineConfig together makes the exception explicit,
 reviewable, and scoped to that use case.
 
+`reconcile_order` only sequences API writes; it does not wait for MCO to
+validate and distribute the policy. A bypassed MachineConfig that depends on a
+new policy must therefore render only after the corresponding effective policy
+appears in `MachineConfiguration.status.nodeDisruptionPolicyStatus`.
+
 ## Observability
 
 `kubevirt_autopilot_machineconfig_update_staged{machineconfig,pool}` is `1` for each MCP matching either label set while an update is staged. `kubevirt_autopilot_machineconfig_update_staged_since_seconds` records when it was first staged. The **Autopilot / Asset Health** dashboard includes a **Staged MachineConfig Updates** table.

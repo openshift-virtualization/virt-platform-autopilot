@@ -286,8 +286,9 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		// Usage: {{ storageProfileRWXClass }}
 		"storageProfileRWXClass": r.storageProfileRWXClassFunc(),
 
-		"objectField":         r.objectField,
-		"defaultStorageClass": r.defaultStorageClass,
+		"objectField":               r.objectField,
+		"nodeDisruptionPolicyReady": r.nodeDisruptionPolicyReady,
+		"defaultStorageClass":       r.defaultStorageClass,
 
 		// fromYaml parses a YAML string into a map
 		// Usage: {{ $data := fromYaml $yamlString }}
