@@ -1,0 +1,22 @@
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+    - path: /usr/local/bin/kubevirt-ksm-tune.py
+      actions:
+      # The updated program must run immediately; kubevirt-ksm-tune.service is
+      # a oneshot unit and cannot service a Reload action.
+      - type: Restart
+        restart:
+          serviceName: kubevirt-ksm-tune.service
+    units:
+    - name: kubevirt-ksm-tune.service
+      actions:
+      # Make systemd read a changed unit before executing its new definition.
+      - type: DaemonReload
+      - type: Restart
+        restart:
+          serviceName: kubevirt-ksm-tune.service

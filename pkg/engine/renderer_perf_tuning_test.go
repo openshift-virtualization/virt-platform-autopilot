@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
@@ -204,6 +205,151 @@ func TestCPUManagerDocumentation(t *testing.T) {
 	if !strings.Contains(contentStr, "Memory Manager") {
 		t.Error("Template should explain memory manager")
 	}
+}
+
+func TestKSMZeroOnlyNodeDisruptionPolicy(t *testing.T) {
+	rendered, _, policyAsset := renderHCOAsset(t, "ksm-zero-only-node-disruption-policy")
+
+	if rendered.GetAPIVersion() != "operator.openshift.io/v1" || rendered.GetKind() != "MachineConfiguration" {
+		t.Fatalf("policy GVK = %s, %s, want operator.openshift.io/v1, MachineConfiguration", rendered.GetAPIVersion(), rendered.GetKind())
+	}
+	if rendered.GetName() != "cluster" {
+		t.Errorf("policy name = %q, want cluster", rendered.GetName())
+	}
+
+	files, found, err := unstructured.NestedSlice(rendered.Object, "spec", "nodeDisruptionPolicy", "files")
+	if err != nil || !found || len(files) != 1 {
+		t.Fatalf("policy files = %#v, found=%t, err=%v; want one entry", files, found, err)
+	}
+	file, ok := files[0].(map[string]any)
+	if !ok {
+		t.Fatal("policy file entry should be a map")
+	}
+	if path, _, _ := unstructured.NestedString(file, "path"); path != "/usr/local/bin/kubevirt-ksm-tune.py" {
+		t.Errorf("policy file path = %q, want KSM tuner", path)
+	}
+	fileActions, _, err := unstructured.NestedSlice(file, "actions")
+	if err != nil || len(fileActions) != 1 {
+		t.Fatalf("file actions = %#v, err=%v; want Restart", fileActions, err)
+	}
+	fileAction, ok := fileActions[0].(map[string]any)
+	if !ok {
+		t.Fatal("file action should be a map")
+	}
+	if got, _, _ := unstructured.NestedString(fileAction, "type"); got != "Restart" {
+		t.Errorf("file action = %q, want Restart", got)
+	}
+	if service, _, _ := unstructured.NestedString(fileAction, "restart", "serviceName"); service != "kubevirt-ksm-tune.service" {
+		t.Errorf("file Restart service = %q, want kubevirt-ksm-tune.service", service)
+	}
+
+	units, found, err := unstructured.NestedSlice(rendered.Object, "spec", "nodeDisruptionPolicy", "units")
+	if err != nil || !found || len(units) != 1 {
+		t.Fatalf("policy units = %#v, found=%t, err=%v; want one entry", units, found, err)
+	}
+	unit, ok := units[0].(map[string]any)
+	if !ok {
+		t.Fatal("policy unit entry should be a map")
+	}
+	if name, _, _ := unstructured.NestedString(unit, "name"); name != "kubevirt-ksm-tune.service" {
+		t.Errorf("policy unit name = %q, want kubevirt-ksm-tune.service", name)
+	}
+	actions, _, err := unstructured.NestedSlice(unit, "actions")
+	if err != nil || len(actions) != 2 {
+		t.Fatalf("unit actions = %#v, err=%v; want DaemonReload then Restart", actions, err)
+	}
+	for i, want := range []string{"DaemonReload", "Restart"} {
+		action, ok := actions[i].(map[string]any)
+		if !ok {
+			t.Fatalf("unit action %d should be a map", i)
+		}
+		if got, _, _ := unstructured.NestedString(action, "type"); got != want {
+			t.Errorf("unit action %d = %q, want %q", i, got, want)
+		}
+	}
+
+	machineConfig, _, machineConfigAsset := renderHCOAsset(t, "ksm-zero-only")
+	if got := machineConfig.GetAnnotations()["platform.kubevirt.io/bypass-mcp-rollout-coalescing"]; got != "true" {
+		t.Errorf("KSM MachineConfig bypass annotation = %q, want true", got)
+	}
+	if policyAsset.ReconcileOrder >= machineConfigAsset.ReconcileOrder {
+		t.Errorf("policy reconcile_order = %d, MachineConfig reconcile_order = %d; policy must be first", policyAsset.ReconcileOrder, machineConfigAsset.ReconcileOrder)
+	}
+}
+
+func TestKSMZeroOnlyWaitsForEffectiveNodeDisruptionPolicy(t *testing.T) {
+	renderKSM := func(policy *unstructured.Unstructured) *unstructured.Unstructured {
+		t.Helper()
+		loader := assets.NewLoader()
+		registry, err := assets.NewRegistry(loader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		asset, err := registry.GetAsset("ksm-zero-only")
+		if err != nil {
+			t.Fatal(err)
+		}
+		renderer := NewRenderer(loader)
+		builder := fake.NewClientBuilder()
+		if policy != nil {
+			builder = builder.WithObjects(policy)
+		}
+		renderer.SetClient(builder.Build())
+
+		rendered, err := renderer.RenderAsset(asset, &pkgcontext.RenderContext{HCO: &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "hco.kubevirt.io/v1beta1",
+			"kind":       "HyperConverged",
+			"metadata":   map[string]any{"name": "kubevirt-hyperconverged", "namespace": "openshift-cnv"},
+		}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rendered
+	}
+
+	if rendered := renderKSM(nil); rendered != nil {
+		t.Fatal("KSM MachineConfig rendered before MachineConfiguration policy was effective")
+	}
+
+	wrongService := ksmNodeDisruptionPolicyStatus("other.service")
+	if rendered := renderKSM(wrongService); rendered != nil {
+		t.Fatal("KSM MachineConfig rendered with an ineffective NodeDisruptionPolicy")
+	}
+
+	if rendered := renderKSM(ksmNodeDisruptionPolicyStatus("kubevirt-ksm-tune.service")); rendered == nil {
+		t.Fatal("KSM MachineConfig did not render after NodeDisruptionPolicy became effective")
+	}
+}
+
+func ksmNodeDisruptionPolicyStatus(restartService string) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "operator.openshift.io/v1",
+		"kind":       "MachineConfiguration",
+		"metadata":   map[string]any{"name": "cluster"},
+		"status": map[string]any{
+			"nodeDisruptionPolicyStatus": map[string]any{
+				"clusterPolicies": map[string]any{
+					"files": []any{map[string]any{
+						"path": "/usr/local/bin/kubevirt-ksm-tune.py",
+						"actions": []any{map[string]any{
+							"type":    "Restart",
+							"restart": map[string]any{"serviceName": restartService},
+						}},
+					}},
+					"units": []any{map[string]any{
+						"name": "kubevirt-ksm-tune.service",
+						"actions": []any{
+							map[string]any{"type": "DaemonReload"},
+							map[string]any{
+								"type":    "Restart",
+								"restart": map[string]any{"serviceName": restartService},
+							},
+						},
+					}},
+				},
+			},
+		},
+	}}
 }
 
 func TestAssetMetadata(t *testing.T) {
