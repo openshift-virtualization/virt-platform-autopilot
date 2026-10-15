@@ -30,6 +30,16 @@ const (
 )
 
 var (
+	RenderFailed = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "render_failed",
+			Help:      "Asset rendering failures by reason and code (1=failed; absent after success or exclusion)",
+		},
+		[]string{"asset", "reason", "code"},
+	)
+
 	// ComplianceStatus tracks whether each managed resource is in sync with desired state.
 	// See the Compliance* constants for the values.
 	// This is the core health indicator used by the VirtPlatformAutopilotSyncFailed alert.
@@ -176,6 +186,7 @@ func init() {
 	// This registry is automatically exposed over HTTPS (mTLS) on :8443/metrics
 	// by the manager
 	metrics.Registry.MustRegister(
+		RenderFailed,
 		ComplianceStatus,
 		ThrashingTotal,
 		PausedResources,
@@ -252,6 +263,15 @@ func ClearCustomization(obj *unstructured.Unstructured, customizationType string
 func SetDependency(group, version, kind string, missing bool, optedIn bool) {
 	MissingDependency.WithLabelValues(group, version, kind).Set(boolToFloat(missing))
 	DependencyOptedIn.WithLabelValues(group, version, kind).Set(boolToFloat(optedIn))
+}
+
+// SetRenderFailure replaces an asset's failure, removing stale reason/code series.
+// An empty reason clears the failure after successful or excluded rendering.
+func SetRenderFailure(asset, reason, code string) {
+	RenderFailed.DeletePartialMatch(prometheus.Labels{"asset": asset})
+	if reason != "" {
+		RenderFailed.WithLabelValues(asset, reason, code).Set(1)
+	}
 }
 
 func boolToFloat(b bool) float64 {
