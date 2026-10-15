@@ -29,8 +29,8 @@ import (
 
 func TestStaticRules_Count(t *testing.T) {
 	rules := StaticRules()
-	if len(rules) != 15 {
-		t.Errorf("expected 15 static rules, got %d", len(rules))
+	if len(rules) != 16 {
+		t.Errorf("expected 16 static rules, got %d", len(rules))
 	}
 }
 

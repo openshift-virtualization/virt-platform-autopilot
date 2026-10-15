@@ -161,13 +161,20 @@ func StaticRules() []Rule {
 			ResourceNames: []string{"virt-platform-autopilot-mc-staging"},
 			Verbs:         []string{"get", "patch", "update"},
 		},
-		// Rule 13: Loki block storage selection uses cluster StorageClasses.
+		// Rule 13: new MachineConfig staging is opt-in and only applies while
+		// KubeVirt has a running VMI.
+		{
+			APIGroups: []string{"kubevirt.io"},
+			Resources: []string{"virtualmachineinstances"},
+			Verbs:     []string{"list"},
+		},
+		// Rule 14: Loki block storage selection uses cluster StorageClasses.
 		{
 			APIGroups: []string{"storage.k8s.io"},
 			Resources: []string{"storageclasses"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		// Rule 14: bind only the external collector ClusterRoles referenced by
+		// Rule 15: bind only the external collector ClusterRoles referenced by
 		// assets/active/logging/collector-crb-*.yaml.
 		{
 			APIGroups: []string{"rbac.authorization.k8s.io"},

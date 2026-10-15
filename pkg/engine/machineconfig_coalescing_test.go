@@ -185,6 +185,39 @@ func TestMachineConfigCreationIsNotStaged(t *testing.T) {
 	}
 }
 
+func TestMachineConfigCreationIsStagedWhenEnabledAndVMIsAreRunning(t *testing.T) {
+	ctx := context.Background()
+	hcoCtx := testRenderContext()
+	hcoCtx.HCO.SetAnnotations(map[string]string{MachineConfigCreationStagingAnnotation: "true"})
+	p := NewPatcher(fake.NewClientBuilder().WithRuntimeObjects(
+		testMCP("worker", "False"), testVMI("running", virtualMachineInstancePhaseRunning),
+	).Build(), nil, nil)
+	desired, _ := testMachineConfigs()
+
+	apply, err := p.coalesceMachineConfigUpdate(ctx, desired, nil, testHash(t, desired), hcoCtx)
+	if err != nil || apply {
+		t.Fatalf("running VMI: apply=%t err=%v, want false nil", apply, err)
+	}
+	stage, err := p.machineConfigStage(ctx, "openshift-cnv", desired.GetName())
+	if err != nil || stage == nil {
+		t.Fatalf("creation stage was not persisted: stage=%v err=%v", stage, err)
+	}
+}
+
+func TestMachineConfigCreationIsImmediateWithoutRunningVMIs(t *testing.T) {
+	hcoCtx := testRenderContext()
+	hcoCtx.HCO.SetAnnotations(map[string]string{MachineConfigCreationStagingAnnotation: "true"})
+	p := NewPatcher(fake.NewClientBuilder().WithRuntimeObjects(
+		testMCP("worker", "False"), testVMI("stopped", "Succeeded"),
+	).Build(), nil, nil)
+	desired, _ := testMachineConfigs()
+
+	apply, err := p.coalesceMachineConfigUpdate(context.Background(), desired, nil, testHash(t, desired), hcoCtx)
+	if err != nil || !apply {
+		t.Fatalf("no running VMI: apply=%t err=%v, want true nil", apply, err)
+	}
+}
+
 // Degraded must not veto the release. A pool that is degraded *and* updating is
 // already disrupting nodes, and Degraded flaps whenever one node fails mid-rollout;
 // vetoing on it would skip exactly the window worth joining.
@@ -357,6 +390,17 @@ func testMCPConditions(name string, conditions map[string]string) *unstructured.
 	}
 	obj := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "machineconfiguration.openshift.io/v1", "kind": "MachineConfigPool", "metadata": map[string]any{"name": name}, "spec": map[string]any{"machineConfigSelector": map[string]any{"matchLabels": map[string]any{"machineconfiguration.openshift.io/role": "worker"}}}, "status": map[string]any{"conditions": status}}}
 	obj.SetGroupVersionKind(schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfigPool"})
+	return obj
+}
+
+func testVMI(name, phase string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "kubevirt.io/v1",
+		"kind":       "VirtualMachineInstance",
+		"metadata":   map[string]any{"name": name, "namespace": "default"},
+		"status":     map[string]any{"phase": phase},
+	}}
+	obj.SetGroupVersionKind(virtualMachineInstanceGVK)
 	return obj
 }
 
