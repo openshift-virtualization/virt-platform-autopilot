@@ -206,6 +206,76 @@ func TestCPUManagerDocumentation(t *testing.T) {
 	}
 }
 
+func TestKSMZeroOnlyNodeDisruptionPolicy(t *testing.T) {
+	rendered, _, policyAsset := renderHCOAsset(t, "ksm-zero-only-node-disruption-policy")
+
+	if rendered.GetAPIVersion() != "operator.openshift.io/v1" || rendered.GetKind() != "MachineConfiguration" {
+		t.Fatalf("policy GVK = %s, %s, want operator.openshift.io/v1, MachineConfiguration", rendered.GetAPIVersion(), rendered.GetKind())
+	}
+	if rendered.GetName() != "cluster" {
+		t.Errorf("policy name = %q, want cluster", rendered.GetName())
+	}
+
+	files, found, err := unstructured.NestedSlice(rendered.Object, "spec", "nodeDisruptionPolicy", "files")
+	if err != nil || !found || len(files) != 1 {
+		t.Fatalf("policy files = %#v, found=%t, err=%v; want one entry", files, found, err)
+	}
+	file, ok := files[0].(map[string]any)
+	if !ok {
+		t.Fatal("policy file entry should be a map")
+	}
+	if path, _, _ := unstructured.NestedString(file, "path"); path != "/usr/local/bin/kubevirt-ksm-tune.py" {
+		t.Errorf("policy file path = %q, want KSM tuner", path)
+	}
+	fileActions, _, err := unstructured.NestedSlice(file, "actions")
+	if err != nil || len(fileActions) != 1 {
+		t.Fatalf("file actions = %#v, err=%v; want Restart", fileActions, err)
+	}
+	fileAction, ok := fileActions[0].(map[string]any)
+	if !ok {
+		t.Fatal("file action should be a map")
+	}
+	if got, _, _ := unstructured.NestedString(fileAction, "type"); got != "Restart" {
+		t.Errorf("file action = %q, want Restart", got)
+	}
+	if service, _, _ := unstructured.NestedString(fileAction, "restart", "serviceName"); service != "kubevirt-ksm-tune.service" {
+		t.Errorf("file Restart service = %q, want kubevirt-ksm-tune.service", service)
+	}
+
+	units, found, err := unstructured.NestedSlice(rendered.Object, "spec", "nodeDisruptionPolicy", "units")
+	if err != nil || !found || len(units) != 1 {
+		t.Fatalf("policy units = %#v, found=%t, err=%v; want one entry", units, found, err)
+	}
+	unit, ok := units[0].(map[string]any)
+	if !ok {
+		t.Fatal("policy unit entry should be a map")
+	}
+	if name, _, _ := unstructured.NestedString(unit, "name"); name != "kubevirt-ksm-tune.service" {
+		t.Errorf("policy unit name = %q, want kubevirt-ksm-tune.service", name)
+	}
+	actions, _, err := unstructured.NestedSlice(unit, "actions")
+	if err != nil || len(actions) != 2 {
+		t.Fatalf("unit actions = %#v, err=%v; want DaemonReload then Restart", actions, err)
+	}
+	for i, want := range []string{"DaemonReload", "Restart"} {
+		action, ok := actions[i].(map[string]any)
+		if !ok {
+			t.Fatalf("unit action %d should be a map", i)
+		}
+		if got, _, _ := unstructured.NestedString(action, "type"); got != want {
+			t.Errorf("unit action %d = %q, want %q", i, got, want)
+		}
+	}
+
+	_, _, machineConfigAsset := renderHCOAsset(t, "ksm-zero-only")
+	if policyAsset.ReconcileOrder >= machineConfigAsset.ReconcileOrder {
+		t.Errorf("policy reconcile_order = %d, MachineConfig reconcile_order = %d; policy must be first", policyAsset.ReconcileOrder, machineConfigAsset.ReconcileOrder)
+	}
+	if got := machineConfigAsset.NodeDisruptionPolicy; got == nil || got.Asset != policyAsset.Name {
+		t.Errorf("KSM MachineConfig node disruption policy = %#v, want %q", got, policyAsset.Name)
+	}
+}
+
 func TestAssetMetadata(t *testing.T) {
 	loader := assets.NewLoader()
 	registry, err := assets.NewRegistry(loader)

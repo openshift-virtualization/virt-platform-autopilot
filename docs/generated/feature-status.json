@@ -74,7 +74,7 @@
     },
     {
       "name": "Kernel Samepage Merging (KSM) zero pages only",
-      "description": "Node-level KSM zero-pages-only deduplication with adaptive scan rate and max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows VM workers; recommend thp-tuning on the same nodes for THP performance.",
+      "description": "Node-level KSM zero-pages-only deduplication with adaptive scan rate and max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows VM workers; recommend thp-tuning on the same nodes for THP performance. KSM tuner updates restart only the tuner service through an MCO Node Disruption Policy, avoiding a node reboot.",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-ksm-zero-only=true, hcoUnconfigured:spec.virtualization.ksmConfiguration"
