@@ -97,7 +97,7 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 	}
 
 	p.copyMachineConfigBypassAnnotation(desired, live)
-	if machineConfigCoalescingBypassed(live) {
+	if machineConfigCoalescingBypassed(desired) {
 		return true, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
 	}
 
@@ -177,11 +177,12 @@ func (p *Patcher) clearMachineConfigStaging(ctx context.Context, desired *unstru
 	return stage, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
 }
 
-// machineConfigCoalescingBypassed reports whether the live MachineConfig opts out
-// of staging. An unparseable value is treated as "no bypass": staging is the safe
-// default, and a typo must not silently start a node-rebooting rollout.
-func machineConfigCoalescingBypassed(live *unstructured.Unstructured) bool {
-	value, ok := live.GetAnnotations()[MachineConfigCoalescingBypassAnnotation]
+// machineConfigCoalescingBypassed reports whether the effective desired
+// MachineConfig opts out of staging. An unparseable value is treated as "no
+// bypass": staging is the safe default, and a typo must not silently start a
+// node-rebooting rollout.
+func machineConfigCoalescingBypassed(desired *unstructured.Unstructured) bool {
+	value, ok := desired.GetAnnotations()[MachineConfigCoalescingBypassAnnotation]
 	if !ok {
 		return false
 	}

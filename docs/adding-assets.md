@@ -281,6 +281,8 @@ The `assets/active/metadata.yaml` catalog defines all managed assets.
   install: always                          # always | opt-in
   component: MachineConfig                 # Logical grouping
   reconcile_order: 10                      # Processing order (lower = earlier)
+  node_disruption_policy:                  # Optional rebootless-update dependency
+    asset: my-node-disruption-policy
   conditions: []                           # Activation conditions (optional)
 ```
 
@@ -315,6 +317,14 @@ The `assets/active/metadata.yaml` catalog defines all managed assets.
 - `1-9`: Critical baseline (MachineConfig, Kubelet)
 - `10-19`: Scheduling and placement (Descheduler)
 - `20+`: Optional operators and advanced features
+
+**node_disruption_policy**: Opt a `MachineConfig` into the MCO Node Disruption
+Policy workflow. `asset` names a companion `MachineConfiguration` asset that
+must have a lower `reconcile_order`. Autopilot applies that asset first, waits
+until `MachineConfiguration/cluster.status.nodeDisruptionPolicyStatus` contains
+the same requested entries and action order, then applies the MachineConfig
+with rollout coalescing bypassed. Keep the policy's paths, units, and actions
+explicit in the companion asset; Autopilot does not infer their safety.
 
 **conditions**: Array of conditions that must ALL be true for asset to be applied.
 

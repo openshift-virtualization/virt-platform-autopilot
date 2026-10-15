@@ -41,7 +41,7 @@ reconciliation rather than leaving updates staged indefinitely.
 
 ## Bypass staging
 
-For a time-sensitive change, add this annotation to the live Autopilot-managed MachineConfig:
+For an exceptional time-sensitive change, add this annotation to the live Autopilot-managed MachineConfig:
 
 ```yaml
 metadata:
@@ -51,13 +51,18 @@ metadata:
 
 Autopilot preserves this annotation and applies future updates immediately. Remove it to resume staging. Use it sparingly: it can start a new MCO rollout and reboot nodes.
 
-Use the bypass only for a MachineConfig whose on-the-fly behavior is covered by
-the MCO's [Node Disruption Policy](https://github.com/openshift/machine-config-operator/blob/main/docs/NodeDisruptionPolicy.md)
-for the target OpenShift version and configuration. When an asset requires a
-specific `MachineConfiguration` cluster singleton setting to make that behavior
-safe, manage that setting in a companion Autopilot asset. Keeping the singleton
-change and bypassed MachineConfig together makes the exception explicit,
-reviewable, and scoped to that use case.
+For a managed asset whose on-the-fly behavior is covered by the MCO's [Node
+Disruption Policy](https://github.com/openshift/machine-config-operator/blob/main/docs/NodeDisruptionPolicy.md), do not add this annotation to its template.
+Instead, declare `node_disruption_policy.asset` in `assets/active/metadata.yaml`
+and point it at a companion `MachineConfiguration` asset. Autopilot then applies
+the policy first, waits until MCO publishes matching effective entries in
+`status.nodeDisruptionPolicyStatus`, and injects the bypass annotation only for
+the dependent MachineConfig. The feature author remains responsible for the
+policy paths and actions; Autopilot does not infer rebootless behavior.
+It permits this bypass only for `storage.files`, `systemd.units`, and SSH
+authorized-key changes (plus the required Ignition version), and requires every
+file and unit to be listed in the referenced policy. Other MachineConfig
+changes, including kernel arguments, are rejected rather than bypassed.
 
 ## Observability
 

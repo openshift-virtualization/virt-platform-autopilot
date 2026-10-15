@@ -496,6 +496,24 @@ assets:
     component: MachineConfig
     reconcile_order: 1
 
+  # A rebootless MachineConfig declares the policy asset that makes its update
+  # safe. The policy asset must be reconciled first.
+  - name: example-node-disruption-policy
+    path: active/machine-config/example-node-disruption-policy.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfiguration
+    reconcile_order: 1
+
+  - name: example-rebootless-machineconfig
+    path: active/machine-config/example-rebootless-machineconfig.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: example-node-disruption-policy
+
   - name: descheduler-loadaware
     path: active/descheduler/recommended.yaml.tpl
     phase: 1
@@ -516,6 +534,10 @@ assets:
 - `component`: Kubernetes Kind of the primary managed resource
 - `reconcile_order`: Processing order within a phase (lower = earlier)
 - `conditions`: Activation conditions (annotations, hardware detection, feature gates) — all must be satisfied (AND logic)
+- `node_disruption_policy.asset`: Optional `MachineConfig` dependency on a prior
+  `MachineConfiguration` asset. The patcher waits for MCO's effective policy
+  status to match before applying the MachineConfig and automatically opts that
+  update out of MachineConfig rollout coalescing.
 
 ### Feature Catalog
 

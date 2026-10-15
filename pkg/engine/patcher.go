@@ -149,6 +149,25 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		}
 	}
 
+	// A MachineConfig that explicitly depends on a Node Disruption Policy must
+	// not reach MCO until the policy's effective status contains its exact
+	// entries. Once ready, its updates are safe to apply immediately rather than
+	// wait for an unrelated MCP rollout.
+	if assetMeta.NodeDisruptionPolicy != nil {
+		ready, err := p.prepareNodeDisruptionPolicyDependentMachineConfig(ctx, desired, assetMeta.NodeDisruptionPolicy.PolicyAsset(), renderCtx)
+		if err != nil {
+			return false, fmt.Errorf("node disruption policy readiness for asset %q: %w", assetMeta.Name, err)
+		}
+		if !ready {
+			logger.Info("Node disruption policy is not effective yet; deferring MachineConfig",
+				"asset", assetMeta.Name,
+				"policyAsset", assetMeta.NodeDisruptionPolicy.Asset,
+			)
+			observability.SetCompliance(desired, observability.ComplianceDeferred)
+			return false, nil
+		}
+	}
+
 	// Start reconciliation duration timer (will be observed at function exit)
 	timer := observability.ReconcileDurationTimer(desired)
 	defer timer.ObserveDuration()
