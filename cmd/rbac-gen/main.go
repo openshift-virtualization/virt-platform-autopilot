@@ -195,6 +195,8 @@ func commentForAPIGroup(group string) string {
 		return "Migration Toolkit for Virtualization (MTV)"
 	case "metallb.io":
 		return "MetalLB"
+	case "migrations.kubevirt.io":
+		return "KubeVirt MigrationPolicy"
 	case "monitoring.coreos.com":
 		return "Prometheus Monitoring"
 	case "observability.openshift.io":
