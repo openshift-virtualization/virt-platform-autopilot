@@ -109,18 +109,36 @@ func FormatCondition(c AssetCondition) string {
 
 // AssetMetadata defines the metadata for a managed asset
 type AssetMetadata struct {
-	Name            string                     `json:"name"`
-	Group           string                     `json:"group,omitempty"`    // Optional group for allowlist matching (e.g. "descheduler-loadaware")
-	GateCRD         string                     `json:"gate_crd,omitempty"` // Optional additional CRD that must be present (on top of RequiredCRD)
-	Path            string                     `json:"path"`
-	Phase           int                        `json:"phase"`
-	Install         InstallMode                `json:"install"`
-	Component       string                     `json:"component"`
-	ReconcileOrder  int                        `json:"reconcile_order"`
-	Conditions      []AssetCondition           `json:"conditions,omitempty"`
-	TemplateParams  map[string]string          `json:"template_params,omitempty"` // Arbitrary per-asset render parameters
-	RenderedContent *unstructured.Unstructured `json:"-"`                         // Cached rendered content
-	RequiredCRD     string                     `json:"-"`                         // Derived from template at load time; empty for core API types
+	Name                 string                          `json:"name"`
+	Group                string                          `json:"group,omitempty"`    // Optional group for allowlist matching (e.g. "descheduler-loadaware")
+	GateCRD              string                          `json:"gate_crd,omitempty"` // Optional additional CRD that must be present (on top of RequiredCRD)
+	Path                 string                          `json:"path"`
+	Phase                int                             `json:"phase"`
+	Install              InstallMode                     `json:"install"`
+	Component            string                          `json:"component"`
+	ReconcileOrder       int                             `json:"reconcile_order"`
+	Conditions           []AssetCondition                `json:"conditions,omitempty"`
+	TemplateParams       map[string]string               `json:"template_params,omitempty"` // Arbitrary per-asset render parameters
+	NodeDisruptionPolicy *NodeDisruptionPolicyDependency `json:"node_disruption_policy,omitempty"`
+	RenderedContent      *unstructured.Unstructured      `json:"-"` // Cached rendered content
+	RequiredCRD          string                          `json:"-"` // Derived from template at load time; empty for core API types
+}
+
+// NodeDisruptionPolicyDependency opts a MachineConfig asset into rebootless
+// application under the named MachineConfiguration policy asset. The policy
+// remains explicit and feature-owned; the engine owns ordering, readiness, and
+// the rollout-coalescing bypass.
+type NodeDisruptionPolicyDependency struct {
+	Asset       string         `json:"asset"`
+	policyAsset *AssetMetadata `json:"-"`
+}
+
+// PolicyAsset returns the resolved MachineConfiguration policy asset.
+func (d *NodeDisruptionPolicyDependency) PolicyAsset() *AssetMetadata {
+	if d == nil {
+		return nil
+	}
+	return d.policyAsset
 }
 
 // FeatureMetadata defines a user-facing feature composed of one or more assets
@@ -179,11 +197,47 @@ func NewRegistry(loader *Loader) (*Registry, error) {
 		}
 		asset.RequiredCRD = extractRequiredCRD(content, strings.HasSuffix(asset.Path, ".tpl"))
 	}
+	if err := resolveNodeDisruptionPolicyDependencies(catalog.Assets); err != nil {
+		return nil, err
+	}
 
 	return &Registry{
 		catalog: catalog,
 		loader:  loader,
 	}, nil
+}
+
+func resolveNodeDisruptionPolicyDependencies(assetList []AssetMetadata) error {
+	assetsByName := make(map[string]*AssetMetadata, len(assetList))
+	for i := range assetList {
+		assetsByName[assetList[i].Name] = &assetList[i]
+	}
+
+	for i := range assetList {
+		asset := &assetList[i]
+		dependency := asset.NodeDisruptionPolicy
+		if dependency == nil {
+			continue
+		}
+		if asset.Component != "MachineConfig" {
+			return fmt.Errorf("asset %q declares node_disruption_policy but is not a MachineConfig", asset.Name)
+		}
+		if dependency.Asset == "" {
+			return fmt.Errorf("MachineConfig asset %q has an empty node_disruption_policy.asset", asset.Name)
+		}
+		policyAsset := assetsByName[dependency.Asset]
+		if policyAsset == nil {
+			return fmt.Errorf("MachineConfig asset %q references unknown node disruption policy asset %q", asset.Name, dependency.Asset)
+		}
+		if policyAsset.Component != "MachineConfiguration" {
+			return fmt.Errorf("MachineConfig asset %q references %q as a node disruption policy, but it is a %s", asset.Name, dependency.Asset, policyAsset.Component)
+		}
+		if policyAsset.ReconcileOrder >= asset.ReconcileOrder {
+			return fmt.Errorf("MachineConfig asset %q node disruption policy asset %q must have a lower reconcile_order", asset.Name, dependency.Asset)
+		}
+		dependency.policyAsset = policyAsset
+	}
+	return nil
 }
 
 // GetAsset returns asset metadata by name

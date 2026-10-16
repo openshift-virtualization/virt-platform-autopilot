@@ -60,6 +60,64 @@ func TestNewRegistry(t *testing.T) {
 	})
 }
 
+func TestResolveNodeDisruptionPolicyDependencies(t *testing.T) {
+	policy := AssetMetadata{Name: "policy", Component: "MachineConfiguration", ReconcileOrder: 1}
+	consumer := AssetMetadata{
+		Name:           "consumer",
+		Component:      "MachineConfig",
+		ReconcileOrder: 2,
+		NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{
+			Asset: "policy",
+		},
+	}
+	assetList := []AssetMetadata{policy, consumer}
+	if err := resolveNodeDisruptionPolicyDependencies(assetList); err != nil {
+		t.Fatalf("resolve valid dependency: %v", err)
+	}
+	if got := assetList[1].NodeDisruptionPolicy.PolicyAsset(); got == nil || got.Name != policy.Name {
+		t.Fatalf("resolved policy asset = %#v, want %q", got, policy.Name)
+	}
+
+	for _, testCase := range []struct {
+		name   string
+		assets []AssetMetadata
+		want   string
+	}{
+		{
+			name:   "unknown policy asset",
+			assets: []AssetMetadata{{Name: "consumer", Component: "MachineConfig", ReconcileOrder: 2, NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "missing"}}},
+			want:   "unknown node disruption policy",
+		},
+		{
+			name:   "empty policy asset",
+			assets: []AssetMetadata{{Name: "consumer", Component: "MachineConfig", ReconcileOrder: 2, NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{}}},
+			want:   "empty node_disruption_policy.asset",
+		},
+		{
+			name:   "consumer is not MachineConfig",
+			assets: []AssetMetadata{{Name: "policy", Component: "MachineConfiguration", ReconcileOrder: 1}, {Name: "consumer", Component: "ConfigMap", ReconcileOrder: 2, NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}}},
+			want:   "is not a MachineConfig",
+		},
+		{
+			name:   "policy is not MachineConfiguration",
+			assets: []AssetMetadata{{Name: "policy", Component: "ConfigMap", ReconcileOrder: 1}, {Name: "consumer", Component: "MachineConfig", ReconcileOrder: 2, NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}}},
+			want:   "but it is a ConfigMap",
+		},
+		{
+			name:   "policy is not first",
+			assets: []AssetMetadata{{Name: "policy", Component: "MachineConfiguration", ReconcileOrder: 2}, {Name: "consumer", Component: "MachineConfig", ReconcileOrder: 2, NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}}},
+			want:   "must have a lower reconcile_order",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := resolveNodeDisruptionPolicyDependencies(testCase.assets)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("error = %v, want %q", err, testCase.want)
+			}
+		})
+	}
+}
+
 func TestGetAsset(t *testing.T) {
 	loader := NewLoader()
 	registry, err := NewRegistry(loader)

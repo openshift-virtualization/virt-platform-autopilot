@@ -113,15 +113,15 @@ assets:
       - type: topology
         field: hasSchedulableMasters
 
-  - name: ksm-zero-only
+  # Must be reconciled before the KSM MachineConfigs so MCO has their
+  # rebootless update policy before it sees the bypassed MachineConfigs.
+  - name: ksm-zero-only-node-disruption-policy
     group: ksm-zero-only
-    path: active/machine-config/05-ksm-zero-only.yaml.tpl
+    path: active/machine-config/05-ksm-zero-only-node-disruption-policy.yaml
     phase: 1
     install: opt-in
-    component: MachineConfig
+    component: MachineConfiguration
     reconcile_order: 1
-    template_params:
-      role: worker
     conditions: &ksm-zero-only-conditions
       - type: annotation
         key: platform.kubevirt.io/enable-ksm-zero-only
@@ -129,13 +129,28 @@ assets:
       - type: hco-field-unconfigured
         path: spec.virtualization.ksmConfiguration
 
+  - name: ksm-zero-only
+    group: ksm-zero-only
+    path: active/machine-config/05-ksm-zero-only.yaml.tpl
+    phase: 1
+    install: opt-in
+    component: MachineConfig
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: ksm-zero-only-node-disruption-policy
+    template_params:
+      role: worker
+    conditions: *ksm-zero-only-conditions
+
   - name: ksm-zero-only-master
     group: ksm-zero-only
     path: active/machine-config/05-ksm-zero-only.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: ksm-zero-only-node-disruption-policy
     template_params:
       role: master
     conditions:
@@ -1210,6 +1225,8 @@ features:
       Node-level KSM zero-pages-only deduplication with adaptive scan rate and
       max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows
       VM workers; recommend thp-tuning on the same nodes for THP performance.
+      KSM tuner updates restart only the tuner service through an MCO Node
+      Disruption Policy, avoiding a node reboot.
     maturity: dp
     groups: [ksm-zero-only]
 
