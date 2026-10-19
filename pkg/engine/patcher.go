@@ -48,6 +48,7 @@ type Patcher struct {
 	throttle          *throttling.TokenBucket
 	thrashingDetector *throttling.ThrashingDetector
 	client            client.Client
+	apiReader         client.Reader
 	eventRecorder     *util.EventRecorder
 	staging           machineConfigStagingStore
 }
@@ -66,6 +67,7 @@ func NewPatcher(c client.Client, apiReader client.Reader, loader *assets.Loader)
 		throttle:          throttling.NewTokenBucket(),
 		thrashingDetector: throttling.NewThrashingDetector(),
 		client:            c,
+		apiReader:         apiReader,
 	}
 }
 
@@ -389,10 +391,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		return false, nil
 	}
 
-	// Existing MachineConfigs are expensive because each update can reboot a
-	// pool. Stage them until an MCP is already Updating, unless explicitly
-	// bypassed. New MachineConfigs remain immediate.
-	if liveExists {
+	// MachineConfig updates are staged until an MCP is already Updating, unless
+	// explicitly bypassed. New MachineConfigs are normally immediate, but join a
+	// matching rollout after an OpenShift major/minor platform upgrade.
+	if isMachineConfig(desired) {
 		apply, err := p.coalesceMachineConfigUpdate(ctx, desired, live, machineConfigHash, renderCtx)
 		if err != nil {
 			return false, fmt.Errorf("machineconfig rollout coalescing: %w", err)

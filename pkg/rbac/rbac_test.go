@@ -68,22 +68,25 @@ func TestStaticRules_MetricsClientCA(t *testing.T) {
 	}
 }
 
-func TestStaticRules_ConfigOpenShiftIncludesAPIServers(t *testing.T) {
-	var found bool
+func TestStaticRules_ConfigOpenShiftIncludesRequiredResources(t *testing.T) {
+	found := map[string]bool{}
 	for _, r := range StaticRules() {
 		for _, g := range r.APIGroups {
 			if g != "config.openshift.io" {
 				continue
 			}
 			for _, res := range r.Resources {
-				if res == "apiservers" {
-					found = true
-				}
+				found[res] = true
 			}
 		}
 	}
-	if !found {
-		t.Error("expected config.openshift.io static rule to include 'apiservers' (metrics TLS security profile)")
+	for resource, reason := range map[string]string{
+		"apiservers":      "metrics TLS security profile",
+		"clusterversions": "MachineConfig creation staging after a platform upgrade",
+	} {
+		if !found[resource] {
+			t.Errorf("expected config.openshift.io static rule to include %q (%s)", resource, reason)
+		}
 	}
 }
 

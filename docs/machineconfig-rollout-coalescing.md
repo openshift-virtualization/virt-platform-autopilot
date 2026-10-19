@@ -39,6 +39,23 @@ an extreme compatibility corner case. In that case Autopilot has no rollout
 signal to coalesce against, so it retains normal immediate MachineConfig
 reconciliation rather than leaving updates staged indefinitely.
 
+## Staging creation after a platform minor upgrade
+
+New MachineConfigs are normally applied immediately: delaying one can leave a
+new feature unavailable until a later rollout. Autopilot uses the retained
+`ClusterVersion.status.history` as evidence that the cluster crossed a platform
+major/minor boundary: if `status.desired.version` differs in major/minor from an
+earlier completed history entry, it stages creation and joins the next matching
+MCP rollout instead. This avoids adding an independent reboot while a newly
+released Autopilot capability arrives on an existing cluster.
+
+The desired version is parsed as SemVer, including pre-release modifiers such as
+`5.0.0-rc.3`. A prior entry must be `Completed` before Autopilot treats the
+cluster as upgraded. A freshly installed cluster, and a cluster whose history
+contains only z-stream changes, retains immediate creation. On non-OpenShift
+clusters or while the ClusterVersion history is unavailable, creation also
+remains immediate.
+
 ## Bypass staging
 
 For a time-sensitive change, add this annotation to the live Autopilot-managed MachineConfig:

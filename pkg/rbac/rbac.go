@@ -94,13 +94,14 @@ func StaticRules() []Rule {
 			Verbs:     []string{"get", "list", "watch"},
 		},
 		// Rule 5: OpenShift config CRs (for cluster topology detection: HCP, compact,
-		// cloud provider via Infrastructure; schedulable masters via Scheduler; and
-		// the cluster TLS security profile for the metrics endpoint via APIServer).
+		// cloud provider via Infrastructure; schedulable masters via Scheduler; the
+		// cluster TLS security profile via APIServer; and MachineConfig creation
+		// staging after a major/minor upgrade via ClusterVersion history).
 		// All are singletons (name="cluster") and are non-sensitive read-only.
 		// Gracefully absent on non-OpenShift clusters — the operator handles NotFound.
 		{
 			APIGroups: []string{"config.openshift.io"},
-			Resources: []string{"apiservers", "infrastructures", "schedulers"},
+			Resources: []string{"apiservers", "clusterversions", "infrastructures", "schedulers"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
 		// Rule 6: Metrics client CA read (the extension-apiserver-authentication

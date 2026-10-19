@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/version"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -43,9 +44,13 @@ const (
 	machineConfigStagingConfigMap           = "virt-platform-autopilot-mc-staging"
 	machineConfigGroup                      = "machineconfiguration.openshift.io"
 	machineConfigKind                       = "MachineConfig"
+	clusterVersionName                      = "version"
 )
 
-var machineConfigPoolGVK = schema.GroupVersionKind{Group: machineConfigGroup, Version: "v1", Kind: "MachineConfigPool"}
+var (
+	machineConfigPoolGVK = schema.GroupVersionKind{Group: machineConfigGroup, Version: "v1", Kind: "MachineConfigPool"}
+	clusterVersionGVK    = schema.GroupVersionKind{Group: "config.openshift.io", Version: "v1", Kind: "ClusterVersion"}
+)
 
 // MachineConfigPoolRolloutConditionTypes are the MachineConfigPool status
 // conditions that decide whether a staged MachineConfig update is released.
@@ -78,17 +83,22 @@ func isMachineConfig(obj *unstructured.Unstructured) bool {
 	return obj != nil && obj.GetKind() == machineConfigKind && obj.GroupVersionKind().Group == machineConfigGroup
 }
 
-// coalesceMachineConfigUpdate returns true when an existing MC update may be
-// applied. Creation is never staged. The first matching MCP that releases the
-// update wins; this intentionally avoids waiting forever for every MCP which can
-// select the same MachineConfig.
+// coalesceMachineConfigUpdate returns true when an MC change may be applied.
+// Updates are staged by default. Creation is staged after an OpenShift
+// major/minor upgrade, avoiding an unexpected reboot for a new capability on an
+// existing cluster. The first matching MCP that releases the change wins; this
+// intentionally avoids waiting forever for every MCP which can select the same
+// MachineConfig.
 //
 // desiredHash identifies the update being staged. It is computed by the caller
 // from the rendered desired state *before* ignore-field masking: masking folds in
 // values read from the live object, so hashing the masked result would let drift
 // on the live side reset the staging timestamp.
 func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live *unstructured.Unstructured, desiredHash string, renderCtx *pkgcontext.RenderContext) (bool, error) {
-	if !isMachineConfig(desired) || live == nil {
+	if !isMachineConfig(desired) {
+		return true, nil
+	}
+	if renderCtx == nil || renderCtx.HCO == nil {
 		return true, nil
 	}
 	namespace := renderCtx.HCO.GetNamespace()
@@ -96,9 +106,19 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 		return true, nil
 	}
 
-	p.copyMachineConfigBypassAnnotation(desired, live)
-	if machineConfigCoalescingBypassed(live) {
-		return true, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
+	if live == nil {
+		apply, err := p.machineConfigCreationMayApply(ctx)
+		if err != nil {
+			return false, err
+		}
+		if apply {
+			return true, nil
+		}
+	} else {
+		p.copyMachineConfigBypassAnnotation(desired, live)
+		if machineConfigCoalescingBypassed(live) {
+			return true, p.unstageMachineConfigUpdate(ctx, namespace, desired.GetName())
+		}
 	}
 
 	// Include pools selected by the live labels as well as by the proposed
@@ -157,6 +177,83 @@ func (p *Patcher) coalesceMachineConfigUpdate(ctx context.Context, desired, live
 	observability.ClearMachineConfigUpdateStaged(desired.GetName())
 	observability.SetMachineConfigUpdateStaged(desired.GetName(), names, stage.StagedAt)
 	return false, nil
+}
+
+// machineConfigCreationMayApply reports whether a new MachineConfig should be
+// created now. New clusters and z-stream-only updates retain immediate creation.
+// When ClusterVersion history shows that the cluster crossed a major/minor
+// boundary, creation instead joins the next matching MCP rollout. ClusterVersion
+// is an optional OpenShift API, so its absence retains immediate creation.
+func (p *Patcher) machineConfigCreationMayApply(ctx context.Context) (bool, error) {
+	upgraded, err := p.clusterVersionHasMajorMinorUpgrade(ctx)
+	if err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	return !upgraded, nil
+}
+
+// clusterVersionHasMajorMinorUpgrade identifies a cluster whose desired OpenShift
+// release differs in major/minor from a previously completed release. Desired is
+// the CVO's target release, including while the newest history entry is Partial.
+func (p *Patcher) clusterVersionHasMajorMinorUpgrade(ctx context.Context) (bool, error) {
+	clusterVersion := &unstructured.Unstructured{}
+	clusterVersion.SetGroupVersionKind(clusterVersionGVK)
+	reader := p.apiReader
+	if reader == nil {
+		reader = p.client
+	}
+	if err := reader.Get(ctx, client.ObjectKey{Name: clusterVersionName}, clusterVersion); err != nil {
+		return false, err
+	}
+	history, found, err := unstructured.NestedSlice(clusterVersion.Object, "status", "history")
+	if err != nil || !found || len(history) < 2 {
+		return false, err
+	}
+	targetVersion, found, err := unstructured.NestedString(clusterVersion.Object, "status", "desired", "version")
+	if err != nil || !found {
+		return false, err
+	}
+	target, ok := clusterVersionMajorMinor(targetVersion)
+	if !ok {
+		return false, nil
+	}
+	for _, entry := range history[1:] {
+		entryMap, ok := entry.(map[string]any)
+		if !ok || entryMap["state"] != "Completed" {
+			continue
+		}
+		previous, ok := clusterVersionHistoryMajorMinor(entry)
+		if ok && previous != target {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func clusterVersionHistoryMajorMinor(entry any) (string, bool) {
+	entryMap, ok := entry.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	rawVersion, ok := entryMap["version"].(string)
+	if !ok || rawVersion == "" {
+		return "", false
+	}
+	return clusterVersionMajorMinor(rawVersion)
+}
+
+// clusterVersionMajorMinor uses strict SemVer parsing so pre-release targets
+// such as 5.0.0-rc.3 compare as the 5.0 minor rather than being treated as an
+// opaque release string.
+func clusterVersionMajorMinor(rawVersion string) (string, bool) {
+	parsed, err := version.ParseSemantic(rawVersion)
+	if err != nil {
+		return "", false
+	}
+	return fmt.Sprintf("%d.%d", parsed.Major(), parsed.Minor()), true
 }
 
 // clearMachineConfigStaging drops any staged entry for a MachineConfig asset. It
