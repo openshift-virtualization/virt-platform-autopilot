@@ -185,6 +185,48 @@ func TestMachineConfigCreationIsNotStaged(t *testing.T) {
 	}
 }
 
+func TestMachineConfigCreationFollowsClusterVersionTarget(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  string
+		history []string
+		apply   bool
+	}{
+		{
+			name:    "stages a 4.22 z-stream to 4.23 z-stream upgrade",
+			target:  "4.23.1",
+			history: []string{"4.23.1", "Completed", "4.22.15", "Completed"},
+			apply:   false,
+		},
+		{
+			name:    "stages a 4.22 z-stream to 5.0 release candidate upgrade",
+			target:  "5.0.0-rc.3",
+			history: []string{"5.0.0-rc.3", "Partial", "4.22.15", "Completed"},
+			apply:   false,
+		},
+		{
+			name:    "immediately creates after a z-stream-only upgrade",
+			target:  "4.22.15",
+			history: []string{"4.22.15", "Completed", "4.22.0", "Completed"},
+			apply:   true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			p := NewPatcher(fake.NewClientBuilder().WithRuntimeObjects(
+				testMCP("worker", "False"), testClusterVersion(test.target, test.history...),
+			).Build(), nil, nil)
+			desired, _ := testMachineConfigs()
+
+			apply, err := p.coalesceMachineConfigUpdate(context.Background(), desired, nil, testHash(t, desired), testRenderContext())
+			if err != nil || apply != test.apply {
+				t.Fatalf("apply=%t err=%v, want %t nil", apply, err, test.apply)
+			}
+		})
+	}
+}
+
 // Degraded must not veto the release. A pool that is degraded *and* updating is
 // already disrupting nodes, and Degraded flaps whenever one node fails mid-rollout;
 // vetoing on it would skip exactly the window worth joining.
@@ -357,6 +399,24 @@ func testMCPConditions(name string, conditions map[string]string) *unstructured.
 	}
 	obj := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "machineconfiguration.openshift.io/v1", "kind": "MachineConfigPool", "metadata": map[string]any{"name": name}, "spec": map[string]any{"machineConfigSelector": map[string]any{"matchLabels": map[string]any{"machineconfiguration.openshift.io/role": "worker"}}}, "status": map[string]any{"conditions": status}}}
 	obj.SetGroupVersionKind(schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfigPool"})
+	return obj
+}
+
+func testClusterVersion(target string, versionsAndStates ...string) *unstructured.Unstructured {
+	history := make([]any, 0, len(versionsAndStates)/2)
+	for i := 0; i < len(versionsAndStates); i += 2 {
+		history = append(history, map[string]any{"version": versionsAndStates[i], "state": versionsAndStates[i+1]})
+	}
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "config.openshift.io/v1",
+		"kind":       "ClusterVersion",
+		"metadata":   map[string]any{"name": clusterVersionName},
+		"status": map[string]any{
+			"desired": map[string]any{"version": target},
+			"history": history,
+		},
+	}}
+	obj.SetGroupVersionKind(clusterVersionGVK)
 	return obj
 }
 
