@@ -189,6 +189,52 @@ func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
 	}
 }
 
+func TestSwapFileMigrationPrecedesActivation(t *testing.T) {
+	rendered, loader, _ := renderHCOAsset(t, "swap-enable")
+	files, found, err := unstructured.NestedSlice(rendered.Object, "spec", "config", "storage", "files")
+	if err != nil || !found {
+		t.Fatal("swap-enable MachineConfig should contain storage files")
+	}
+	hasMigrator := false
+	for _, file := range files {
+		fileMap, ok := file.(map[string]any)
+		if ok && fileMap["path"] == "/usr/local/bin/kubevirt-migrate-swap-file.sh" {
+			hasMigrator = true
+			break
+		}
+	}
+	if !hasMigrator {
+		t.Error("swap-enable MachineConfig must install the swap migration script")
+	}
+
+	activationUnit := machineConfigSystemdUnit(t, rendered, "swap-file-enable.service")
+	activationContents, _ := activationUnit["contents"].(string)
+
+	if !strings.Contains(activationContents, "ConditionPathExists=/var/swapfile") ||
+		!strings.Contains(activationContents, "swapon --priority 10 /var/swapfile") {
+		t.Error("swap-file-enable.service must activate /var/swapfile")
+	}
+
+	migrationUnit := machineConfigSystemdUnit(t, rendered, "swap-file-migrate.service")
+	migrationContents, _ := migrationUnit["contents"].(string)
+	if !strings.Contains(migrationContents, "ConditionPathExists=/var/ocpswap.file") ||
+		!strings.Contains(migrationContents, "Before=swap-file-enable.service") ||
+		!strings.Contains(migrationContents, "Before=swap-provision.service") ||
+		!strings.Contains(migrationContents, "WantedBy=kubelet-dependencies.target") {
+		t.Error("swap-file-migrate.service must precede provisioning and activation without blocking kubelet startup")
+	}
+
+	migrator, err := loader.LoadAsset("active/machine-config/01-swap-enable/kubevirt-migrate-swap-file.sh")
+	if err != nil {
+		t.Fatalf("Failed to load swap migrator: %v", err)
+	}
+	if !strings.Contains(string(migrator), "legacy_swap_file=/var/ocpswap.file") ||
+		!strings.Contains(string(migrator), "swap_file=/var/swapfile") ||
+		!strings.Contains(string(migrator), "refusing to migrate active swap file") {
+		t.Error("swap migrator must move the old inactive path to /var/swapfile")
+	}
+}
+
 func TestFileBasedSwapProvisioningUsesConfiguredFreeSpaceReserve(t *testing.T) {
 	rendered, _, _ := renderHCOAssetWithAnnotations(t, "file-based-swap-provisioning", map[string]string{
 		"platform.kubevirt.io/file-based-swap-min-free-percent": "20",
