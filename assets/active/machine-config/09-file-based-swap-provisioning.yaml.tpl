@@ -31,7 +31,7 @@ spec:
             # provisioned worker can activate the file swap on its first boot,
             # then restore the file-exists safeguard.
             ConditionFirstBoot=
-            ConditionPathExists=/var/swapfile
+            ConditionPathExists=/var/ocpswap.file
             After=swap-provision.service
       - contents: |
           [Unit]

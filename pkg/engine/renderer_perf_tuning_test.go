@@ -168,7 +168,7 @@ func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
 	activationDropInContents := systemdDropInContents(t, activationUnit, "10-wait-for-provisioning.conf")
 	if !strings.Contains(activationDropInContents, "After=swap-provision.service") ||
 		!strings.Contains(activationDropInContents, "ConditionFirstBoot=") ||
-		!strings.Contains(activationDropInContents, "ConditionPathExists=/var/swapfile") {
+		!strings.Contains(activationDropInContents, "ConditionPathExists=/var/ocpswap.file") {
 		t.Error("swap-file-enable.service must wait for swap provisioning")
 	}
 
@@ -176,7 +176,7 @@ func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to load swap provisioner: %v", err)
 	}
-	if !strings.Contains(string(provisioner), "swap_file=/var/swapfile") {
+	if !strings.Contains(string(provisioner), "swap_file=/var/ocpswap.file") {
 		t.Error("swap provisioner must create the swap file under /var")
 	}
 	if !strings.Contains(string(provisioner), "semanage fcontext -a -f a -t swapfile_t") ||
@@ -186,6 +186,17 @@ func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
 	if !strings.Contains(string(provisioner), "legacy_swap_files=(/var/tmp/ocpswap.file /var/tmp/swapfile)") ||
 		!strings.Contains(string(provisioner), "legacy file-backed swap ${legacy_swap_file} exists; leaving it unchanged") {
 		t.Error("swap provisioner must preserve both supported legacy /var/tmp swap file paths")
+	}
+}
+
+func TestSwapFileActivationUsesFiveZeroCompatiblePath(t *testing.T) {
+	rendered, _, _ := renderHCOAsset(t, "swap-enable")
+	activationUnit := machineConfigSystemdUnit(t, rendered, "swap-file-enable.service")
+	activationContents, _ := activationUnit["contents"].(string)
+
+	if !strings.Contains(activationContents, "ConditionPathExists=/var/ocpswap.file") ||
+		!strings.Contains(activationContents, "swapon --priority 10 /var/ocpswap.file") {
+		t.Error("swap-file-enable.service must retain the /var/ocpswap.file path used in 5.0")
 	}
 }
 

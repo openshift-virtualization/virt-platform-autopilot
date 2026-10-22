@@ -3,7 +3,7 @@
 # Swap activation deliberately belongs to swap-file-enable.service.
 set -euo pipefail
 
-swap_file=/var/swapfile
+swap_file=/var/ocpswap.file
 legacy_swap_files=(/var/tmp/ocpswap.file /var/tmp/swapfile)
 # A replacement is built here and renamed into place, so ${swap_file} only ever
 # holds a complete, mkswap-formatted file. A run that is interrupted part way

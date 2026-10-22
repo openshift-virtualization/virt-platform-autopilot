@@ -48,12 +48,12 @@ spec:
           [Unit]
           Description=Enable OCP file swap
           ConditionFirstBoot=no
-          ConditionPathExists=/var/swapfile
+          ConditionPathExists=/var/ocpswap.file
 
           [Service]
           Type=oneshot
           RemainAfterExit=true
-          ExecStart=/bin/sh -c 'swapon --priority 10 /var/swapfile && echo "Enabled file swap /var/swapfile (priority 10)"'
+          ExecStart=/bin/sh -c 'swapon --priority 10 /var/ocpswap.file && echo "Enabled file swap /var/ocpswap.file (priority 10)"'
 
           [Install]
           RequiredBy=kubelet-dependencies.target

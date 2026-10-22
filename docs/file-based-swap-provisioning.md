@@ -18,7 +18,7 @@ the first boot. Removing the condition from `swap-disk-enable.service` means
 editing an always-on MachineConfig and rolling every worker pool, so it is left
 for the next change that touches that asset.
 
-When enabled, it provisions `/var/swapfile` on workers for KubeVirt
+When enabled, it provisions `/var/ocpswap.file` on workers for KubeVirt
 memory overcommitment. It calculates the file size independently on each node as
 its RAM multiplied by the configured overcommit amount:
 
@@ -123,7 +123,7 @@ parent filesystem.
 ## Disable and clean up file-backed swap
 
 Removing the opt-in annotation removes the provisioning MachineConfig, but does
-not remove an existing `/var/swapfile`. Remove the file before a later
+not remove an existing `/var/ocpswap.file`. Remove the file before a later
 reboot, otherwise the always-on Swap Enablement feature can activate it again.
 
 For each worker, cordon and drain the node using the process appropriate for the
@@ -133,7 +133,7 @@ workloads it hosts, then deactivate and remove the file:
 oc adm cordon <worker-node>
 oc adm drain <worker-node> --ignore-daemonsets --delete-emptydir-data
 oc debug node/<worker-node> -- chroot /host sh -c \
-  'swapoff /var/swapfile && rm -f /var/swapfile'
+  'swapoff /var/ocpswap.file && rm -f /var/ocpswap.file'
 oc adm uncordon <worker-node>
 ```
 
@@ -182,13 +182,13 @@ spec:
         contents: |
           [Unit]
           Description=Remove obsolete file-backed swap
-          ConditionPathExists=/var/swapfile
+          ConditionPathExists=/var/ocpswap.file
           Before=swap-file-enable.service
           Before=kubelet-dependencies.target
 
           [Service]
           Type=oneshot
-          ExecStart=/bin/sh -c 'if grep -Fq -- /var/swapfile /proc/swaps; then swapoff /var/swapfile || exit $?; fi; rm -f /var/swapfile'
+          ExecStart=/bin/sh -c 'if grep -Fq -- /var/ocpswap.file /proc/swaps; then swapoff /var/ocpswap.file || exit $?; fi; rm -f /var/ocpswap.file'
 
           [Install]
           WantedBy=kubelet-dependencies.target
@@ -220,21 +220,21 @@ right size carrying a swap signature is reused only when it is owned by
 `root:root` with mode `0600`. Anything else is replaced rather than activated,
 so a file planted by another user is never turned into swap — which would
 otherwise have given its creator read and write access to swapped-out guest
-memory. The replacement is staged as `/var/swapfile.new` under `umask 077`
+memory. The replacement is staged as `/var/ocpswap.file.new` under `umask 077`
 and then renamed into place.
 
-The service persistently maps `/var/swapfile` to the `swapfile_t` SELinux
+The service persistently maps `/var/ocpswap.file` to the `swapfile_t` SELinux
 type using `semanage fcontext`, then applies it with `restorecon`. A complete
 filesystem relabel therefore restores the required type. Verify the label and a
 successful `swapon` under enforcing SELinux when validating the feature on a new
 platform:
 
 ```bash
-oc debug node/<worker-node> -- chroot /host ls -Z /var/swapfile
+oc debug node/<worker-node> -- chroot /host ls -Z /var/ocpswap.file
 oc debug node/<worker-node> -- chroot /host ausearch -m AVC -ts boot
 ```
 
-When the worker boot disk is encrypted, `/var/swapfile` inherits that
+When the worker boot disk is encrypted, `/var/ocpswap.file` inherits that
 at-rest encryption. On an unencrypted boot disk, this Developer Preview feature
 does not add a separate encryption layer for swap. Clusters with a physical-media
 or disk-snapshot threat model should use encrypted worker storage, or provision
@@ -248,7 +248,7 @@ the provisioning MachineConfig. Plan that change as a worker-pool rollout. At
 the following boot, the service validates the existing file's type, ownership,
 permissions, and size; it recreates it when they do not match the calculated
 configuration. A new file is built alongside the current one and renamed into
-place, so `/var/swapfile` is always either the previous complete file or
+place, so `/var/ocpswap.file` is always either the previous complete file or
 the new one, never a half-written stub for the activation unit to `swapon`. When
 the percentage is reduced to 100 or below, the file is removed before the
 activation unit runs.
