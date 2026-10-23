@@ -28,7 +28,10 @@ swap size = node RAM × (memoryOvercommitPercentage - 100) / 100
 
 For backward compatibility, if a worker already has a manually provisioned
 legacy `/var/tmp/swapfile` or `/var/tmp/ocpswap.file`, Autopilot leaves it
-unchanged and does not create a second file under `/var`.
+unchanged and does not create a second file under `/var`. A leftover
+`/var/ocpswap.file` from when swap-enable activated that path
+(introduced in `36f64e9`, replaced by `/var/swapfile` in `ed6c313`) is renamed to
+`/var/swapfile` seamlessly.
 
 The feature creates and formats the swap file only. The always-on **Swap
 Enablement** feature remains the sole owner of `swapon`; its activation unit is
