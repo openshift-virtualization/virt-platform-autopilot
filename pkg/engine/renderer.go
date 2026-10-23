@@ -259,7 +259,7 @@ func (r *Renderer) customFuncMap() template.FuncMap {
 		"readAsset": readAsset,
 
 		// hasAnnotation checks if an unstructured object has a specific annotation value
-		// Usage: {{ hasAnnotation .HCO.Object "platform.kubevirt.io/enable-incident-detection" "true" }}
+		// Usage: {{ hasAnnotation .HCO.Object "platform.kubevirt.io/enable-audit-logging" "true" }}
 		"hasAnnotation": hasAnnotation,
 
 		"gzip": func(s string) (string, error) {
@@ -590,7 +590,6 @@ func (r *Renderer) prometheusRuleHasRecordingRuleFunc() func(string, string, str
 			Namespace: namespace,
 			Name:      name,
 		}, obj)
-
 		if err != nil {
 			return false
 		}
