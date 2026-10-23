@@ -618,7 +618,11 @@ func TestNodeDisruptionPolicyCoversMachineConfig(t *testing.T) {
 // TestCatalogNodeDisruptionPoliciesAreValid turns authoring errors into CI
 // failures instead of allowing an invalid policy/dependent pair to stop the
 // platform reconciliation loop on a customer cluster.
-func TestCatalogNodeDisruptionPoliciesAreValid(t *testing.T) {
+//
+// Coverage is bidirectional: every MachineConfig file/unit must appear in its
+// policy, and every policy file/unit must appear on at least one dependent so
+// removed Ignition paths cannot leave stale Node Disruption Policy entries.
+func TestCatalogNodeDisruptionPoliciesAreValid(t *testing.T) { //nolint:gocognit // catalog walk is inherently nested
 	loader := assets.NewLoader()
 	registry, err := assets.NewRegistry(loader)
 	if err != nil {
@@ -626,12 +630,32 @@ func TestCatalogNodeDisruptionPoliciesAreValid(t *testing.T) {
 	}
 	renderer := NewRenderer(loader)
 	ctx := pkgcontext.NewRenderContext(pkgcontext.NewMockHCO("kubevirt-hyperconverged", "openshift-cnv"))
+
+	type policyCoverage struct {
+		policyAsset *assets.AssetMetadata
+		files       map[string]struct{}
+		units       map[string]struct{}
+		dependents  int
+	}
+	byPolicy := map[string]*policyCoverage{}
 	active := map[string]bool{}
+
 	for _, asset := range registry.ListAssetsByReconcileOrder() {
 		if asset.NodeDisruptionPolicy == nil {
 			continue
 		}
 		active[asset.Name] = true
+		policyMeta := asset.NodeDisruptionPolicy.PolicyAsset()
+		cov, ok := byPolicy[policyMeta.Name]
+		if !ok {
+			cov = &policyCoverage{
+				policyAsset: policyMeta,
+				files:       map[string]struct{}{},
+				units:       map[string]struct{}{},
+			}
+			byPolicy[policyMeta.Name] = cov
+		}
+
 		t.Run(asset.Name, func(t *testing.T) {
 			dependentCtx := *ctx
 			dependent, err := renderer.RenderAsset(&asset, &dependentCtx)
@@ -642,7 +666,7 @@ func TestCatalogNodeDisruptionPoliciesAreValid(t *testing.T) {
 				t.Fatal("NDP dependent rendered empty")
 			}
 			policyCtx := *ctx
-			policy, err := renderer.RenderAsset(asset.NodeDisruptionPolicy.PolicyAsset(), &policyCtx)
+			policy, err := renderer.RenderAsset(policyMeta, &policyCtx)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -656,12 +680,124 @@ func TestCatalogNodeDisruptionPoliciesAreValid(t *testing.T) {
 			if err := nodeDisruptionPolicyCoversMachineConfig(want, dependent); err != nil {
 				t.Fatal(err)
 			}
+
+			files, units, err := machineConfigNodeDisruptionKeys(dependent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cov.dependents++
+			for path := range files {
+				cov.files[path] = struct{}{}
+			}
+			for name := range units {
+				cov.units[name] = struct{}{}
+			}
 		})
 	}
+
+	for policyName, cov := range byPolicy {
+		t.Run("policy/"+policyName, func(t *testing.T) {
+			if cov.dependents == 0 {
+				t.Fatal("node disruption policy has no MachineConfig dependents")
+			}
+			policyCtx := *ctx
+			policy, err := renderer.RenderAsset(cov.policyAsset, &policyCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, found, err := unstructured.NestedMap(policy.Object, "spec", "nodeDisruptionPolicy")
+			if err != nil || !found {
+				t.Fatalf("policy has no spec.nodeDisruptionPolicy: found=%t err=%v", found, err)
+			}
+			policyFiles, err := nodeDisruptionPolicyNamedKeys(want, "files", "path")
+			if err != nil {
+				t.Fatal(err)
+			}
+			policyUnits, err := nodeDisruptionPolicyNamedKeys(want, "units", "name")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for path := range policyFiles {
+				if _, ok := cov.files[path]; !ok {
+					t.Errorf("policy files path %q is not present on any dependent MachineConfig", path)
+				}
+			}
+			for name := range policyUnits {
+				if _, ok := cov.units[name]; !ok {
+					t.Errorf("policy units name %q is not present on any dependent MachineConfig", name)
+				}
+			}
+		})
+	}
+
 	p := NewPatcher(fake.NewClientBuilder().Build(), nil, loader)
 	if _, _, err := p.aggregateNodeDisruptionPolicies(registry.ListAssetsByReconcileOrder(), active, false, ctx); err != nil {
 		t.Fatalf("catalog contains conflicting node disruption policy entries: %v", err)
 	}
+}
+
+func machineConfigNodeDisruptionKeys(machineConfig *unstructured.Unstructured) (files, units map[string]struct{}, err error) {
+	files = map[string]struct{}{}
+	units = map[string]struct{}{}
+	config, found, err := unstructured.NestedMap(machineConfig.Object, "spec", "config")
+	if err != nil || !found {
+		return nil, nil, err
+	}
+	fileEntries, found, err := unstructured.NestedSlice(config, "storage", "files")
+	if err != nil {
+		return nil, nil, err
+	}
+	if found {
+		for _, entry := range fileEntries {
+			entryMap, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			path, found, err := unstructured.NestedString(entryMap, "path")
+			if err != nil || !found || path == "" {
+				continue
+			}
+			files[path] = struct{}{}
+		}
+	}
+	unitEntries, found, err := unstructured.NestedSlice(config, "systemd", "units")
+	if err != nil {
+		return nil, nil, err
+	}
+	if found {
+		for _, entry := range unitEntries {
+			entryMap, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, found, err := unstructured.NestedString(entryMap, "name")
+			if err != nil || !found || name == "" {
+				continue
+			}
+			units[name] = struct{}{}
+		}
+	}
+	return files, units, nil
+}
+
+func nodeDisruptionPolicyNamedKeys(policy map[string]any, field, identifier string) (map[string]struct{}, error) {
+	out := map[string]struct{}{}
+	entries, found, err := unstructured.NestedSlice(policy, field)
+	if err != nil || !found {
+		return out, err
+	}
+	for _, entry := range entries {
+		entryMap, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		key, found, err := unstructured.NestedString(entryMap, identifier)
+		if err != nil || !found || key == "" {
+			continue
+		}
+		out[key] = struct{}{}
+	}
+	return out, nil
 }
 
 func testMachineConfigurationPolicyStatus(restartService string) *unstructured.Unstructured {

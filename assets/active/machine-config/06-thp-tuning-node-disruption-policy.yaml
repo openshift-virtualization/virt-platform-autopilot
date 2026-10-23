@@ -1,0 +1,20 @@
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+    - path: /usr/local/bin/kubevirt-thp-tune.py
+      actions:
+      - type: DaemonReload
+      - type: Restart
+        restart:
+          serviceName: kubevirt-thp-tune.service
+    units:
+    - name: kubevirt-thp-tune.service
+      actions:
+      - type: DaemonReload
+      - type: Restart
+        restart:
+          serviceName: kubevirt-thp-tune.service
