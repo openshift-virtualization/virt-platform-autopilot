@@ -17,10 +17,12 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/yaml"
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
@@ -132,12 +134,17 @@ func TestKubeletPerfSettingsIsMachineConfig(t *testing.T) {
 	if !strings.HasPrefix(path, "/etc/openshift/kubelet.conf.d/") {
 		t.Errorf("File path = %s, want /etc/openshift/kubelet.conf.d/*", path)
 	}
+
+	// Smoke-check the Ignition payload: unresolved template markers here
+	// crash-loop kubelet when the drop-in is merged at runtime.
+	assertKubeletDropinRenderable(t, fileMap)
 }
 
 // Detailed field tests removed: kubelet configuration is now dropped as files
 // to /etc/openshift/kubelet.conf.d, base64-encoded in the MachineConfig.
 // The kubelet merges these files at runtime, making field-level assertions
-// in unit tests less meaningful than functional e2e validation.
+// in unit tests less meaningful than functional e2e validation. Still decode
+// the payload once to catch unresolved template markers (invalid YAML).
 
 func TestKubeletPerfSettingsDocumentation(t *testing.T) {
 	_, loader, asset := renderHCOAsset(t, "kubelet-perf-settings")
@@ -153,6 +160,29 @@ func TestKubeletPerfSettingsDocumentation(t *testing.T) {
 	}
 	if !strings.Contains(contentStr, "BZ#1984442") {
 		t.Error("Template should reference BZ#1984442 for nodeStatusMaxImages")
+	}
+}
+
+func assertKubeletDropinRenderable(t *testing.T, fileMap map[string]any) {
+	t.Helper()
+
+	source, _, _ := unstructured.NestedString(fileMap, "contents", "source")
+	const prefix = "base64,"
+	idx := strings.Index(source, prefix)
+	if idx < 0 {
+		t.Fatalf("Ignition source missing base64 payload: %q", source)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(source[idx+len(prefix):])
+	if err != nil {
+		t.Fatalf("Ignition base64 decode: %v", err)
+	}
+	conf := string(decoded)
+	if strings.Contains(conf, "{{") || strings.Contains(conf, "}}") {
+		t.Fatalf("drop-in still contains unresolved Go template markers:\n%s", conf)
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal(decoded, &parsed); err != nil {
+		t.Fatalf("drop-in is not valid YAML (kubelet would crash-loop): %v\n%s", err, conf)
 	}
 }
 
