@@ -25,6 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
+	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
@@ -54,6 +56,55 @@ var _ = Describe("Patched Baseline Algorithm Integration", func() {
 	})
 
 	Describe("Full Patched Baseline Flow", func() {
+		It("preserves the user-managed HCO jsonpatch annotations", func() {
+			hcoJSONPatches := map[string]string{
+				"kubevirt.kubevirt.io/jsonpatch":                  `[{"op":"replace","path":"/spec/configuration/developerConfiguration/featureGates","value":["CPUManager"]}]`,
+				"containerizeddataimporter.kubevirt.io/jsonpatch": `[{"op":"add","path":"/spec/config/uploadProxyURLOverride","value":"proxy.example.com"}]`,
+				"networkaddonsconfigs.kubevirt.io/jsonpatch":      `[{"op":"replace","path":"/spec/kubeMacPool","value":null}]`,
+				"ssp.kubevirt.io/jsonpatch":                       `[{"op":"add","path":"/spec/featureGates/deployVmConsoleProxy","value":true}]`,
+			}
+			annotations := make(map[string]any, len(hcoJSONPatches))
+			for key, value := range hcoJSONPatches {
+				annotations[key] = value
+			}
+
+			By("creating an HCO with its user-managed jsonpatch annotations")
+			hco := &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "hco.kubevirt.io/v1",
+				"kind":       "HyperConverged",
+				"metadata": map[string]any{
+					"name":        "kubevirt-hyperconverged",
+					"namespace":   testNs,
+					"annotations": annotations,
+				},
+				"spec": map[string]any{},
+			}}
+			Expect(k8sClient.Create(ctx, hco)).To(Succeed())
+
+			loader := assets.NewLoader()
+			registry, err := assets.NewRegistry(loader)
+			Expect(err).NotTo(HaveOccurred())
+			hcoAsset, err := registry.GetAsset("hco-golden-config")
+			Expect(err).NotTo(HaveOccurred())
+
+			patcher := engine.NewPatcher(k8sClient, apiReader, loader)
+			renderCtx := pkgcontext.NewRenderContext(hco)
+
+			By("reconciling the HCO golden configuration twice")
+			_, err = patcher.ReconcileAsset(ctx, hcoAsset, renderCtx)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = patcher.ReconcileAsset(ctx, hcoAsset, renderCtx)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying autopilot neither deletes nor changes the HCO jsonpatch annotations")
+			reconciled := &unstructured.Unstructured{}
+			reconciled.SetGroupVersionKind(hco.GroupVersionKind())
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(hco), reconciled)).To(Succeed())
+			for key, value := range hcoJSONPatches {
+				Expect(reconciled.GetAnnotations()).To(HaveKeyWithValue(key, value))
+			}
+		})
+
 		It("should successfully reconcile a static asset", func() {
 			// Create a simple ConfigMap asset for testing
 			asset := &unstructured.Unstructured{
