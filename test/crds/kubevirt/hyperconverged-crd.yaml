@@ -2269,6 +2269,12 @@ spec:
                   * deprecated: the feature is deprecated. The feature gate will be removed in a future release.
 
                   Feature-Gate list:
+                  * containerPathVolumes:
+                    ContainerPathVolumes enables the use of container paths as volumes in
+                    KubeVirt. This allows VMs to access files and directories from the
+                    virt-launcher pod's filesystem via virtiofs.
+                    Phase: beta
+
                   * decentralizedLiveMigration:
                     DecentralizedLiveMigration enables the decentralized live migration
                     (cross-cluster migration) feature. This feature allows live migration of
@@ -2310,12 +2316,6 @@ spec:
                     isolation. Note: this feature is in Developer Preview.
                     Phase: alpha
 
-                  * containerPathVolumes:
-                    ContainerPathVolumes enables the use of container paths as volumes in
-                    KubeVirt. This allows VMs to access files and directories from the
-                    virt-launcher pod's filesystem via virtiofs.
-                    Phase: alpha
-
                   * deployObservabilityController:
                     Deploy the virt-observability-controller component. When enabled, the
                     controller exposes KubeVirt metrics and manages PrometheusRule resources
@@ -2331,6 +2331,13 @@ spec:
                     backups using QEMU capabilities in KubeVirt. When enabled, this also
                     enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This
                     feature is in Developer Preview.
+                    Phase: alpha
+
+                  * networkDevicesWithDRA:
+                    NetworkDevicesWithDRA allows users to create VMIs with DRA provisioned
+                    network devices specified in spec.networks with resourceClaim type. This
+                    enables DRA-managed network resources to be attached to VMs using the
+                    natural networks API. Note: this feature is in Developer Preview.
                     Phase: alpha
 
                   * objectGraph:
@@ -5651,7 +5658,7 @@ spec:
               enableApplicationAwareQuota: false
               enableCommonBootImageImport: true
               featureGates:
-                containerPathVolumes: false
+                containerPathVolumes: true
                 decentralizedLiveMigration: true
                 declarativeHotplugVolumes: true
                 downwardMetrics: false
@@ -6797,7 +6804,7 @@ spec:
                 type: string
               featureGates:
                 default:
-                  containerPathVolumes: false
+                  containerPathVolumes: true
                   decentralizedLiveMigration: true
                   declarativeHotplugVolumes: true
                   downwardMetrics: false
@@ -6818,7 +6825,7 @@ spec:
                     description: 'Deprecated: this feature gate is ignored.'
                     type: boolean
                   containerPathVolumes:
-                    default: false
+                    default: true
                     description: |-
                       ContainerPathVolumes enables the use of container paths as volumes in KubeVirt.
                       This allows VMs to access files and directories from the virt-launcher pod's filesystem via virtiofs.
