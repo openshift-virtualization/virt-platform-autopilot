@@ -193,6 +193,15 @@ func TestFileBasedSwapProvisioningIsOrderedBeforeActivation(t *testing.T) {
 		!strings.Contains(string(provisioner), "legacy file-backed swap ${legacy_swap_file} exists; leaving it unchanged") {
 		t.Error("swap provisioner must preserve both supported legacy /var/tmp swap file paths")
 	}
+	if !strings.Contains(string(provisioner), "legacy_autopilot_swap_file=/var/ocpswap.file") ||
+		!strings.Contains(string(provisioner), "migrated ${legacy_autopilot_swap_file} to ${swap_file}") {
+		t.Error("swap provisioner must migrate /var/ocpswap.file (36f64e9..ed6c313)")
+	}
+	partitionIdx := strings.Index(string(provisioner), "dedicated swap partition")
+	legacyIdx := strings.Index(string(provisioner), "legacy file-backed swap")
+	if partitionIdx < 0 || legacyIdx < 0 || partitionIdx > legacyIdx {
+		t.Error("OCPSWAP handling must run before the /var/tmp legacy early-exit")
+	}
 }
 
 func TestFileBasedSwapProvisioningUsesConfiguredFreeSpaceReserve(t *testing.T) {
