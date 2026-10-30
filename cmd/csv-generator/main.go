@@ -34,6 +34,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 
 	"sigs.k8s.io/yaml"
@@ -307,6 +308,13 @@ func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy 
 		"app":           "virt-platform-autopilot",
 		"control-plane": "controller-manager",
 	}
+	// HCO-generated NetworkPolicies select pod labels. Keep these out of the
+	// Deployment selector: they are not an identity of the workload and should
+	// remain freely changeable as the HCO policy contract evolves.
+	podLabels := make(map[string]string, len(labels)+2)
+	maps.Copy(podLabels, labels)
+	podLabels["np.kubevirt.io/allow-access-cluster-services"] = "true"
+	podLabels["np.kubevirt.io/allow-prometheus-access"] = "true"
 
 	permissions := buildClusterPermissions(rules)
 
@@ -382,7 +390,7 @@ through the existing HyperConverged resource.`,
 								Replicas: 1,
 								Selector: &LabelSelector{MatchLabels: labels},
 								Template: PodTemplateSpec{
-									Metadata: PodMetadata{Labels: labels},
+									Metadata: PodMetadata{Labels: podLabels},
 									Spec: PodSpec{
 										ServiceAccountName:            "virt-platform-autopilot",
 										TerminationGracePeriodSeconds: &gracePeriod,
