@@ -149,3 +149,27 @@ func TestRegistryFeatureCatalog(t *testing.T) {
 		}
 	}
 }
+
+func TestVSOCKLocalFeatureStatus(t *testing.T) {
+	registry, err := NewRegistry(NewLoader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := registry.FeatureCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, feature := range catalog.Features {
+		if feature.Name != "VSOCK local namespace mode" {
+			continue
+		}
+		if feature.Maturity != "GA" || feature.Install != "always" {
+			t.Fatalf("VSOCK feature maturity/install = %s/%s", feature.Maturity, feature.Install)
+		}
+		if feature.OptIn != nil {
+			t.Fatalf("VSOCK opt-in = %v, want nil", feature.OptIn)
+		}
+		return
+	}
+	t.Fatal("VSOCK local namespace mode is missing from the feature catalog")
+}

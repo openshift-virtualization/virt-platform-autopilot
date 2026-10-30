@@ -121,6 +121,13 @@ var sensitiveKinds = map[string]bool{
 // Sensitive is derived automatically from sensitiveKinds.
 var assetsUnderTest = initAssets([]testAsset{
 	{
+		// No Override: changing the MachineConfig spec can trigger an MCP rollout.
+		GVK:           schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
+		Plural:        "machineconfigs",
+		Name:          "90-worker-vsock-local",
+		ClusterScoped: true,
+	},
+	{
 		// No Override: any field change on MachineConfig triggers an MCP rollout.
 		GVK:           schema.GroupVersionKind{Group: "machineconfiguration.openshift.io", Version: "v1", Kind: "MachineConfig"},
 		Plural:        "machineconfigs",
