@@ -182,13 +182,22 @@ assets:
     reconcile_order: 2
     conditions: *ksm-zero-only-conditions
 
+  - name: thp-tuning-node-disruption-policy
+    group: thp-tuning
+    path: active/machine-config/06-thp-tuning-node-disruption-policy.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfiguration
+    reconcile_order: 1
   - name: thp-tuning
     group: thp-tuning
     path: active/machine-config/06-thp-tuning.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: thp-tuning-node-disruption-policy
     template_params:
       role: worker
     conditions:
@@ -202,7 +211,9 @@ assets:
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: thp-tuning-node-disruption-policy
     template_params:
       role: master
     conditions:
@@ -243,12 +254,20 @@ assets:
         field: hasSchedulableMasters
 
   # Phase 1: OpenShift Kubelet (MachineConfig dropping files to /etc/openshift/kubelet.conf.d)
+  - name: kubelet-perf-settings-node-disruption-policy
+    path: active/machine-config/03-kubelet-perf-settings-node-disruption-policy.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfiguration
+    reconcile_order: 1
   - name: kubelet-perf-settings
     path: active/machine-config/03-kubelet-perf-settings.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: kubelet-perf-settings-node-disruption-policy
     conditions:
       - type: annotation
         key: platform.kubevirt.io/enable-kubelet-performance-settings
@@ -436,12 +455,20 @@ assets:
   # Gated on BOTH the KubeVirt CPUManager feature gate (VM CPU pinning) AND an
   # explicit opt-in annotation: these kubelet perf tunings change node-level
   # reserved resources and require deliberate opt-in (see CNV-96059).
+  - name: kubelet-cpu-manager-node-disruption-policy
+    path: active/machine-config/07-kubelet-cpu-manager-node-disruption-policy.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfiguration
+    reconcile_order: 1
   - name: kubelet-cpu-manager
     path: active/machine-config/07-kubelet-cpu-manager.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: kubelet-cpu-manager-node-disruption-policy
     conditions:
       - type: kubevirt-feature-gate
         value: CPUManager
@@ -451,12 +478,22 @@ assets:
 
   # Phase 1: Opt-in - configures multipath to persist SCSI PR keys in a file
   # on every worker that can host VMs using shared LUNs.
+  # Hard requirement: /etc/multipath.conf must already exist so multipathd can
+  # start; NDP Reload fails if the unit is inactive (see docs/scsi-persistent-reservations.md).
+  - name: scsi-persistent-reservations-node-disruption-policy
+    path: active/machine-config/08-scsi-persistent-reservations-node-disruption-policy.yaml
+    phase: 1
+    install: opt-in
+    component: MachineConfiguration
+    reconcile_order: 1
   - name: scsi-persistent-reservations
     path: active/machine-config/08-scsi-persistent-reservations.yaml.tpl
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: scsi-persistent-reservations-node-disruption-policy
     template_params:
       role: worker
     conditions:
@@ -469,7 +506,9 @@ assets:
     phase: 1
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: scsi-persistent-reservations-node-disruption-policy
     template_params:
       role: master
     conditions:
@@ -1068,12 +1107,20 @@ assets:
     reconcile_order: 3
     conditions: *kubevirt-metrics-exporter-conditions
   
+  - name: vm-drain-shutdown-inhibitor-node-disruption-policy
+    path: active/machine-config/99-vm-drain-shutdown-inhibitor-node-disruption-policy.yaml
+    phase: 2
+    install: opt-in
+    component: MachineConfiguration
+    reconcile_order: 1
   - name: vm-drain-shutdown-inhibitor
     path: active/machine-config/99-vm-drain-shutdown-inhibitor.yaml.tpl
     phase: 2
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: vm-drain-shutdown-inhibitor-node-disruption-policy
     template_params:
       role: worker
     conditions:
@@ -1086,7 +1133,9 @@ assets:
     phase: 2
     install: opt-in
     component: MachineConfig
-    reconcile_order: 1
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: vm-drain-shutdown-inhibitor-node-disruption-policy
     template_params:
       role: master
     conditions:
@@ -1161,9 +1210,13 @@ features:
     assets: [file-based-swap-provisioning]
 
   - name: Kubelet Performance
-    description: Optimized kubelet settings for virtualization workloads
+    description: >-
+      Optimized kubelet settings for virtualization workloads. Does not
+      require node reboot; restarts kubelet.
     maturity: tp
-    assets: [kubelet-perf-settings]
+    assets:
+      - kubelet-perf-settings-node-disruption-policy
+      - kubelet-perf-settings
 
   - name: Observability Enhancements
     description: Enhanced observability with additional Prometheus alerting rules and advanced Perses dashboards in the OpenShift console
@@ -1183,14 +1236,25 @@ features:
     assets: [pci-passthrough]
 
   - name: CPU Manager
-    description: Dedicated CPU pinning for guaranteed QoS workloads
+    description: >-
+      Dedicated CPU pinning for guaranteed QoS workloads. Does not require
+      node reboot; drains the node, restarts kubelet.
     maturity: dp
-    assets: [kubelet-cpu-manager]
+    assets:
+      - kubelet-cpu-manager-node-disruption-policy
+      - kubelet-cpu-manager
 
   - name: SCSI Persistent Reservations
-    description: Configures worker-node multipath to persist SCSI persistent-reservation keys for VMs sharing LUN-backed disks
+    description: >-
+      Configures worker-node multipath to persist SCSI persistent-reservation
+      keys for VMs sharing LUN-backed disks. Does not require node reboot.
+      Requires an existing /etc/multipath.conf so multipathd is active before
+      enable.
     maturity: dp
-    assets: [scsi-persistent-reservations, scsi-persistent-reservations-master]
+    assets:
+      - scsi-persistent-reservations-node-disruption-policy
+      - scsi-persistent-reservations
+      - scsi-persistent-reservations-master
 
   - name: MTV Operator
     description: Migration Toolkit for Virtualization
@@ -1250,9 +1314,10 @@ features:
     description: >-
       Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on
       kernels that support it, khugepaged scan rates, and max_ptes_none
-      coordination with KSM. Optional sub-feature:
-      enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97%
-      (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot.
+      coordination with KSM. Does not require node reboot. Optional
+      sub-feature: enable-thp-tuning-kernelcore sets kernelcore=2G and
+      movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node);
+      requires reboot.
     maturity: dp
     groups: [thp-tuning]
 
@@ -1266,6 +1331,11 @@ features:
       - Storage Based Remediation Operator
 
   - name: VM drain shutdown inhibitor
-    description: Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down
+    description: >-
+      Attempts to gracefully shutdown KubeVirt VMs before allowing the
+      node to shut down. Does not require node reboot.
     maturity: dp
-    assets: [vm-drain-shutdown-inhibitor, vm-drain-shutdown-inhibitor-master]
+    assets:
+      - vm-drain-shutdown-inhibitor-node-disruption-policy
+      - vm-drain-shutdown-inhibitor
+      - vm-drain-shutdown-inhibitor-master

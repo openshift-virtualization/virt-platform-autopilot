@@ -1,0 +1,12 @@
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+    - path: /etc/multipath/conf.d/reservation.conf
+      actions:
+      - type: Reload
+        reload:
+          serviceName: multipathd.service

@@ -60,14 +60,14 @@
     },
     {
       "name": "Kubelet Performance",
-      "description": "Optimized kubelet settings for virtualization workloads",
+      "description": "Optimized kubelet settings for virtualization workloads. Does not require node reboot; restarts kubelet.",
       "maturity": "TP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-kubelet-performance-settings=true"
     },
     {
       "name": "CPU Manager",
-      "description": "Dedicated CPU pinning for guaranteed QoS workloads",
+      "description": "Dedicated CPU pinning for guaranteed QoS workloads. Does not require node reboot; drains the node, restarts kubelet.",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "kubevirtFeatureGate:CPUManager, platform.kubevirt.io/enable-cpu-manager-perf-tunings=true"
@@ -142,21 +142,21 @@
     },
     {
       "name": "SCSI Persistent Reservations",
-      "description": "Configures worker-node multipath to persist SCSI persistent-reservation keys for VMs sharing LUN-backed disks",
+      "description": "Configures worker-node multipath to persist SCSI persistent-reservation keys for VMs sharing LUN-backed disks. Does not require node reboot. Requires an existing /etc/multipath.conf so multipathd is active before enable.",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-scsi-persistent-reservations=true"
     },
     {
       "name": "Transparent Huge Pages (THP) Tuning",
-      "description": "Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on kernels that support it, khugepaged scan rates, and max_ptes_none coordination with KSM. Optional sub-feature: enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot.",
+      "description": "Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on kernels that support it, khugepaged scan rates, and max_ptes_none coordination with KSM. Does not require node reboot. Optional sub-feature: enable-thp-tuning-kernelcore sets kernelcore=2G and movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node); requires reboot.",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-thp-tuning=true, platform.kubevirt.io/enable-thp-tuning-kernelcore=true"
     },
     {
       "name": "VM drain shutdown inhibitor",
-      "description": "Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down",
+      "description": "Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down. Does not require node reboot.",
       "maturity": "DP",
       "install": "opt-in",
       "opt_in": "platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor=true"
