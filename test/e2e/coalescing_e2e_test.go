@@ -53,7 +53,6 @@ const (
 // Coalescing tests manipulate MachineConfigPool status directly via a fake CRD.
 // They are incompatible with real OpenShift clusters where MCO owns MCP state.
 var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
-
 	BeforeAll(func() {
 		if isOpenShiftCluster() {
 			Skip("coalescing tests run on Kind only — MCP status manipulation conflicts with real MCO")
@@ -64,6 +63,9 @@ var _ = Describe("Kind: MachineConfig Rollout Coalescing", Ordered, func() {
 		By("installing MachineConfigPool CRD for coalescing tests")
 		installCRDFromFile(machineConfigPoolCRDFile)
 		waitForCRDEstablished(machineConfigPoolCRDName)
+
+		By("restarting the operator with the MCP API available")
+		restartOperatorPod()
 
 		By("waiting for all coalescing assets to be compliant")
 		for _, asset := range coalescingAssetsUnderTest {
