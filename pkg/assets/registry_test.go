@@ -60,6 +60,49 @@ func TestNewRegistry(t *testing.T) {
 	})
 }
 
+func TestVSOCKLocalActivation(t *testing.T) {
+	registry, err := NewRegistry(NewLoader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name                string
+		mastersSchedulable  bool
+		wantWorker, wantMCP bool
+	}{
+		{name: "worker only by default", wantWorker: true},
+		{name: "worker and schedulable master by default", mastersSchedulable: true, wantWorker: true, wantMCP: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			evaluator := &DefaultConditionEvaluator{
+				TopologyContext: map[string]any{
+					"hasSchedulableMasters": tc.mastersSchedulable,
+				},
+			}
+			for _, expected := range []struct {
+				assetName string
+				role      string
+				want      bool
+			}{
+				{assetName: "vsock-local", role: "worker", want: tc.wantWorker},
+				{assetName: "vsock-local-master", role: "master", want: tc.wantMCP},
+			} {
+				asset, err := registry.GetAsset(expected.assetName)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if asset.RequiredCRD != "machineconfigs.machineconfiguration.openshift.io" || asset.Install != InstallModeAlways || asset.TemplateParams["role"] != expected.role {
+					t.Fatalf("%s metadata: requiredCRD=%q install=%q role=%v", expected.assetName, asset.RequiredCRD, asset.Install, asset.TemplateParams["role"])
+				}
+				got, err := registry.ShouldApply(context.Background(), asset, evaluator)
+				if err != nil || got != expected.want {
+					t.Errorf("%s: ShouldApply = %v, want %v, err=%v", expected.assetName, got, expected.want, err)
+				}
+			}
+		})
+	}
+}
+
 func TestResolveNodeDisruptionPolicyDependencies(t *testing.T) {
 	policy := AssetMetadata{Name: "policy", Component: "MachineConfiguration", ReconcileOrder: 1}
 	consumer := AssetMetadata{

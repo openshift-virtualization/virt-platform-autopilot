@@ -1096,6 +1096,30 @@ assets:
       - type: topology
         field: hasSchedulableMasters
 
+  # Configure new network namespaces for local-mode VSOCK by default.
+  # The master variant is needed only when masters can run workloads.
+  - name: vsock-local
+    path: active/machine-config/10-vsock-local.yaml.tpl
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: worker
+    conditions: []
+
+  - name: vsock-local-master
+    path: active/machine-config/10-vsock-local.yaml.tpl
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 1
+    template_params:
+      role: master
+    conditions:
+      - type: topology
+        field: hasSchedulableMasters
+
   # SBR detection-mode config. Auto-detects sharedStorageClass from CDI StorageProfiles
   # (picks alphabetically first RWX Filesystem class). Omits field when none found.
   # Admin should set platform.kubevirt.io/sbr-storage-class on HCO if multiple RWX classes exist.
@@ -1269,3 +1293,8 @@ features:
     description: Attempts to gracefully shutdown KubeVirt VMs before allowing the node to shut down
     maturity: dp
     assets: [vm-drain-shutdown-inhibitor, vm-drain-shutdown-inhibitor-master]
+
+  - name: VSOCK local namespace mode
+    description: Configures local VSOCK mode for new network namespaces on workers and schedulable masters
+    maturity: ga
+    assets: [vsock-local, vsock-local-master]
