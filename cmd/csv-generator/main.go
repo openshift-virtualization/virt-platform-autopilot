@@ -34,6 +34,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 
 	"sigs.k8s.io/yaml"
@@ -51,6 +52,14 @@ const (
 	metricsCertVolumeName = "metrics-serving-cert"
 	metricsCertMountPath  = "/etc/tls/private"
 	metricsCertSecretName = "virt-platform-autopilot-metrics-tls"
+)
+
+const (
+	networkPolicyLabelPrefix = "np.kubevirt.io/"
+	// allowEgressToDNSAndAPIServerLabel if this label is set, the network policy will allow egress to DNS and API server
+	allowEgressToDNSAndAPIServerLabel = networkPolicyLabelPrefix + "allow-access-cluster-services"
+	// allowIngressToMetricsEndpointLabel if this label is set, the network policy will allow ingress to the metrics endpoint
+	allowIngressToMetricsEndpointLabel = networkPolicyLabelPrefix + "allow-prometheus-access"
 )
 
 // ─── OLM ClusterServiceVersion types ─────────────────────────────────────────
@@ -253,22 +262,15 @@ type ClusterServiceVersion struct {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
-	csvVersion := flag.String("csv-version", "", "Version for the ClusterServiceVersion (required)")
-	namespace := flag.String("namespace", "openshift-cnv", "Target namespace for the operator")
-	operatorImage := flag.String("operator-image", "quay.io/openshift-virtualization/virt-platform-autopilot:latest", "Operator container image reference")
-	operatorVersion := flag.String("operator-version", "", "Operator version string (defaults to csv-version)")
-	pullPolicy := flag.String("pull-policy", "IfNotPresent", "Image pull policy")
-	additionalImages := flag.String("additional-images", "", "Comma-separated list of ENVKEY:image pairs to inject as environment variables")
-	dumpCRDs := flag.Bool("dump-crds", false, "Dump owned CRDs (virt-platform-autopilot owns none; flag accepted for pipeline compatibility)")
 	flag.Parse()
 
-	if *csvVersion == "" {
+	if config.csvVersion == "" {
 		fmt.Fprintln(os.Stderr, "error: --csv-version is required")
 		flag.Usage()
 		os.Exit(1)
 	}
-	if *operatorVersion == "" {
-		*operatorVersion = *csvVersion
+	if config.operatorVersion == "" {
+		config.operatorVersion = config.csvVersion
 	}
 
 	// Derive RBAC rules from the embedded assets FS.
@@ -280,9 +282,9 @@ func main() {
 	}
 
 	// Parse additional images from comma-separated ENVKEY:image pairs.
-	imageEnvVars := parser.ParseAdditionalImages(*additionalImages)
+	imageEnvVars := parser.ParseAdditionalImages(config.additionalImages)
 
-	csv := buildCSV(*csvVersion, *namespace, *operatorImage, *operatorVersion, *pullPolicy, imageEnvVars, rules)
+	csv := buildCSV(config, imageEnvVars, rules)
 
 	data, err := yaml.Marshal(csv)
 	if err != nil {
@@ -291,14 +293,10 @@ func main() {
 	}
 
 	fmt.Print(string(data))
-
-	// --dump-crds: virt-platform-autopilot intentionally owns no CRDs (zero API surface).
-	// Accept the flag for pipeline compatibility but produce no additional output.
-	_ = dumpCRDs
 }
 
 // buildCSV constructs the ClusterServiceVersion for virt-platform-autopilot.
-func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy string, additionalImageEnvVars []parser.EnvVar, rules []rbac.Rule) ClusterServiceVersion {
+func buildCSV(config configuration, additionalImageEnvVars []parser.EnvVar, rules []rbac.Rule) ClusterServiceVersion {
 	falseVal := false
 	trueVal := true
 	gracePeriod := int64(30)
@@ -308,23 +306,29 @@ func buildCSV(csvVersion, namespace, operatorImage, operatorVersion, pullPolicy 
 		"control-plane": "controller-manager",
 	}
 
+	podLabels := maps.Clone(labels)
+	if config.dumpNetworkPolicies {
+		podLabels[allowEgressToDNSAndAPIServerLabel] = "true"
+		podLabels[allowIngressToMetricsEndpointLabel] = "true"
+	}
+
 	permissions := buildClusterPermissions(rules)
 
 	// Build relatedImages list: operator image + all additional images.
-	relatedImages := buildRelatedImages(operatorImage, additionalImageEnvVars)
+	relatedImages := buildRelatedImages(config.operatorImage, additionalImageEnvVars)
 
 	return ClusterServiceVersion{
 		APIVersion: "operators.coreos.com/v1alpha1",
 		Kind:       "ClusterServiceVersion",
 		Metadata: CSVMetadata{
-			Name:      fmt.Sprintf("virt-platform-autopilot.v%s", csvVersion),
-			Namespace: namespace,
+			Name:      fmt.Sprintf("virt-platform-autopilot.v%s", config.csvVersion),
+			Namespace: config.namespace,
 			Annotations: map[string]string{
 				"capabilities":   "Basic Install",
 				"categories":     "Virtualization",
 				"description":    "Automatically configures OpenShift platform settings for optimal KubeVirt/OpenShift Virtualization performance.",
 				"repository":     "https://github.com/openshift-virtualization/virt-platform-autopilot",
-				"containerImage": operatorImage,
+				"containerImage": config.operatorImage,
 				// alm-examples is required by HCO's CSV ingestion pipeline.
 				// virt-platform-autopilot owns no CRDs, so the list is empty.
 				"alm-examples": "[]",
@@ -343,7 +347,7 @@ The operator has zero API surface: it introduces no new CRDs and is fully contro
 through the existing HyperConverged resource.`,
 			Keywords: []string{"kubevirt", "virtualization", "platform", "performance", "openshift"},
 			Maturity: "stable",
-			Version:  operatorVersion,
+			Version:  config.operatorVersion,
 			Provider: NamedEntity{Name: "Red Hat"},
 			Links: []Link{
 				{Name: "Source Code", URL: "https://github.com/openshift-virtualization/virt-platform-autopilot"},
@@ -382,7 +386,7 @@ through the existing HyperConverged resource.`,
 								Replicas: 1,
 								Selector: &LabelSelector{MatchLabels: labels},
 								Template: PodTemplateSpec{
-									Metadata: PodMetadata{Labels: labels},
+									Metadata: PodMetadata{Labels: podLabels},
 									Spec: PodSpec{
 										ServiceAccountName:            "virt-platform-autopilot",
 										TerminationGracePeriodSeconds: &gracePeriod,
@@ -394,12 +398,12 @@ through the existing HyperConverged resource.`,
 										Containers: []Container{
 											{
 												Name:            "manager",
-												Image:           operatorImage,
-												ImagePullPolicy: pullPolicy,
+												Image:           config.operatorImage,
+												ImagePullPolicy: config.pullPolicy,
 												Command:         []string{"/manager"},
 												Args: []string{
 													"--leader-elect",
-													fmt.Sprintf("--namespace=%s", namespace),
+													fmt.Sprintf("--namespace=%s", config.namespace),
 													fmt.Sprintf("--metrics-bind-address=:%d", metricsPort),
 												},
 												Env: additionalImageEnvVars,
