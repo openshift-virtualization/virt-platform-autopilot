@@ -942,6 +942,33 @@ assets:
     reconcile_order: 2
     conditions: *kubevirt-metrics-exporter-conditions
 
+  - name: kubevirt-metrics-exporter-network-policy-default-deny
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/network-policy-default-deny.yaml
+    phase: 1
+    install: opt-in
+    component: NetworkPolicy
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-network-policy-api-server
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/network-policy-api-server.yaml
+    phase: 1
+    install: opt-in
+    component: NetworkPolicy
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
+  - name: kubevirt-metrics-exporter-network-policy-metrics
+    group: kubevirt-metrics-exporter
+    path: active/kubevirt-metrics-exporter/network-policy-metrics.yaml
+    phase: 1
+    install: opt-in
+    component: NetworkPolicy
+    reconcile_order: 3
+    conditions: *kubevirt-metrics-exporter-conditions
+
   - name: kubevirt-metrics-exporter-service
     group: kubevirt-metrics-exporter
     path: active/kubevirt-metrics-exporter/service.yaml

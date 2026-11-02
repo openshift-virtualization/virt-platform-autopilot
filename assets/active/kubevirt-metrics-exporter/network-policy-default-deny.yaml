@@ -1,0 +1,12 @@
+# KME owns its dedicated namespace, so isolate all pods by default and add only
+# the traffic the exporter needs. Health probes are not subject to NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubevirt-metrics-exporter-default-deny
+  namespace: kubevirt-metrics-exporter
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
