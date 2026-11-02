@@ -297,6 +297,17 @@ rules:
       - patch
       - update
       - watch
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # Cluster Observability (includes tombstone cleanup)
   - apiGroups:
       - observability.openshift.io

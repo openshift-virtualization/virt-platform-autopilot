@@ -34,6 +34,7 @@ TEMPLATE_HEADER='{{- $envOverrides := dig "metadata" "annotations" "platform.kub
 # Format: mode|reconcile_order|upstream_relpath|dest_name
 #   mode=copy      — fetch upstream and copy as-is
 #   mode=daemonset — fetch upstream and apply DaemonSet transform
+#   mode=metrics-network-policy — fetch upstream and apply the OpenShift mTLS port transform
 declare -a ASSETS=(
 	"copy|1|deploy/base/namespace.yaml|namespace.yaml"
 	"copy|2|deploy/base/serviceaccount.yaml|serviceaccount.yaml"
@@ -42,6 +43,9 @@ declare -a ASSETS=(
 	"copy|2|deploy/openshift/scc.yaml|scc.yaml"
 	"copy|2|deploy/openshift/scc-clusterrole.yaml|scc-clusterrole.yaml"
 	"copy|2|deploy/openshift/scc-clusterrolebinding.yaml|scc-clusterrolebinding.yaml"
+	"copy|3|deploy/base/network-policy-default-deny.yaml|network-policy-default-deny.yaml"
+	"copy|3|deploy/base/network-policy-api-server.yaml|network-policy-api-server.yaml"
+	"metrics-network-policy|3|deploy/base/network-policy-metrics.yaml|network-policy-metrics.yaml"
 	"copy|3|deploy/openshift/metrics-service.yaml|service.yaml"
 	"daemonset|4|deploy/base/daemonset.yaml|kubevirt-metrics-exporter.yaml.tpl"
 	"copy|4|deploy/openshift/metrics-servicemonitor.yaml|servicemonitor.yaml"
@@ -138,6 +142,7 @@ transform_daemonset() {
 	printf "%s  - name: TLS_GROUPS\n%s    value: {{ resolvedTLSGroups | quote }}\n", env_indent, env_indent
 	next
 }
+
 /^[[:space:]]+volumeMounts:/ {
 	match($0, /^[[:space:]]+/)
 	indent = substr($0, RSTART, RLENGTH)
@@ -177,6 +182,13 @@ transform_daemonset() {
 }
 { print }
 '
+}
+
+transform_metrics_network_policy() {
+	local src=$1
+	# Mirrors the deploy/openshift kustomization patch: OpenShift exposes the
+	# exporter on its mTLS-protected metrics port rather than the base HTTP port.
+	sed 's/port: 8080/port: 8443/' "${src}"
 }
 
 asset_stem() {
@@ -507,6 +519,13 @@ sync_assets() {
 			transform_daemonset "${src}" > "${daemonset_tmp}"
 			write_or_compare_file "${DEST_DIR}/${dest}" "${daemonset_tmp}"
 			rm -f "${daemonset_tmp}"
+			;;
+		metrics-network-policy)
+			local network_policy_tmp
+			network_policy_tmp="$(mktemp)"
+			transform_metrics_network_policy "${src}" > "${network_policy_tmp}"
+			write_or_compare_file "${DEST_DIR}/${dest}" "${network_policy_tmp}"
+			rm -f "${network_policy_tmp}"
 			;;
 		*)
 			echo "unknown asset mode: ${mode}" >&2

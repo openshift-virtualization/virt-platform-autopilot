@@ -485,6 +485,13 @@ rules:
 
 // ---- DynamicRules ----
 
+func TestParseGVK_NetworkPolicy(t *testing.T) {
+	group, version, resource := parseGVK("networking.k8s.io/v1", "NetworkPolicy")
+	if group != "networking.k8s.io" || version != "v1" || resource != "networkpolicies" {
+		t.Errorf("parseGVK() = (%q, %q, %q), want (%q, %q, %q)", group, version, resource, "networking.k8s.io", "v1", "networkpolicies")
+	}
+}
+
 func TestDynamicRules_ScopesSCCWithResourceNames(t *testing.T) {
 	fsys := makeFS(map[string]string{
 		"active/scc/scc.yaml": `

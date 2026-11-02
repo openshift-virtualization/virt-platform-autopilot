@@ -1,0 +1,22 @@
+# KME uses in-cluster Kubernetes clients to watch Pods and ConfigMaps and to
+# retrieve VMIs. Permit the Kubernetes service port without pinning an IP.
+# The kubernetes.default service listens on 443 but DNATs to its host-network
+# endpoints on 6443, and OVN-Kubernetes evaluates egress ACLs after DNAT, so
+# both ports must be allowed for this rule to work on every CNI.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubevirt-metrics-exporter-allow-api-server
+  namespace: kubevirt-metrics-exporter
+spec:
+  podSelector:
+    matchLabels:
+      app: kubevirt-metrics-exporter
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443

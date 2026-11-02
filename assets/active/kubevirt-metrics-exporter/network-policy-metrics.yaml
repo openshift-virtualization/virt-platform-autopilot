@@ -1,0 +1,17 @@
+# The base and Kubernetes deployments serve unauthenticated HTTP metrics on
+# 8080. The OpenShift overlay replaces this port with mTLS-protected 8443.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubevirt-metrics-exporter-allow-metrics
+  namespace: kubevirt-metrics-exporter
+spec:
+  podSelector:
+    matchLabels:
+      app: kubevirt-metrics-exporter
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - protocol: TCP
+      port: 8443
