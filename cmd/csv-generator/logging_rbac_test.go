@@ -30,7 +30,17 @@ func TestCSVIncludesScopedCollectorBindPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	csv := buildCSV("1.0.0", "openshift-cnv", "quay.io/test/autopilot:test", "1.0.0", "IfNotPresent", nil, rules)
+
+	tstConfig := configuration{
+		csvVersion:          "1.0.0",
+		namespace:           "openshift-cnv",
+		operatorImage:       "quay.io/test/autopilot:test",
+		operatorVersion:     "1.0.0",
+		pullPolicy:          "IfNotPresent",
+		dumpNetworkPolicies: false,
+	}
+
+	csv := buildCSV(tstConfig, nil, rules)
 	var names []string
 	for _, permissions := range csv.Spec.Install.Spec.ClusterPermissions {
 		for _, rule := range permissions.Rules {
@@ -47,5 +57,55 @@ func TestCSVIncludesScopedCollectorBindPermissions(t *testing.T) {
 	want := []string{"collect-application-logs", "collect-audit-logs", "collect-infrastructure-logs", "logging-collector-logs-writer"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("CSV bind permissions = %q, want explicit allowlist %q", names, want)
+	}
+}
+
+func TestDumpNetworkPolicies(t *testing.T) {
+	tstConfig := configuration{
+		csvVersion:          "1.0.0",
+		namespace:           "openshift-cnv",
+		operatorImage:       "quay.io/test/autopilot:test",
+		operatorVersion:     "1.0.0",
+		pullPolicy:          "IfNotPresent",
+		dumpNetworkPolicies: true,
+	}
+
+	csv := buildCSV(tstConfig, nil, nil)
+
+	if actual, required := len(csv.Spec.Install.Spec.Deployments), 1; actual != required {
+		t.Fatalf("csv has wrong number of deployments: %d, want %d", actual, required)
+	}
+
+	if val, exists := csv.Spec.Install.Spec.Deployments[0].Spec.Template.Metadata.Labels[allowIngressToMetricsEndpointLabel]; !exists || val != "true" {
+		t.Errorf("the %q pod label is missing or misconfigured with %q", allowIngressToMetricsEndpointLabel, val)
+	}
+
+	if val, exists := csv.Spec.Install.Spec.Deployments[0].Spec.Template.Metadata.Labels[allowEgressToDNSAndAPIServerLabel]; !exists || val != "true" {
+		t.Errorf("the %q pod label is missing or misconfigured with %q", allowEgressToDNSAndAPIServerLabel, val)
+	}
+}
+
+func TestDontDumpNetworkPolicies(t *testing.T) {
+	tstConfig := configuration{
+		csvVersion:          "1.0.0",
+		namespace:           "openshift-cnv",
+		operatorImage:       "quay.io/test/autopilot:test",
+		operatorVersion:     "1.0.0",
+		pullPolicy:          "IfNotPresent",
+		dumpNetworkPolicies: false,
+	}
+
+	csv := buildCSV(tstConfig, nil, nil)
+
+	if actual, required := len(csv.Spec.Install.Spec.Deployments), 1; actual != required {
+		t.Fatalf("csv has wrong number of deployments: %d, want %d", actual, required)
+	}
+
+	if _, exists := csv.Spec.Install.Spec.Deployments[0].Spec.Template.Metadata.Labels[allowIngressToMetricsEndpointLabel]; exists {
+		t.Errorf("the %q pod label is not expected, but it exists", allowIngressToMetricsEndpointLabel)
+	}
+
+	if _, exists := csv.Spec.Install.Spec.Deployments[0].Spec.Template.Metadata.Labels[allowEgressToDNSAndAPIServerLabel]; exists {
+		t.Errorf("the %q pod label is not expected, but it exists", allowEgressToDNSAndAPIServerLabel)
 	}
 }

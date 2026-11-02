@@ -18,11 +18,11 @@ COPY pkg/ pkg/
 COPY assets/ assets/
 
 # Build the operator manager
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o manager ./cmd
 
 # Build the CSV generator (invoked by HCO's build-manifests.sh to produce the
 # OLM ClusterServiceVersion contributed by this operator to the unified HCO bundle)
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o csv-generator cmd/csv-generator/main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a -o csv-generator ./cmd/csv-generator
 
 # Runtime stage
 FROM gcr.io/distroless/static:nonroot
