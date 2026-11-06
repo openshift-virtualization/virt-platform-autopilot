@@ -18,8 +18,12 @@ goimport:
 	goimports -w -local="kubevirt.io,github.com/kubevirt,github.com/kubevirt/hyperconverged-cluster-operator"  $(shell find . -type f -name '*.go' ! -path "*/vendor/*" ! -path "./_kubevirtci/*" ! -path "*zz_generated*" )
 
 .PHONY: test
-test: fmt vet goimport ## Run unit tests
+test: fmt vet goimport verify-console-inspection-schema ## Run unit tests
 	go test ./pkg/... -coverprofile cover.out
+
+.PHONY: verify-console-inspection-schema
+verify-console-inspection-schema: ## Verify the Console inspection schema matches the published envelope
+	go test ./pkg/status -run '^TestInspectionSchemaMatchesPublishedEnvelope$$'
 
 ENVTEST = $(shell pwd)/bin/setup-envtest
 GINKGO = $(shell pwd)/bin/ginkgo

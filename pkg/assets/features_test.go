@@ -17,8 +17,68 @@ limitations under the License.
 package assets
 
 import (
+	"context"
 	"testing"
 )
+
+func TestFeatureEnabledUsesPerAssetConditions(t *testing.T) {
+	registry := &Registry{catalog: &AssetCatalog{
+		Assets: []AssetMetadata{
+			{Name: "logging", Install: InstallModeOptIn, Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-logging", Value: "true"}}},
+			{Name: "audit", Install: InstallModeOptIn, Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-audit-logging", Value: "true"}}},
+		},
+		Features: []FeatureMetadata{{ID: "logging", Name: "Logging", Assets: []string{"logging", "audit"}}},
+	}}
+	enabled, err := registry.FeatureEnabled(context.Background(), &DefaultConditionEvaluator{Annotations: map[string]string{"platform.kubevirt.io/enable-logging": "true"}})
+	if err != nil || !enabled["Logging"] {
+		t.Fatalf("FeatureEnabled() = %v, %v; want Logging enabled by one applicable asset", enabled, err)
+	}
+}
+
+func TestFeatureEnabledSeparatesConfiguredIntentFromApplicability(t *testing.T) {
+	registry := &Registry{catalog: &AssetCatalog{
+		Assets: []AssetMetadata{{Name: "pci", Install: InstallModeOptIn, Conditions: []AssetCondition{
+			{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-pci-passthrough", Value: "true"},
+			{Type: ConditionTypeHardwareDetection, Detector: "pciDevicesPresent"},
+		}}},
+		Features: []FeatureMetadata{{ID: "pci", Name: "PCI", Assets: []string{"pci"}}},
+	}}
+	evaluator := &DefaultConditionEvaluator{
+		Annotations:     map[string]string{"platform.kubevirt.io/enable-pci-passthrough": "true"},
+		HardwareContext: map[string]bool{"pciDevicesPresent": false},
+	}
+	enabled, err := registry.FeatureEnabled(context.Background(), evaluator)
+	if err != nil || !enabled["PCI"] {
+		t.Fatalf("FeatureEnabled() = %v, %v; want configured intent despite unavailable hardware", enabled, err)
+	}
+}
+
+func TestFeatureEnabledDoesNotTreatAlwaysOnPrerequisiteAsOptInIntent(t *testing.T) {
+	registry := &Registry{catalog: &AssetCatalog{Assets: []AssetMetadata{
+		{Name: "prerequisite", Install: InstallModeAlways},
+		{Name: "optional", Install: InstallModeOptIn, Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-example", Value: "true"}}},
+	}, Features: []FeatureMetadata{{ID: "example", Name: "Example", Assets: []string{"prerequisite", "optional"}}}}}
+	enabled, err := registry.FeatureEnabled(context.Background(), &DefaultConditionEvaluator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled["Example"] {
+		t.Fatalf("always-on prerequisite incorrectly enabled opt-in feature: %#v", enabled)
+	}
+}
+
+func TestValidateFeatureCoverageRequiresUniqueStableIDs(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{{Name: "asset-a"}, {Name: "asset-b"}},
+		Features: []FeatureMetadata{
+			{ID: "duplicate", Name: "A", Assets: []string{"asset-a"}},
+			{ID: "duplicate", Name: "B", Assets: []string{"asset-b"}},
+		},
+	}
+	if err := ValidateFeatureCoverage(catalog); err == nil {
+		t.Fatal("expected duplicate feature IDs to be rejected")
+	}
+}
 
 func TestDeriveFeatureOptInIncludesUserFacingConditionTypes(t *testing.T) {
 	resolved := []*AssetMetadata{
@@ -96,6 +156,7 @@ func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 		},
 		Features: []FeatureMetadata{
 			{
+				ID:          "kubevirt-metrics-exporter",
 				Name:        "KubeVirt Metrics Exporter",
 				Description: "Per-node metrics exporter",
 				Groups:      []string{},
@@ -114,6 +175,31 @@ func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 	}
 	if len(statuses[0].Recommended) != 1 || statuses[0].Recommended[0] != "Cluster Observability Operator" {
 		t.Fatalf("status.Recommended = %v, want [Cluster Observability Operator]", statuses[0].Recommended)
+	}
+}
+
+func TestDeriveFeatureStatusesExposesFeatureAndAssetIdentifiers(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{
+			{Name: "first-asset", Install: InstallModeOptIn},
+			{Name: "second-asset", Install: InstallModeOptIn},
+		},
+		Features: []FeatureMetadata{{
+			ID:     "example-feature",
+			Name:   "Example Feature",
+			Assets: []string{"second-asset", "first-asset"},
+		}},
+	}
+
+	statuses, err := deriveFeatureStatuses(catalog)
+	if err != nil {
+		t.Fatalf("deriveFeatureStatuses() error = %v", err)
+	}
+	if len(statuses) != 1 || statuses[0].ID != "example-feature" {
+		t.Fatalf("unexpected feature identifier: %#v", statuses)
+	}
+	if got, want := statuses[0].Assets, []string{"first-asset", "second-asset"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("feature asset identifiers = %v, want %v", got, want)
 	}
 }
 

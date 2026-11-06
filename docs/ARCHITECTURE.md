@@ -13,10 +13,12 @@ The **virt-platform-autopilot** embraces a **"Zero API Surface"** philosophy:
 
 ### Core Principles
 
-1. **Zero API Surface**
-   - Users never need to interact with autopilot-specific APIs
+1. **No New API Types or Serving Surface**
+   - Autopilot introduces no CRDs and serves no general external API
+   - It may reconcile bounded inspection ConfigMaps using the existing Kubernetes API;
+     see `docs/console-inspection-api.md` for the explicit inspection scope
    - All control happens through standard Kubernetes annotations
-   - No new resources to learn or monitor
+   - No new custom resource types to learn or monitor
 
 2. **Silent Operation**
    - The autopilot works quietly in the background
