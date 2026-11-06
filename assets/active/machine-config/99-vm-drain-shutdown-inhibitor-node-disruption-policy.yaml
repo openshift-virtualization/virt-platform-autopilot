@@ -1,0 +1,24 @@
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+    - path: /etc/systemd/logind.conf.d/10-inhibit-delay.conf
+      actions:
+      - type: Restart
+        restart:
+          serviceName: systemd-logind.service
+    - path: /usr/local/bin/vm-drain-shutdown-inhibitor.py
+      actions:
+      - type: Restart
+        restart:
+          serviceName: vm-drain-shutdown-inhibitor.service
+    units:
+    - name: vm-drain-shutdown-inhibitor.service
+      actions:
+      - type: DaemonReload
+      - type: Restart
+        restart:
+          serviceName: vm-drain-shutdown-inhibitor.service

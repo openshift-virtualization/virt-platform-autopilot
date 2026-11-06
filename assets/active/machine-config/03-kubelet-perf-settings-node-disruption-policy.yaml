@@ -1,0 +1,12 @@
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+    - path: /etc/openshift/kubelet.conf.d/95-perf.conf
+      actions:
+      - type: Restart
+        restart:
+          serviceName: kubelet.service

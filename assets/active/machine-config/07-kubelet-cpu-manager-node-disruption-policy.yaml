@@ -1,0 +1,16 @@
+apiVersion: operator.openshift.io/v1
+kind: MachineConfiguration
+metadata:
+  name: cluster
+spec:
+  nodeDisruptionPolicy:
+    files:
+    - path: /etc/openshift/kubelet.conf.d/96-cpu-manager.conf
+      actions:
+      - type: Drain
+      - type: Restart
+        restart:
+          serviceName: kubelet-cleanup.service
+      - type: Restart
+        restart:
+          serviceName: kubelet.service
