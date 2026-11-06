@@ -30,6 +30,11 @@ For backward compatibility, if a worker already has a manually provisioned
 legacy `/var/tmp/swapfile` or `/var/tmp/ocpswap.file`, Autopilot leaves it
 unchanged and does not create a second file under `/var`.
 
+Workers that use the previous `/var/ocpswap.file` location are migrated to
+`/var/swapfile` by the always-on Swap Enablement MachineConfig. Its migration
+unit runs before swap activation, refuses to move an active or non-regular file,
+and leaves the old file untouched if `/var/swapfile` already exists.
+
 The feature creates and formats the swap file only. The always-on **Swap
 Enablement** feature remains the sole owner of `swapon`; its activation unit is
 ordered after provisioning, avoiding a first-boot race or duplicate `swapon`.

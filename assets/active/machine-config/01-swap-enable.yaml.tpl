@@ -17,6 +17,12 @@ spec:
         mode: 420
       - contents:
           compression: gzip
+          source: data:;base64,{{ readAsset "machine-config/01-swap-enable/kubevirt-migrate-swap-file.sh" | gzip | b64enc }}
+        mode: 493
+        overwrite: true
+        path: /usr/local/bin/kubevirt-migrate-swap-file.sh
+      - contents:
+          compression: gzip
           source: data:;base64,{{ readAsset "machine-config/01-swap-enable/kubevirt-tune-watermarks.py" | gzip | b64enc }}
         mode: 493
         overwrite: true
@@ -44,6 +50,24 @@ spec:
           RequiredBy=kubelet-dependencies.target
         enabled: true
         name: swap-disk-enable.service
+      - contents: |
+          [Unit]
+          Description=Migrate OCP file-backed swap to /var/swapfile
+          ConditionFirstBoot=no
+          ConditionPathExists=/var/ocpswap.file
+          RequiresMountsFor=/var
+          Before=swap-file-enable.service
+          Before=swap-provision.service
+          Before=kubelet-dependencies.target
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/kubevirt-migrate-swap-file.sh
+
+          [Install]
+          WantedBy=kubelet-dependencies.target
+        enabled: true
+        name: swap-file-migrate.service
       - contents: |
           [Unit]
           Description=Enable OCP file swap
