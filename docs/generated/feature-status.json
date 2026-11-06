@@ -52,6 +52,13 @@
       ]
     },
     {
+      "name": "VSOCK local namespace mode",
+      "description": "Configures local VSOCK mode for new network namespaces on workers and schedulable masters",
+      "maturity": "GA",
+      "install": "always",
+      "opt_in": null
+    },
+    {
       "name": "In-Flight Operations",
       "description": "OperationRuleSet-based coordination for safe concurrent operations",
       "maturity": "TP",

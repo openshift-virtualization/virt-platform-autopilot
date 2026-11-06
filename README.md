@@ -36,6 +36,7 @@ The autopilot applies opinionated best practices and manages your platform autom
 | Observability Enhancements | Enhanced observability with additional Prometheus alerting rules and advanced Perses dashboards in the OpenShift console | GA | always | Cluster Observability Operator |
 | Swap Enablement | Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available | GA | always | - |
 | Troubleshooting Panel | Korrel8r observability signal correlation in the console | GA | always | Cluster Observability Operator |
+| VSOCK local namespace mode | Configures local VSOCK mode for new network namespaces on workers and schedulable masters | GA | always | - |
 | In-Flight Operations | OperationRuleSet-based coordination for safe concurrent operations | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-in-flight-operations=true</code></details> | - |
 | Kubelet Performance | Optimized kubelet settings for virtualization workloads | TP | <details><summary>opt-in</summary><code>platform.kubevirt.io/enable-kubelet-performance-settings=true</code></details> | - |
 | CPU Manager | Dedicated CPU pinning for guaranteed QoS workloads | DP | <details><summary>opt-in</summary><code>kubevirtFeatureGate:CPUManager</code><br><code>platform.kubevirt.io/enable-cpu-manager-perf-tunings=true</code></details> | - |
@@ -220,6 +221,7 @@ The autopilot uses a **"Patched Baseline"** approach:
 - [Lifecycle Management](docs/lifecycle-management.md) - Tombstoning and resource exclusions
 - [Debug Endpoints](docs/debug-endpoints.md) - Debugging and inspection tools
 - [SCSI Persistent Reservations](docs/scsi-persistent-reservations.md) - Configure multipath reservation keys for shared LUN disks
+- [VSOCK local namespace mode](docs/vsock-local.md) - Configure local VSOCK mode on workers and schedulable masters
 - [MachineConfig Rollout Coalescing](docs/machineconfig-rollout-coalescing.md) - Stage expensive MachineConfig updates for an active MCP rollout
 - [File-based Swap Provisioning](docs/file-based-swap-provisioning.md) - Provision swap files for memory-overcommitted workers
 - [Runbooks](https://github.com/kubevirt/monitoring/tree/main/docs/runbooks) - Operational guides for alerts (published at https://kubevirt.io/monitoring/runbooks/)
