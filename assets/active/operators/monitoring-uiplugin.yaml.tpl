@@ -7,3 +7,5 @@ spec:
   monitoring:
     perses:
       enabled: true
+    incidents:
+      enabled: true
