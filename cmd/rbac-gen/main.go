@@ -106,6 +106,11 @@ func formatRulesWithComments(static, transitive, dynamic []rbac.Rule) string {
 		"Metrics client CA watch (cluster-scope list/watch for the client-CA informer; RBAC cannot name-scope list/watch)",
 		"Namespaces (pre-apply guard: verify target namespace before consuming a rate-limit token)",
 		"CDI StorageProfiles (for RWX StorageClass auto-detection in templates)",
+		"KubeVirt (for kubevirt-feature-gate conditions)",
+		"MachineConfigPools (for staged MachineConfig release)",
+		"MachineConfig staging ConfigMap (name-scoped non-create access)",
+		"StorageClasses (for Loki block-storage selection)",
+		"Logging collector ClusterRole binding",
 	}
 	for i, rule := range static {
 		if i < len(staticComments) {

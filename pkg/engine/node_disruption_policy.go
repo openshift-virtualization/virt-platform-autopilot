@@ -30,6 +30,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/status"
 )
 
 const (
@@ -49,10 +50,80 @@ const (
 // singleton policy and how many file/unit entries changed.
 func (p *Patcher) ReconcileNodeDisruptionPolicies(ctx context.Context, allAssets []assets.AssetMetadata, active map[string]bool, pruneTombstoneActions bool, renderCtx *pkgcontext.RenderContext) (bool, int, error) {
 	desired, allowCreate, err := p.aggregateNodeDisruptionPolicies(allAssets, active, pruneTombstoneActions, renderCtx)
-	if err != nil || desired == nil {
+	if err != nil {
+		p.observeNodeDisruptionPolicyAssets(nodeDisruptionPolicyAssets(allAssets), nodeDisruptionPolicyStatusObject(), "applyFailed", status.AssetReasonNodeDisruptionPolicyAggregationFail, renderCtx)
 		return false, 0, err
 	}
-	return p.reconcileAggregateNodeDisruptionPolicy(ctx, desired, allowCreate)
+	if desired == nil {
+		p.observeNodeDisruptionPolicyAssets(nodeDisruptionPolicyAssets(allAssets), nodeDisruptionPolicyStatusObject(), "excluded", status.AssetReasonRootExclusion, renderCtx)
+		return false, 0, nil
+	}
+	managed, changes, err := p.reconcileAggregateNodeDisruptionPolicy(ctx, desired, allowCreate)
+	state, reason := "synced", ""
+	if err != nil {
+		state, reason = "applyFailed", status.AssetReasonNodeDisruptionPolicyApplyFail
+	} else if !managed {
+		state, reason = "unmanaged", status.AssetReasonUserOptOut
+	}
+	p.observeNodeDisruptionPolicyAssets(activeNodeDisruptionPolicyAssets(allAssets, active), desired, state, reason, renderCtx)
+	return managed, changes, err
+}
+
+func (p *Patcher) observeNodeDisruptionPolicyAssets(policyAssets []assets.AssetMetadata, object *unstructured.Unstructured, state, reason string, renderCtx *pkgcontext.RenderContext) {
+	for _, asset := range policyAssets {
+		if sidecar, err := p.renderNodeDisruptionPolicySidecar(&asset, renderCtx); err == nil && sidecar != nil {
+			status.DefaultStore.SetGolden(asset.Name, sidecar)
+		}
+		status.DefaultStore.ObserveSharedAsset(asset.Name, object, state, reason, "spec.nodeDisruptionPolicy")
+	}
+}
+
+func (p *Patcher) renderNodeDisruptionPolicySidecar(policyAsset *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) (*unstructured.Unstructured, error) {
+	if renderCtx == nil {
+		return nil, nil
+	}
+	want, err := p.renderNodeDisruptionPolicy(policyAsset, renderCtx)
+	if err != nil || want == nil {
+		return nil, err
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": machineConfigurationAPIVersion,
+		"kind":       machineConfigurationKind,
+		"metadata":   map[string]any{"name": machineConfigurationName},
+		"spec":       map[string]any{"nodeDisruptionPolicy": want},
+	}}, nil
+}
+
+func nodeDisruptionPolicyStatusObject() *unstructured.Unstructured {
+	object := &unstructured.Unstructured{}
+	object.SetAPIVersion(machineConfigurationAPIVersion)
+	object.SetKind(machineConfigurationKind)
+	object.SetName(machineConfigurationName)
+	return object
+}
+
+func nodeDisruptionPolicyAssets(allAssets []assets.AssetMetadata) []assets.AssetMetadata {
+	active := make(map[string]bool, len(allAssets))
+	for _, asset := range allAssets {
+		active[asset.Name] = true
+	}
+	return activeNodeDisruptionPolicyAssets(allAssets, active)
+}
+
+func activeNodeDisruptionPolicyAssets(allAssets []assets.AssetMetadata, active map[string]bool) []assets.AssetMetadata {
+	seen := map[string]bool{}
+	var out []assets.AssetMetadata
+	for _, asset := range allAssets {
+		if asset.NodeDisruptionPolicy == nil || asset.NodeDisruptionPolicy.PolicyAsset() == nil || !active[asset.Name] {
+			continue
+		}
+		policy := asset.NodeDisruptionPolicy.PolicyAsset()
+		if !seen[policy.Name] {
+			seen[policy.Name] = true
+			out = append(out, *policy)
+		}
+	}
+	return out
 }
 
 // reconcileAggregateNodeDisruptionPolicy deliberately retains the live

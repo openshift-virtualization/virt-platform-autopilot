@@ -102,6 +102,7 @@ rules:
       - storageprofiles
     verbs:
       - list
+  # KubeVirt (for kubevirt-feature-gate conditions)
   - apiGroups:
       - kubevirt.io
     resources:
@@ -110,6 +111,7 @@ rules:
       - get
       - list
       - watch
+  # MachineConfigPools (for staged MachineConfig release)
   - apiGroups:
       - machineconfiguration.openshift.io
     resources:
@@ -118,6 +120,7 @@ rules:
       - get
       - list
       - watch
+  # MachineConfig staging ConfigMap (name-scoped non-create access)
   - apiGroups:
       - ""
     resourceNames:
@@ -128,6 +131,7 @@ rules:
       - get
       - patch
       - update
+  # StorageClasses (for Loki block-storage selection)
   - apiGroups:
       - storage.k8s.io
     resources:
@@ -136,6 +140,7 @@ rules:
       - get
       - list
       - watch
+  # Logging collector ClusterRole binding
   - apiGroups:
       - rbac.authorization.k8s.io
     resourceNames:

@@ -499,8 +499,7 @@ func waitForServingCertThenRestart(ctx context.Context, restart context.CancelFu
 			return nil
 		case <-ticker.C:
 			if certFilesPresent(metricstls.ServingCertDir) {
-				setupLog.Info("metrics serving certificate is now present; restarting to enable HTTPS metrics",
-					"certDir", metricstls.ServingCertDir)
+				setupLog.Info("serving certificates are now present; restarting to enable HTTPS endpoints")
 				restart()
 				return nil
 			}

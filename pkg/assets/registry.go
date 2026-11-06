@@ -143,6 +143,7 @@ func (d *NodeDisruptionPolicyDependency) PolicyAsset() *AssetMetadata {
 
 // FeatureMetadata defines a user-facing feature composed of one or more assets
 type FeatureMetadata struct {
+	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Maturity    string   `json:"maturity,omitempty"`    // "dp" or "tp"; empty = auto-derive from install mode
@@ -172,6 +173,8 @@ type Registry struct {
 	loader  *Loader
 }
 
+var configMapDataKey = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
 // NewRegistry creates a new asset registry
 func NewRegistry(loader *Loader) (*Registry, error) {
 	// Load metadata.yaml
@@ -183,6 +186,9 @@ func NewRegistry(loader *Loader) (*Registry, error) {
 	catalog := &AssetCatalog{}
 	if err := yaml.Unmarshal(data, catalog); err != nil {
 		return nil, fmt.Errorf("failed to parse asset catalog: %w", err)
+	}
+	if err := validateInspectionAssetKeys(catalog); err != nil {
+		return nil, err
 	}
 
 	// Derive RequiredCRD for each asset by parsing its template
@@ -205,6 +211,18 @@ func NewRegistry(loader *Loader) (*Registry, error) {
 		catalog: catalog,
 		loader:  loader,
 	}, nil
+}
+
+// validateInspectionAssetKeys keeps the stable asset ID usable as the
+// <asset-id>.json key in the published golden ConfigMap.
+func validateInspectionAssetKeys(catalog *AssetCatalog) error {
+	for _, asset := range catalog.Assets {
+		key := asset.Name + ".json"
+		if asset.Name == "" || asset.Name == "index" || asset.Name == "generation" || len(key) > 253 || !configMapDataKey.MatchString(key) {
+			return fmt.Errorf("asset name %q cannot be used as an inspection ConfigMap data key", asset.Name)
+		}
+	}
+	return nil
 }
 
 func resolveNodeDisruptionPolicyDependencies(assetList []AssetMetadata) error {

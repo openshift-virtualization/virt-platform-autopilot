@@ -49,6 +49,7 @@ import (
 	"github.com/kubevirt/virt-platform-autopilot/pkg/engine"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/resources"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/status"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/tlsprofile"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
@@ -56,6 +57,7 @@ import (
 // PlatformReconciler reconciles the virt platform based on HCO state
 type PlatformReconciler struct {
 	client.Client
+	apiReader        client.Reader
 	Namespace        string
 	tlsProfileEvents <-chan event.GenericEvent
 
@@ -87,6 +89,7 @@ func NewPlatformReconciler(c client.Client, apiReader client.Reader, namespace s
 
 	return &PlatformReconciler{
 		Client:              c,
+		apiReader:           apiReader,
 		Namespace:           namespace,
 		loader:              loader,
 		registry:            registry,
@@ -151,34 +154,12 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		"name", req.Name,
 	)
 
-	// Get the HyperConverged instance
-	hco, err := r.getHCO(ctx, req.NamespacedName)
+	hco, proceed, result, err := r.reconciliationHCO(ctx, req)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("HCO not found, skipping reconciliation")
-			return ctrl.Result{}, nil
-		}
 		return ctrl.Result{}, err
 	}
-
-	// Track any HCO-level metrics TLS security profile override
-	// (spec.security.tlsSecurityProfile). The metrics server reads the resolved
-	// profile per new connection, so no restart or requeue is needed here.
-	if changed, err := tlsprofile.SetHyperConvergedProfileFromUnstructured(hco); err != nil {
-		logger.Error(err, "Failed to read spec.security.tlsSecurityProfile from HCO")
-	} else if changed {
-		logger.Info("Updated metrics TLS security profile override from HCO")
-	}
-
-	// Opt-out gate: the autopilot is GA and enabled by default. It stays idle only when
-	// the annotation platform.kubevirt.io/autopilot on the HCO CR is explicitly set to
-	// "false".
-	if !overrides.IsAutopilotEnabled(hco) {
-		logger.Info("Autopilot disabled via annotation, keeping idle.",
-			"annotation", overrides.AnnotationAutopilotEnabled,
-			"value", "false",
-		)
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	if !proceed {
+		return result, nil
 	}
 
 	// Step 0: Process ordinary tombstones FIRST (before HCO reconciliation).
@@ -200,11 +181,13 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info("Applying HCO golden configuration")
 	if err := r.reconcileHCO(ctx, hco); err != nil {
 		logger.Error(err, "Failed to reconcile HCO golden config")
+		r.publishInspectionFailure(ctx)
 		return ctrl.Result{}, err
 	}
 
 	// Re-fetch HCO to get effective state (after potential golden config application)
 	if err := r.Get(ctx, req.NamespacedName, hco); err != nil {
+		r.publishInspectionFailure(ctx)
 		return ctrl.Result{}, err
 	}
 
@@ -213,15 +196,18 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	renderCtx, err := r.contextBuilder.Build(ctx, hco)
 	if err != nil {
 		logger.Error(err, "Failed to build render context")
+		r.publishInspectionFailure(ctx)
 		return ctrl.Result{}, err
 	}
 
 	// Update condition evaluator with current context
 	r.updateConditionEvaluator(hco, renderCtx)
+	r.updateStatusFeatures(ctx, hco)
 
 	metricErr := r.reconcileDependencyMetrics(ctx)
 	machineConfigNDPAction, err := r.tombstoneReconciler.MachineConfigTombstonesHaveEffectiveNodeDisruptionPolicy(ctx)
 	if err != nil {
+		r.publishInspectionFailure(ctx)
 		return ctrl.Result{}, fmt.Errorf("check MachineConfig tombstone node disruption policy actions: %w", err)
 	}
 
@@ -230,8 +216,11 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	ndpManaged, err := r.reconcileAssets(ctx, renderCtx, machineConfigNDPAction)
 	if err != nil {
 		logger.Error(err, "Failed to reconcile assets")
+		r.publishInspectionFailure(ctx)
 		return ctrl.Result{}, err
 	}
+	status.DefaultStore.MarkReconciled()
+	r.publishInspection(ctx)
 
 	if machineConfigNDPAction {
 		if !ndpManaged {
@@ -240,6 +229,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		observed, err := r.patcher.NodeDisruptionPolicyGenerationObserved(ctx)
 		if err != nil {
+			r.publishInspectionFailure(ctx)
 			return ctrl.Result{}, fmt.Errorf("observe node disruption policy before MachineConfig tombstones: %w", err)
 		}
 		if !observed {
@@ -248,6 +238,7 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		stillEffective, err := r.tombstoneReconciler.MachineConfigTombstonesHaveEffectiveNodeDisruptionPolicy(ctx)
 		if err != nil {
+			r.publishInspectionFailure(ctx)
 			return ctrl.Result{}, fmt.Errorf("check MachineConfig tombstone node disruption policy actions after MCO observation: %w", err)
 		}
 		if stillEffective {
@@ -264,10 +255,66 @@ func (r *PlatformReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	if metricErr != nil {
 		logger.Error(metricErr, "Dependency metric refresh incomplete, retrying reconciliation")
+		r.publishInspectionFailure(ctx)
 		return ctrl.Result{}, metricErr
 	}
 	logger.Info("Successfully reconciled virt platform")
 	return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+}
+
+// reconciliationHCO loads the HCO and handles the two lifecycle states in
+// which ordinary asset reconciliation must not run.
+func (r *PlatformReconciler) reconciliationHCO(ctx context.Context, req ctrl.Request) (*unstructured.Unstructured, bool, ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+	hco, err := r.getHCO(ctx, req.NamespacedName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("HCO not found, publishing unavailable inspection snapshot")
+			status.DefaultStore.ClearOwner()
+			r.publishUnavailable(ctx, "absent", "hcoNotFound")
+			return nil, false, ctrl.Result{}, nil
+		}
+		r.publishInspectionFailure(ctx)
+		return nil, false, ctrl.Result{}, err
+	}
+	if hco.GetNamespace() == r.Namespace {
+		status.DefaultStore.SetOwner(hco)
+	} else {
+		// Inspection objects live in the configured Autopilot namespace; a
+		// cross-namespace owner is invalid and would be garbage-collected.
+		status.DefaultStore.ClearOwner()
+	}
+
+	// The metrics server reads this profile per connection, so no requeue is
+	// necessary when the HCO override changes.
+	if changed, err := tlsprofile.SetHyperConvergedProfileFromUnstructured(hco); err != nil {
+		logger.Error(err, "Failed to read spec.security.tlsSecurityProfile from HCO")
+	} else if changed {
+		logger.Info("Updated metrics TLS security profile override from HCO")
+	}
+	if overrides.IsAutopilotEnabled(hco) {
+		return hco, true, ctrl.Result{}, nil
+	}
+
+	logger.Info("Autopilot disabled via annotation, keeping idle.", "annotation", overrides.AnnotationAutopilotEnabled, "value", "false")
+	r.publishUnavailable(ctx, "disabled", "autopilotOptOut")
+	return nil, false, ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+}
+
+func (r *PlatformReconciler) publishUnavailable(ctx context.Context, state, reason string) {
+	status.DefaultStore.SetUnavailable(state, reason)
+	r.publishInspection(ctx)
+}
+
+func (r *PlatformReconciler) publishInspection(ctx context.Context) {
+	if err := status.DefaultStore.Publish(ctx, r.Client, r.apiReader, r.Namespace); err != nil {
+		log.FromContext(ctx).Error(err, "Failed to publish inspection snapshot")
+	}
+}
+
+func (r *PlatformReconciler) publishInspectionFailure(ctx context.Context) {
+	status.DefaultStore.MarkFailed()
+	r.publishInspection(ctx)
 }
 
 func (r *PlatformReconciler) getHCO(ctx context.Context, name types.NamespacedName) (*unstructured.Unstructured, error) {
@@ -276,6 +323,20 @@ func (r *PlatformReconciler) getHCO(ctx context.Context, name types.NamespacedNa
 
 	err := r.Get(ctx, name, hco)
 	return hco, err
+}
+
+func (r *PlatformReconciler) updateStatusFeatures(ctx context.Context, hco *unstructured.Unstructured) {
+	catalog, err := r.registry.FeatureCatalog()
+	if err != nil {
+		log.FromContext(ctx).Error(err, "Failed to load feature catalog for inspection snapshot")
+		return
+	}
+	enabled, err := r.registry.FeatureEnabled(ctx, r.conditionEvaluator)
+	if err != nil {
+		log.FromContext(ctx).Error(err, "Failed to evaluate feature intent for inspection snapshot")
+		return
+	}
+	status.DefaultStore.SetFeatures(catalog, enabled, hco)
 }
 
 // reconcileHCO applies the golden HCO configuration
@@ -339,7 +400,7 @@ func (r *PlatformReconciler) reconcileDependencyMetrics(ctx context.Context) err
 
 // assetCRDsAvailable checks both the auto-detected RequiredCRD and the explicit GateCRD.
 // Returns false (skip) if either CRD is absent or cannot be checked.
-func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
+func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) (bool, string) {
 	logger := log.FromContext(ctx)
 
 	for _, entry := range []struct {
@@ -358,17 +419,17 @@ func (r *PlatformReconciler) assetCRDsAvailable(ctx context.Context, asset *asse
 				"asset", asset.Name,
 				"crd", entry.crd,
 			)
-			return false
+			return false, status.AssetReasonDependencyCheckFailed
 		}
 		if !installed {
 			logger.V(1).Info(entry.desc, "asset", asset.Name, "crd", entry.crd)
 			if r.eventRecorder != nil {
 				r.eventRecorder.CRDMissing(renderCtx.HCO, asset.Name, entry.crd)
 			}
-			return false
+			return false, status.AssetReasonMissingCRD
 		}
 	}
-	return true
+	return true, ""
 }
 
 // reconcileAssets reconciles all non-HCO assets.
@@ -397,14 +458,14 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 			continue
 		}
 
-		if !r.assetCRDsAvailable(ctx, asset, renderCtx) {
+		if available, reason := r.assetCRDsAvailable(ctx, asset, renderCtx); !available {
 			if policyAssetNames[asset.Name] {
 				// Never partially reconcile the singleton: without a policy
 				// template's API we cannot safely decide which of its keyed
 				// entries remain owned.
 				policyAssetsAvailable = false
 			}
-			r.patcher.CleanupExcludedAsset(asset, renderCtx)
+			r.patcher.CleanupExcludedAsset(asset, renderCtx, reason)
 			continue
 		}
 
@@ -414,6 +475,7 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 			logger.Error(err, "Failed to evaluate asset conditions, skipping",
 				"asset", asset.Name,
 			)
+			r.patcher.CleanupExcludedAsset(asset, renderCtx, status.AssetReasonConditionEvaluationFailed)
 			continue
 		}
 
@@ -421,7 +483,7 @@ func (r *PlatformReconciler) reconcileAssets(ctx context.Context, renderCtx *pkg
 			logger.V(1).Info("Asset conditions not met, skipping",
 				"asset", asset.Name,
 			)
-			r.patcher.CleanupExcludedAsset(asset, renderCtx)
+			r.patcher.CleanupExcludedAsset(asset, renderCtx, status.AssetReasonConditionNotMet)
 			continue
 		}
 		activeAssets[asset.Name] = true
