@@ -32,6 +32,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/status"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/throttling"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
@@ -81,11 +82,19 @@ func (p *Patcher) SetEventRecorder(recorder *util.EventRecorder) {
 // still works when cluster configuration is missing, then calls DeleteAssetMetrics.
 // Silently returns if the identity cannot be resolved — the metric series either
 // never existed or the template cannot resolve, both are safe to ignore.
-func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) {
+func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext, reason string) {
 	observability.SetRenderFailure(assetMeta.Name, "", "")
 	identity := p.renderer.RenderAssetIdentity(assetMeta, renderCtx)
 	if identity == nil {
+		status.DefaultStore.MarkAssetUnavailable(assetMeta.Name, reason)
 		return
+	}
+	if desired, err := p.renderer.RenderAsset(assetMeta, renderCtx); err == nil && desired != nil {
+		status.DefaultStore.SetGolden(assetMeta.Name, desired)
+		status.DefaultStore.ClearDesired(assetMeta.Name)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "excluded", reason)
+	} else {
+		status.DefaultStore.MarkAssetUnavailable(assetMeta.Name, reason)
 	}
 	observability.DeleteAssetMetrics(identity.GetKind(), identity.GetName(), identity.GetNamespace())
 	if _, err := p.clearMachineConfigStaging(context.Background(), identity, renderCtx); err != nil {
@@ -213,8 +222,10 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		logger.V(1).Info("Asset not applicable (conditions not met)",
 			"name", assetMeta.Name,
 		)
+		status.DefaultStore.MarkAssetUnavailable(assetMeta.Name, status.AssetReasonNotRenderable)
 		return false, nil
 	}
+	status.DefaultStore.SetGolden(assetMeta.Name, desired)
 
 	// Root Exclusion: Check if this resource is explicitly disabled via annotation
 	if p.isRootExcluded(ctx, renderCtx, desired.GetKind(), desired.GetNamespace(), desired.GetName()) {
@@ -234,6 +245,8 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		// managed reconcile re-evaluates them from scratch.
 		observability.ClearCompliance(desired)
 		observability.SetPaused(desired, false)
+		status.DefaultStore.ClearDesired(assetMeta.Name)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "excluded", status.AssetReasonRootExclusion)
 		return false, nil
 	}
 
@@ -252,6 +265,8 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 				"policyAsset", assetMeta.NodeDisruptionPolicy.Asset,
 			)
 			observability.SetCompliance(desired, observability.ComplianceDeferred)
+			status.DefaultStore.ClearDesired(assetMeta.Name)
+			status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "staged", status.AssetReasonNodeDisruptionPolicyPending)
 			return false, nil
 		}
 	}
@@ -292,6 +307,8 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		// zero side effects. Without this, the metric is absent after pod restart
 		// because all in-memory gauges are lost on restart (CNV-94143).
 		observability.SetPaused(desired, true)
+		status.DefaultStore.ClearDesired(assetMeta.Name)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "staged", status.AssetReasonReconciliationPaused)
 		return false, nil
 	}
 
@@ -340,6 +357,8 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		observability.SetPaused(desired, false)
 		// Track unmanaged customization
 		observability.SetCustomization(desired, "unmanaged")
+		status.DefaultStore.ClearDesired(assetMeta.Name)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "unmanaged", status.AssetReasonUserOptOut)
 
 		// Record event about unmanaged mode
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
@@ -440,6 +459,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	if liveExists && isMachineConfig(desired) {
 		p.copyMachineConfigBypassAnnotation(desired, live)
 	}
+	// Cache the effective desired object for the authenticated status detail API.
+	// It includes validated patches and ignored-field masking, unlike debug/render.
+	status.DefaultStore.SetDesired(assetMeta.Name, desired)
 
 	hasDrift := false
 	if liveExists {
@@ -458,6 +480,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			// state while drift detection is broken, so the metric must signal degraded
 			// status to allow VirtPlatformAutopilotSyncFailed to fire.
 			observability.SetCompliance(desired, observability.ComplianceFailed)
+			status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "applyFailed", status.AssetReasonDriftDetectionFailed)
 			return false, fmt.Errorf("drift detection failed: %w", err)
 		}
 	} else {
@@ -470,6 +493,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			"name", assetMeta.Name,
 		)
 		observability.SetCompliance(desired, observability.ComplianceSynced)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "synced", "")
 		observability.SetPaused(desired, false)
 		return false, nil
 	}
@@ -488,6 +512,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 			// compliance state keeps the generic sync-failed alert (which matches
 			// == 0) quiet without claiming the live object matches the golden state.
 			observability.SetCompliance(desired, observability.ComplianceDeferred)
+			status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "staged", status.AssetReasonMachineConfigRollout)
 			return false, nil
 		}
 	}
@@ -495,6 +520,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Record drift detection (only when drift is found)
 	if liveExists && p.eventRecorder != nil && renderCtx.HCO != nil {
 		p.eventRecorder.DriftDetected(renderCtx.HCO, desired.GetKind(), desired.GetNamespace(), desired.GetName())
+	}
+	if liveExists {
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "drifted", status.AssetReasonDetected)
 	}
 
 	// Pre-Step 6: verify the target namespace exists before consuming a rate-limit token.
@@ -508,6 +536,9 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 					"name", assetMeta.Name,
 					"namespace", ns,
 				)
+				status.DefaultStore.ClearDesired(assetMeta.Name)
+				status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "excluded", status.AssetReasonNamespaceNotFound)
+				observability.DeleteAssetMetrics(desired.GetKind(), desired.GetName(), desired.GetNamespace())
 				return false, nil
 			}
 			return false, fmt.Errorf("failed to verify target namespace %s: %w", ns, nsErr)
@@ -592,11 +623,15 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 				"name", assetMeta.Name,
 				"namespace", desired.GetNamespace(),
 			)
+			status.DefaultStore.ClearDesired(assetMeta.Name)
+			status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "excluded", status.AssetReasonNamespaceNotFound)
+			observability.DeleteAssetMetrics(desired.GetKind(), desired.GetName(), desired.GetNamespace())
 			return false, nil
 		}
 
 		// Set compliance status to failed (0)
 		observability.SetCompliance(desired, observability.ComplianceFailed)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "applyFailed", status.AssetReasonApplyFailed)
 
 		// Record apply failure event
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
@@ -614,6 +649,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 		)
 		// Set compliance status to synced (1)
 		observability.SetCompliance(desired, observability.ComplianceSynced)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "synced", "")
 
 		// A staged MachineConfig update is only retired once its release has
 		// actually reached the API server, so that a refusal further up (namespace
@@ -651,6 +687,7 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	} else {
 		// No drift detected or skipped - still compliant
 		observability.SetCompliance(desired, observability.ComplianceSynced)
+		status.DefaultStore.ObserveAsset(assetMeta.Name, desired, "synced", "")
 	}
 
 	return applied, nil

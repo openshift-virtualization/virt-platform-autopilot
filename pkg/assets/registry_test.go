@@ -60,6 +60,31 @@ func TestNewRegistry(t *testing.T) {
 	})
 }
 
+func TestValidateInspectionAssetKeys(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		asset string
+		valid bool
+	}{
+		{name: "valid", asset: "cpu-manager.v1", valid: true},
+		{name: "slash", asset: "cpu/manager"},
+		{name: "empty", asset: ""},
+		{name: "reserved index", asset: "index"},
+		{name: "reserved generation", asset: "generation"},
+		{name: "too long", asset: strings.Repeat("a", 249)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			err := validateInspectionAssetKeys(&AssetCatalog{Assets: []AssetMetadata{{Name: testCase.asset}}})
+			if testCase.valid && err != nil {
+				t.Fatalf("valid asset key rejected: %v", err)
+			}
+			if !testCase.valid && err == nil {
+				t.Fatal("invalid asset key accepted")
+			}
+		})
+	}
+}
+
 func TestResolveNodeDisruptionPolicyDependencies(t *testing.T) {
 	policy := AssetMetadata{Name: "policy", Component: "MachineConfiguration", ReconcileOrder: 1}
 	consumer := AssetMetadata{

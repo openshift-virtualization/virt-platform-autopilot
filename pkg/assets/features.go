@@ -17,10 +17,64 @@ limitations under the License.
 package assets
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 )
+
+// FeatureEnabled evaluates configured feature intent with the same condition
+// evaluator as reconciliation. Explicit enable annotations and feature gates
+// count as user intent; hardware, topology, images, environment markers, and
+// HCO applicability determine runtime availability instead. Conditions from
+// separate assets are alternatives, not a feature-wide conjunction.
+func (r *Registry) FeatureEnabled(ctx context.Context, evaluator ConditionEvaluator) (map[string]bool, error) {
+	enabled := make(map[string]bool, len(r.catalog.Features))
+	assetByName := make(map[string]*AssetMetadata, len(r.catalog.Assets))
+	for i := range r.catalog.Assets {
+		assetByName[r.catalog.Assets[i].Name] = &r.catalog.Assets[i]
+	}
+	for _, feature := range r.catalog.Features {
+		hasOptInAsset := false
+		for _, asset := range resolveFeatureAssets(feature, r.catalog.Assets, assetByName) {
+			// An always-on prerequisite can contribute reconciliation evidence,
+			// but cannot express a user's intent to enable an opt-in feature.
+			if asset.Install == InstallModeAlways {
+				continue
+			}
+			hasOptInAsset = true
+			applies, err := featureAssetEnabled(ctx, asset, evaluator)
+			if err != nil {
+				return nil, fmt.Errorf("evaluate feature %q asset %q: %w", feature.Name, asset.Name, err)
+			}
+			if applies {
+				enabled[feature.Name] = true
+				break
+			}
+		}
+		if !hasOptInAsset {
+			enabled[feature.Name] = true
+		}
+	}
+	return enabled, nil
+}
+
+func featureAssetEnabled(ctx context.Context, asset *AssetMetadata, evaluator ConditionEvaluator) (bool, error) {
+	hasUserCondition := false
+	for _, condition := range asset.Conditions {
+		isUserCondition := condition.Type == ConditionTypeFeatureGate || condition.Type == ConditionTypeKubeVirtFeatureGate ||
+			(condition.Type == ConditionTypeAnnotation && strings.HasPrefix(condition.Key, "platform.kubevirt.io/enable-"))
+		if !isUserCondition {
+			continue
+		}
+		hasUserCondition = true
+		satisfied, err := evaluator.EvaluateCondition(ctx, condition)
+		if err != nil || !satisfied {
+			return false, err
+		}
+	}
+	return hasUserCondition, nil
+}
 
 // FrameworkStatus describes the maturity and opt-in gate of the autopilot framework.
 type FrameworkStatus struct {
