@@ -18,7 +18,6 @@ package engine
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	storagev1 "k8s.io/api/storage/v1"
@@ -36,7 +35,10 @@ func (r *Renderer) defaultStorageClass() (string, error) {
 	if class := defaultStorageClass(classes.Items); class != "" {
 		return class, nil
 	}
-	return "", errors.New("no default StorageClass found; configure a cluster default or an explicit storage class")
+	return "", &ConfigurationError{
+		Code:    NoDefaultStorageClass,
+		Message: "no default StorageClass found; configure a cluster default or an explicit storage class",
+	}
 }
 
 // Kubernetes chooses the newest default when multiple defaults exist.

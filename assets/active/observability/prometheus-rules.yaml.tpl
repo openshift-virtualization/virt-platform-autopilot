@@ -108,6 +108,29 @@ spec:
               this alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation.
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotDependencyMissing" }}"
 
+        - alert: VirtPlatformAutopilotLoggingStorageNotConfigured
+          expr: |
+            kubevirt_autopilot_render_failed{asset="logging-lokistack", reason="configuration", code="NoDefaultStorageClass"} == 1
+          for: 15m
+          labels:
+            severity: warning
+            namespace: {{ .HCO.GetNamespace | default "openshift-cnv" }}
+            operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: warning
+          annotations:
+            summary: "Autopilot logging storage is not configured for {{`{{ $labels.asset }}`}}"
+            description: |-
+              virt-platform-autopilot cannot configure Loki block storage for {{`{{ $labels.asset }}`}}:
+              no explicit storage class, existing LokiStack storage class,
+              or cluster default StorageClass is available.
+
+              Set platform.kubevirt.io/logging-storage-class on HyperConverged
+              to a suitable StorageClass, or configure a cluster default.
+              Inspect RenderFailed events on HyperConverged for details.
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotLoggingStorageNotConfigured" }}"
+
         - alert: VirtPlatformAutopilotTombstoneStuck
           # Tombstone cleanup indicator: Tombstone deletion failed or skipped
           # Expr: kubevirt_autopilot_tombstone_status < 0
@@ -164,3 +187,4 @@ spec:
               The update is intentional and will be applied when a matching
               MachineConfigPool next starts a rollout. No administrator action
               is required.
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotMachineConfigUpdateStaged" }}"
