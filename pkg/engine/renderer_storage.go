@@ -36,7 +36,24 @@ func (r *Renderer) defaultStorageClass() (string, error) {
 	if class := defaultStorageClass(classes.Items); class != "" {
 		return class, nil
 	}
-	return "", errors.New("no default StorageClass found; configure a cluster default or an explicit storage class")
+	return "", &ConfigurationError{
+		Code:    NoDefaultStorageClass,
+		Message: "no default StorageClass found; configure a cluster default or an explicit storage class",
+	}
+}
+
+// defaultStorageClassFunc adapts defaultStorageClass for template use. In
+// tolerant mode a missing cluster default yields "" instead of a
+// ConfigurationError so identity-only renders can succeed.
+func (r *Renderer) defaultStorageClassFunc(tolerant bool) func() (string, error) {
+	return func() (string, error) {
+		class, err := r.defaultStorageClass()
+		var cfgErr *ConfigurationError
+		if tolerant && errors.As(err, &cfgErr) {
+			return "", nil
+		}
+		return class, err
+	}
 }
 
 // Kubernetes chooses the newest default when multiple defaults exist.

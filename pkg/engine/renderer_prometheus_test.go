@@ -52,7 +52,7 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
 		name, err := objectFieldFunc("monitoring.coreos.com/v1", "PrometheusRule", "openshift-kube-descheduler-operator", "descheduler-rules", "metadata", "name")
@@ -73,7 +73,7 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
 		name, err := objectFieldFunc("monitoring.coreos.com/v1", "PrometheusRule", "openshift-kube-descheduler-operator", "descheduler-rules", "metadata", "name")
@@ -124,7 +124,7 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		hasRuleFunc := funcMap["prometheusRuleHasRecordingRule"].(func(string, string, string) bool)
 
 		hasRule := hasRuleFunc("openshift-kube-descheduler-operator", "descheduler-rules", "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m")
@@ -168,7 +168,7 @@ func TestPrometheusRuleIntrospection(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		hasRuleFunc := funcMap["prometheusRuleHasRecordingRule"].(func(string, string, string) bool)
 
 		hasRule := hasRuleFunc("openshift-kube-descheduler-operator", "descheduler-rules", "descheduler:node:linear_amplified_ideal_point_positive_distance:k3:avg1m")
@@ -322,7 +322,7 @@ func TestObjectFieldConfigMapData(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
 		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
@@ -344,7 +344,7 @@ func TestObjectFieldConfigMapData(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
 		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
@@ -380,7 +380,7 @@ func TestObjectFieldConfigMapData(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
 		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")
@@ -396,7 +396,7 @@ func TestObjectFieldConfigMapData(t *testing.T) {
 		loader := assets.NewLoader()
 		renderer := NewRenderer(loader)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		objectFieldFunc := funcMap["objectField"].(func(string, string, string, string, ...string) (string, error))
 
 		result, err := objectFieldFunc("v1", "ConfigMap", "openshift-monitoring", "cluster-monitoring-config", "data", "config.yaml")

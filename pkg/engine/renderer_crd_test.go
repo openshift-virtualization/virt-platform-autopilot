@@ -49,7 +49,7 @@ func TestCRDIntrospectionFunctions(t *testing.T) {
 	renderer.SetClient(fakeClient)
 
 	t.Run("crdEnum extracts all enum values", func(t *testing.T) {
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		crdEnumFunc := funcMap["crdEnum"].(func(string, string) []string)
 
 		enums := crdEnumFunc("kubedeschedulers.operator.openshift.io", "spec.profiles")
@@ -72,7 +72,7 @@ func TestCRDIntrospectionFunctions(t *testing.T) {
 	})
 
 	t.Run("crdHasEnum returns true for existing value", func(t *testing.T) {
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		crdHasEnumFunc := funcMap["crdHasEnum"].(func(string, string, string) bool)
 
 		if !crdHasEnumFunc("kubedeschedulers.operator.openshift.io", "spec.profiles", "KubeVirtRelieveAndMigrate") {
@@ -89,7 +89,7 @@ func TestCRDIntrospectionFunctions(t *testing.T) {
 	})
 
 	t.Run("crdHasEnum returns false for non-existing value", func(t *testing.T) {
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		crdHasEnumFunc := funcMap["crdHasEnum"].(func(string, string, string) bool)
 
 		if crdHasEnumFunc("kubedeschedulers.operator.openshift.io", "spec.profiles", "NonExistentProfile") {

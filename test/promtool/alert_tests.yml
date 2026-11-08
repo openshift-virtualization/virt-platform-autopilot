@@ -6,12 +6,7 @@
 # - Alert expressions evaluate without errors
 # - Alerts fire at the correct time (testing "for" durations)
 # - Alert firing logic works correctly (thresholds, ranges)
-# - Alert labels are correctly set
-#
-# Note: We only test labels, not annotations, because Prometheus template
-# rendering can produce subtle whitespace differences (trailing spaces, newlines)
-# that are hard to match exactly in tests. The PrometheusRule integration test
-# (test/prometheus_rules_test.go) validates the full alert structure including annotations.
+# - Alert labels AND annotations match exactly (strict comparison)
 
 rule_files:
   - prometheus-rules.yml
@@ -44,45 +39,94 @@ tests:
         alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts: []
 
-      # After 15min: Alert SHOULD be firing with correct labels
+      # After 15min: Alert SHOULD be firing with correct labels and annotations
       - eval_time: 16m
         alertname: VirtPlatformAutopilotSyncFailed
         exp_alerts:
           - exp_labels:
               severity: critical
               operator: virt-platform-autopilot
+              kubernetes_operator_part_of: kubevirt
+              kubernetes_operator_component: autopilot
+              operator_health_impact: critical
               kind: MachineConfig
               name: 50-virt-platform-hugepages
-              namespace: ""
+            exp_annotations:
+              summary: "virt-platform-autopilot failed to sync MachineConfig/50-virt-platform-hugepages"
+              description: "virt-platform-autopilot has failed to apply the Golden State\nto MachineConfig/50-virt-platform-hugepages in namespace \nfor 15 minutes.\n\nThis indicates the automation is broken and requires immediate attention.\n\nCurrent compliance status: 0\n(0 = Drifted/Sync Failed, 1 = Synced, 2 = Staged for an MCP rollout)"
+              runbook_url: placeholder
 
   # ============================================================================
   # Test: VirtPlatformAutopilotThrashingDetected - Warning Alert
-  # Tests the increase() function with 10m range
+  # Fires while any resource is paused (no "for:" delay) and resolves
+  # as soon as the pause is lifted.
   # ============================================================================
 
   - interval: 1m
     input_series:
-      # Scenario: High thrashing - counter increases by >5 in 10min window
-      # Time 0-10: counter goes 0->9, increase(10m) = 9 (> 5 threshold)
-      - series: 'kubevirt_autopilot_thrashing_total{kind="NodeHealthCheck",name="virt-workers",namespace="openshift-operators"}'
-        values: '0 0 1 2 3 4 5 6 7 8 9 10 11 12 13'
+      # Scenario: Resource paused (edit war active)
+      - series: 'kubevirt_autopilot_paused_resources{kind="NodeHealthCheck",name="virt-workers",namespace="openshift-operators"}'
+        values: '1 1 1 1 1 1 1 1'
 
     alert_rule_test:
-      # At 5min: increase[10m] would look at [0,5] = only 5 events, not enough
-      - eval_time: 5m
-        alertname: VirtPlatformAutopilotThrashingDetected
-        exp_alerts: []
-
-      # At 10min: increase[10m] looks at [0,10] = 9 events (> 5 threshold)
-      - eval_time: 10m
+      # No "for:" duration: fires on the first evaluation while paused
+      - eval_time: 1m
         alertname: VirtPlatformAutopilotThrashingDetected
         exp_alerts:
           - exp_labels:
               severity: warning
               operator: virt-platform-autopilot
+              kubernetes_operator_part_of: kubevirt
+              kubernetes_operator_component: autopilot
+              operator_health_impact: warning
               kind: NodeHealthCheck
               name: virt-workers
               namespace: openshift-operators
+            exp_annotations:
+              summary: "Edit war detected on NodeHealthCheck/virt-workers"
+              description: "virt-platform-autopilot detected an \"Edit War\" on\nNodeHealthCheck/virt-workers in namespace openshift-operators.\n\nAutomation has been paused to protect the API server from thrashing.\n\nPaused status: 1 (1=paused, 0=active)\n\nThis indicates another controller or user is modifying the resource,\nconflicting with the autopilot's desired state.\n\nTo resume reconciliation, remove the annotation:\nplatform.kubevirt.io/reconcile-paused=\"true\""
+              runbook_url: placeholder
+
+  - interval: 1m
+    input_series:
+      # Scenario: Pause lifted at t=3m; the alert must resolve immediately
+      - series: 'kubevirt_autopilot_paused_resources{kind="NodeHealthCheck",name="virt-workers",namespace="openshift-operators"}'
+        values: '1 1 1 0 0 0 0 0'
+
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: VirtPlatformAutopilotThrashingDetected
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              operator: virt-platform-autopilot
+              kubernetes_operator_part_of: kubevirt
+              kubernetes_operator_component: autopilot
+              operator_health_impact: warning
+              kind: NodeHealthCheck
+              name: virt-workers
+              namespace: openshift-operators
+            exp_annotations:
+              summary: "Edit war detected on NodeHealthCheck/virt-workers"
+              description: "virt-platform-autopilot detected an \"Edit War\" on\nNodeHealthCheck/virt-workers in namespace openshift-operators.\n\nAutomation has been paused to protect the API server from thrashing.\n\nPaused status: 1 (1=paused, 0=active)\n\nThis indicates another controller or user is modifying the resource,\nconflicting with the autopilot's desired state.\n\nTo resume reconciliation, remove the annotation:\nplatform.kubevirt.io/reconcile-paused=\"true\""
+              runbook_url: placeholder
+      - eval_time: 4m
+        alertname: VirtPlatformAutopilotThrashingDetected
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: VirtPlatformAutopilotThrashingDetected
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      # Scenario: Nothing paused (all values 0) - no alert
+      - series: 'kubevirt_autopilot_paused_resources{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"}'
+        values: '0 0 0 0 0 0 0 0 0 0'
+
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: VirtPlatformAutopilotThrashingDetected
+        exp_alerts: []
 
   # ============================================================================
   # Test: VirtPlatformAutopilotDependencyMissing - Warning Alert
@@ -111,16 +155,23 @@ tests:
         alertname: VirtPlatformAutopilotDependencyMissing
         exp_alerts: []
 
-      # After 5min: Alert SHOULD be firing with correct labels
+      # After 5min: Alert SHOULD be firing with correct labels and annotations
       - eval_time: 6m
         alertname: VirtPlatformAutopilotDependencyMissing
         exp_alerts:
           - exp_labels:
               severity: warning
               operator: virt-platform-autopilot
+              kubernetes_operator_part_of: kubevirt
+              kubernetes_operator_component: autopilot
+              operator_health_impact: none
               group: remediation.medik8s.io
               version: v1alpha1
               kind: NodeHealthCheck
+            exp_annotations:
+              summary: "Missing optional CRD: NodeHealthCheck.v1alpha1.remediation.medik8s.io"
+              description: "virt-platform-autopilot detected that the optional CRD\nNodeHealthCheck.v1alpha1.remediation.medik8s.io is missing\nfrom the cluster.\n\nRelated platform features (e.g., LoadAware Scheduling, Node Health Checks)\nwill not be configured until this CRD is installed.\n\nIf the related operator is not installed intentionally, you can silence\nthis alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation."
+              runbook_url: placeholder
 
   # ============================================================================
   # Test: VirtPlatformAutopilotDependencyMissing - No Alert When Not Opted In
@@ -167,6 +218,10 @@ tests:
               group: metallb.io
               version: v1
               kind: MetalLB
+            exp_annotations:
+              summary: "Missing optional CRD: MetalLB.v1.metallb.io"
+              description: "virt-platform-autopilot detected that the optional CRD\nMetalLB.v1.metallb.io is missing\nfrom the cluster.\n\nRelated platform features (e.g., LoadAware Scheduling, Node Health Checks)\nwill not be configured until this CRD is installed.\n\nIf the related operator is not installed intentionally, you can silence\nthis alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation."
+              runbook_url: placeholder
 
       # User opted out at 8m: alert resolves even though the CRD is still absent
       - eval_time: 10m
@@ -202,23 +257,6 @@ tests:
         exp_alerts: []
 
   # ============================================================================
-  # Test: Low Thrashing Should NOT Trigger Alert
-  # Tests the threshold logic (must be > 5 events)
-  # ============================================================================
-
-  - interval: 1m
-    input_series:
-      # Scenario: Only 3 thrashing events in 10min window (< 5 threshold)
-      - series: 'kubevirt_autopilot_thrashing_total{kind="HyperConverged",name="kubevirt-hyperconverged",namespace="openshift-cnv"}'
-        values: '0 0 0 1 1 1 1 2 2 2 3 3 3 3 3'
-
-    alert_rule_test:
-      # At 10min: increase[10m] = 3 events (< 5 threshold), should NOT alert
-      - eval_time: 10m
-        alertname: VirtPlatformAutopilotThrashingDetected
-        exp_alerts: []
-
-  # ============================================================================
   # Test: VirtPlatformAutopilotMachineConfigUpdateStaged - Informational Alert
   # A staged update is deliberate; this makes it visible after five minutes
   # without representing a remediation request.
@@ -244,6 +282,10 @@ tests:
               kubernetes_operator_component: autopilot
               machineconfig: 95-worker-kubelet-perf-settings
               pool: worker
+            exp_annotations:
+              summary: "MachineConfig update staged for MCP worker"
+              description: "virt-platform-autopilot has staged an update to MachineConfig\n95-worker-kubelet-perf-settings for MachineConfigPool worker.\n\nThe update is intentional and will be applied when a matching\nMachineConfigPool reports Updating=True, which may occur after\nthe rollout is already underway. No administrator action is\nrequired."
+              runbook_url: placeholder
 
   # ============================================================================
   # Test: Alert Expressions Are Syntactically Valid
@@ -255,7 +297,7 @@ tests:
       # Minimal test data - just ensuring expressions don't error
       - series: 'kubevirt_autopilot_compliance_status{kind="Test",name="test",namespace="test"}'
         values: '1 1 1'
-      - series: 'kubevirt_autopilot_thrashing_total{kind="Test",name="test",namespace="test"}'
+      - series: 'kubevirt_autopilot_paused_resources{kind="Test",name="test",namespace="test"}'
         values: '0 0 0'
       - series: 'kubevirt_autopilot_missing_dependency{group="test",version="v1",kind="Test"}'
         values: '0 0 0'

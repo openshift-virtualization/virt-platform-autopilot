@@ -17,6 +17,7 @@ limitations under the License.
 package observability
 
 import (
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,7 +30,28 @@ const (
 	subsystem = "autopilot"
 )
 
+// renderFailureLabels identifies the series an asset last reported. It is
+// retained after recovery so the series can be set to 0 instead of deleted:
+// a disappearing series resets the for: timer of a sustained-state alert.
+type renderFailureLabels struct {
+	reason string
+	code   string
+}
+
 var (
+	renderFailures   = map[string]renderFailureLabels{}
+	renderFailuresMu sync.Mutex
+
+	RenderFailed = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "render_failed",
+			Help:      "Asset rendering failures by reason and code (1=failed, 0=healthy or excluded; the series persists after recovery)",
+		},
+		[]string{"asset", "reason", "code"},
+	)
+
 	// ComplianceStatus tracks whether each managed resource is in sync with desired state.
 	// See the Compliance* constants for the values.
 	// This is the core health indicator used by the VirtPlatformAutopilotSyncFailed alert.
@@ -176,6 +198,7 @@ func init() {
 	// This registry is automatically exposed over HTTPS (mTLS) on :8443/metrics
 	// by the manager
 	metrics.Registry.MustRegister(
+		RenderFailed,
 		ComplianceStatus,
 		ThrashingTotal,
 		PausedResources,
@@ -252,6 +275,48 @@ func ClearCustomization(obj *unstructured.Unstructured, customizationType string
 func SetDependency(group, version, kind string, missing bool, optedIn bool) {
 	MissingDependency.WithLabelValues(group, version, kind).Set(boolToFloat(missing))
 	DependencyOptedIn.WithLabelValues(group, version, kind).Set(boolToFloat(optedIn))
+}
+
+// SetRenderFailure updates an asset's failure state.
+// A non-empty reason reports the failure as 1 on the (asset, reason, code)
+// series. An empty reason reports recovery or exclusion as 0. Series are never
+// deleted here: a scrape between a delete and the next set would observe a
+// missing series and reset the alert's for: timer, so recovery keeps the last
+// failure series present at 0 and a repeated failure reuses it.
+func SetRenderFailure(asset, reason, code string) {
+	renderFailuresMu.Lock()
+	defer renderFailuresMu.Unlock()
+
+	previous, existed := renderFailures[asset]
+	unchanged := existed && previous.reason == reason && previous.code == code
+	if existed && !unchanged && reason != "" {
+		// The failure changed shape: retire the previous series before
+		// publishing the new one so every scrape observes a settled value.
+		RenderFailed.WithLabelValues(asset, previous.reason, previous.code).Set(0)
+	}
+	switch {
+	case reason != "":
+		RenderFailed.WithLabelValues(asset, reason, code).Set(1)
+		renderFailures[asset] = renderFailureLabels{reason: reason, code: code}
+	case existed:
+		// Recovery or exclusion: keep the series, drop the failure.
+		RenderFailed.WithLabelValues(asset, previous.reason, previous.code).Set(0)
+	}
+}
+
+// ResetRenderFailures deletes every render-failure series and forgets their
+// labels. Call it only when the operator stops managing the cluster entirely
+// (HCO removal or Autopilot opt-out). Inconclusive reconciliation errors
+// (HCO reads, golden-config application, render-context building) must not
+// touch the gauges: prior state is preserved until each asset is re-evaluated
+// or intentionally excluded, disabled, or removed, so a transient error
+// cannot falsely resolve a persistent failure and restart the alert's for:
+// timer.
+func ResetRenderFailures() {
+	renderFailuresMu.Lock()
+	defer renderFailuresMu.Unlock()
+	RenderFailed.Reset()
+	clear(renderFailures)
 }
 
 func boolToFloat(b bool) float64 {

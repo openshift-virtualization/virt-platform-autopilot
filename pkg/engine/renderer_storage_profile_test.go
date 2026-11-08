@@ -59,7 +59,7 @@ func TestStorageProfileRWXClass(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		fn := funcMap["storageProfileRWXClass"].(func() string)
 
 		result := fn()
@@ -98,7 +98,7 @@ func TestStorageProfileRWXClass(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		fn := funcMap["storageProfileRWXClass"].(func() string)
 
 		result := fn()
@@ -127,7 +127,7 @@ func TestStorageProfileRWXClass(t *testing.T) {
 		renderer := NewRenderer(loader)
 		renderer.SetClient(fakeClient)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		fn := funcMap["storageProfileRWXClass"].(func() string)
 
 		result := fn()
@@ -140,7 +140,7 @@ func TestStorageProfileRWXClass(t *testing.T) {
 		loader := assets.NewLoader()
 		renderer := NewRenderer(loader)
 
-		funcMap := renderer.customFuncMap()
+		funcMap := renderer.customFuncMap(false)
 		fn := funcMap["storageProfileRWXClass"].(func() string)
 
 		result := fn()
