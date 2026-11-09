@@ -80,7 +80,12 @@ type testAsset struct {
 	Plural    string
 	Name      string
 	Namespace string
-	GateCRD   string
+	// GateCRDs lists all CRDs that must be installed for this asset to exist.
+	// Tests skip when any listed CRD is absent. Use multiple entries when the
+	// resource type and its soft dependency come from different operators
+	// (e.g. PersesDashboard requires both persesdashboards.perses.dev and
+	// kubedeschedulers.operator.openshift.io).
+	GateCRDs []string
 	// GateAnnotation is the opt-in HCO annotation key required to install this
 	// asset (Tech Preview / opt-in features). Empty for always-installed assets.
 	// enableAssetGates sets it on the HCO so the resource is present for tests.
@@ -145,7 +150,7 @@ var assetsUnderTest = initAssets([]testAsset{
 		Plural:        "servicemonitors",
 		Name:          "virt-platform-autopilot-metrics",
 		Namespace:     "openshift-cnv",
-		GateCRD:       "servicemonitors.monitoring.coreos.com",
+		GateCRDs:      []string{"servicemonitors.monitoring.coreos.com"},
 		ClusterScoped: false,
 		Override: UserOverrideFieldSpec{
 			JSONPointer: "/metadata/labels/app",
@@ -157,7 +162,7 @@ var assetsUnderTest = initAssets([]testAsset{
 		Plural:        "prometheusrules",
 		Name:          "virt-platform-autopilot-alerts",
 		Namespace:     "openshift-cnv",
-		GateCRD:       "prometheusrules.monitoring.coreos.com",
+		GateCRDs:      []string{"prometheusrules.monitoring.coreos.com"},
 		ClusterScoped: false,
 		Override: UserOverrideFieldSpec{
 			JSONPointer: "/metadata/labels/role",
@@ -169,7 +174,7 @@ var assetsUnderTest = initAssets([]testAsset{
 		GVK:           schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
 		Plural:        "uiplugins",
 		Name:          "monitoring",
-		GateCRD:       "uiplugins.observability.openshift.io",
+		GateCRDs:      []string{"uiplugins.observability.openshift.io"},
 		ClusterScoped: true,
 	},
 	{
@@ -177,7 +182,7 @@ var assetsUnderTest = initAssets([]testAsset{
 		GVK:           schema.GroupVersionKind{Group: "observability.openshift.io", Version: "v1alpha1", Kind: "UIPlugin"},
 		Plural:        "uiplugins",
 		Name:          "troubleshooting-panel",
-		GateCRD:       "uiplugins.observability.openshift.io",
+		GateCRDs:      []string{"uiplugins.observability.openshift.io"},
 		ClusterScoped: true,
 	},
 	{
@@ -185,7 +190,7 @@ var assetsUnderTest = initAssets([]testAsset{
 		Plural:        "kubedeschedulers",
 		Name:          "cluster",
 		Namespace:     "openshift-kube-descheduler-operator",
-		GateCRD:       "kubedeschedulers.operator.openshift.io",
+		GateCRDs:      []string{"kubedeschedulers.operator.openshift.io"},
 		ClusterScoped: false,
 		Override: UserOverrideFieldSpec{
 			JSONPointer: "/spec/deschedulingIntervalSeconds",
@@ -195,11 +200,13 @@ var assetsUnderTest = initAssets([]testAsset{
 	{
 		// No Override: PersesDashboard has no user-facing field outside SSA ownership.
 		// Uses legacy annotation-based patch path (same as UIPlugin).
+		// Requires both the Perses CRD (from COO) and the descheduler CRD: autopilot
+		// only creates this dashboard when both operators are present.
 		GVK:           schema.GroupVersionKind{Group: "perses.dev", Version: "v1alpha2", Kind: "PersesDashboard"},
 		Plural:        "persesdashboards",
 		Name:          "descheduler-memory-aware-rebalancing",
 		Namespace:     "openshift-cnv",
-		GateCRD:       "kubedeschedulers.operator.openshift.io",
+		GateCRDs:      []string{"persesdashboards.perses.dev", "kubedeschedulers.operator.openshift.io"},
 		ClusterScoped: false,
 	},
 	{
@@ -208,7 +215,7 @@ var assetsUnderTest = initAssets([]testAsset{
 		Plural:        "persesdashboards",
 		Name:          "autopilot-asset-health",
 		Namespace:     "openshift-cnv",
-		GateCRD:       "persesdashboards.perses.dev",
+		GateCRDs:      []string{"persesdashboards.perses.dev"},
 		ClusterScoped: false,
 	},
 })

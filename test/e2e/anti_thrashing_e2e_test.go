@@ -74,8 +74,8 @@ var _ = Describe("Anti-Thrashing E2E Tests", Ordered, ContinueOnFailure, func() 
 
 			BeforeAll(func() {
 				skipIfUnmanagedOnOCP(asset)
-				if asset.GateCRD != "" && !crdInstalled(asset.GateCRD) {
-					Skip(fmt.Sprintf("gate CRD %s not installed", asset.GateCRD))
+				if !allGateCRDsInstalled(asset) {
+					Skip(fmt.Sprintf("gate CRDs not all installed: %v", asset.GateCRDs))
 				}
 
 				By("verifying the resource exists before starting")
