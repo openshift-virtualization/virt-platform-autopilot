@@ -55,8 +55,8 @@ var _ = Describe("User Override E2E Tests: ", Ordered, ContinueOnFailure, func()
 
 		By("filtering assets by installed gate CRDs")
 		for _, asset := range assetsUnderTest {
-			if asset.GateCRD != "" && !crdInstalled(asset.GateCRD) {
-				GinkgoWriter.Printf("skipping %s/%s: gate CRD %s not installed\n", asset.GVK.Kind, asset.Name, asset.GateCRD)
+			if !allGateCRDsInstalled(asset) {
+				GinkgoWriter.Printf("skipping %s/%s: gate CRDs not all installed: %v\n", asset.GVK.Kind, asset.Name, asset.GateCRDs)
 				continue
 			}
 			assetsUnderTestAvailable = append(assetsUnderTestAvailable, asset)
