@@ -65,9 +65,9 @@ var _ = Describe("Operator Resilience After Restart", Ordered, ContinueOnFailure
 			var active []activeAsset
 			By("collecting baseline metrics for all managed assets")
 			for _, asset := range assetsUnderTest {
-				if asset.GateCRD != "" && !crdInstalled(asset.GateCRD) {
-					GinkgoWriter.Printf("resilience: skipping %s/%s — gate CRD %s not installed\n",
-						asset.GVK.Kind, asset.Name, asset.GateCRD)
+				if !allGateCRDsInstalled(asset) {
+					GinkgoWriter.Printf("resilience: skipping %s/%s — gate CRDs not all installed: %v\n",
+						asset.GVK.Kind, asset.Name, asset.GateCRDs)
 					continue
 				}
 				m := captureAssetMetrics(asset.GVK.Kind, asset.Name, asset.Namespace)

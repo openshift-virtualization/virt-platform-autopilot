@@ -408,8 +408,8 @@ func deleteResource(gvk schema.GroupVersionKind, name, namespace string) {
 }
 
 // gateAnnotationKeys returns the distinct opt-in annotation keys required by the
-// given assets, skipping assets whose gate CRD is not installed (matching the
-// per-asset GateCRD skip used throughout the suites).
+// given assets, skipping assets whose gate CRDs are not all installed (matching
+// the per-asset allGateCRDsInstalled skip used throughout the suites).
 func gateAnnotationKeys(assets []testAsset) []string {
 	seen := map[string]bool{}
 	var keys []string
@@ -417,7 +417,7 @@ func gateAnnotationKeys(assets []testAsset) []string {
 		if a.GateAnnotation == "" {
 			continue
 		}
-		if a.GateCRD != "" && !crdInstalled(a.GateCRD) {
+		if !allGateCRDsInstalled(a) {
 			continue
 		}
 		if !seen[a.GateAnnotation] {
@@ -577,6 +577,18 @@ func isOpenShiftCluster() bool {
 func crdInstalled(name string) bool {
 	crd := &apiextensionsv1.CustomResourceDefinition{}
 	return k8sClient.Get(ctx, types.NamespacedName{Name: name}, crd) == nil
+}
+
+// allGateCRDsInstalled returns true when every CRD listed in asset.GateCRDs is
+// present on the cluster. An asset with no gate CRDs is always considered
+// installed (unconditional assets like Service or MachineConfig).
+func allGateCRDsInstalled(asset testAsset) bool {
+	for _, crd := range asset.GateCRDs {
+		if !crdInstalled(crd) {
+			return false
+		}
+	}
+	return true
 }
 
 // skipIfUnmanagedOnOCP skips the current spec when the asset is a
