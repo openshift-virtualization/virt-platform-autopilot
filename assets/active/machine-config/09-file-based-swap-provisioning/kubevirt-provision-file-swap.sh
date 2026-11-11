@@ -4,6 +4,7 @@
 set -euo pipefail
 
 swap_file=/var/swapfile
+legacy_autopilot_swap_file=/var/ocpswap.file
 legacy_swap_files=(/var/tmp/ocpswap.file /var/tmp/swapfile)
 # A replacement is built here and renamed into place, so ${swap_file} only ever
 # holds a complete, mkswap-formatted file. A run that is interrupted part way
@@ -86,15 +87,6 @@ validate_configuration() {
     exit 1
   fi
 
-  # Earlier procedures provisioned swap under /var/tmp. Keep either known
-  # configuration intact rather than creating a second swap file without an
-  # explicit migration.
-  for legacy_swap_file in "${legacy_swap_files[@]}"; do
-    if [[ -f "${legacy_swap_file}" ]]; then
-      echo "legacy file-backed swap ${legacy_swap_file} exists; leaving it unchanged"
-      exit 0
-    fi
-  done
   if [[ -L "${swap_file}" ]]; then
     echo "refusing to replace symbolic link ${swap_file}" >&2
     exit 1
@@ -113,6 +105,31 @@ if (( overcommit_percentage <= 100 )); then
   remove_inactive_swap_file
   echo "memory overcommit is ${overcommit_percentage}%; removed file-backed swap"
   exit 0
+fi
+
+for legacy_swap_file in "${legacy_swap_files[@]}"; do
+  if [[ -f "${legacy_swap_file}" ]]; then
+    echo "legacy file-backed swap ${legacy_swap_file} exists; leaving it unchanged"
+    exit 0
+  fi
+done
+
+if [[ -e "${legacy_autopilot_swap_file}" ]]; then
+  if grep -Fq -- "${legacy_autopilot_swap_file}" /proc/swaps; then
+    echo "refusing to migrate active swap file ${legacy_autopilot_swap_file}" >&2
+    exit 1
+  fi
+  if [[ ! -f "${legacy_autopilot_swap_file}" ]]; then
+    echo "refusing to migrate non-regular file ${legacy_autopilot_swap_file}" >&2
+    exit 1
+  fi
+  if [[ -e "${swap_file}" ]]; then
+    rm -f -- "${legacy_autopilot_swap_file}"
+    echo "removed obsolete ${legacy_autopilot_swap_file}; ${swap_file} already present"
+  else
+    mv -f -- "${legacy_autopilot_swap_file}" "${swap_file}"
+    echo "migrated ${legacy_autopilot_swap_file} to ${swap_file}"
+  fi
 fi
 
 memory_kib=$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo)
