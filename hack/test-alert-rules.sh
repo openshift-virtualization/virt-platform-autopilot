@@ -2,8 +2,7 @@
 # Test Prometheus alert rules with promtool
 #
 # This script runs promtool tests and validates alert firing logic,
-# while ignoring annotation differences (promtool compares exact text
-# including whitespace, which can vary due to Prometheus template rendering).
+# labels, and annotations strictly against the generated rules.
 
 set -euo pipefail
 
@@ -34,8 +33,10 @@ try:
     # Read the PrometheusRule CRD
     with open('assets/active/observability/prometheus-rules.yaml.tpl') as f:
         content = f.read()
-    # Replace Go template expressions with placeholder values so YAML parses cleanly
-    content = re.sub(r'\{\{[^}]*\}\}', 'placeholder', content)
+    # Preserve escaped Prometheus expressions before replacing Go expressions.
+    # A flat regex otherwise leaves trailing backticks/braces in annotations.
+    content = re.sub(r'\{\{`(.*?)`\}\}', lambda match: match.group(1), content, flags=re.DOTALL)
+    content = re.sub(r'\{\{(?!\s*\$)[^}]*\}\}', 'placeholder', content)
     crd = yaml.safe_load(content)
 
     # Extract just the groups (what promtool expects)
@@ -54,48 +55,14 @@ except Exception as e:
 PYSCRIPT
 
 echo ""
+# Configuration alert coverage is strict, including its remediation annotations.
+promtool test rules "${REPO_ROOT}/test/promtool/logging_storage_tests.yml"
+
 echo "Running promtool tests on alert rules..."
 echo "File: test/promtool/alert_tests.yml"
 echo ""
 
-# Run promtool test (will return non-zero if tests fail)
-# Capture output for analysis
-OUTPUT=$(promtool test rules "${REPO_ROOT}/test/promtool/alert_tests.yml" 2>&1) || TEST_EXIT=$?
-
-# Check if there was an actual failure (not just annotation differences)
-if [ -z "${TEST_EXIT:-}" ]; then
-    # Tests passed completely
-    echo "✓ All promtool tests passed"
-    exit 0
-fi
-
-# Tests failed - check if it's only annotation differences
-# Promtool output shows "FAILED:" when tests fail
-if echo "${OUTPUT}" | grep -q "FAILED"; then
-    # Check if labels match (this means alert logic is correct)
-    # We look for our operator label in the output (simplified check)
-    if echo "${OUTPUT}" | grep -q 'Labels:[{].*operator="virt-platform-autopilot"'; then
-        echo "✓ Alert expressions are syntactically correct"
-        echo "✓ Alerts fire at correct times (for: durations validated)"
-        echo "✓ Alert labels match correctly"
-        echo "✓ Alert thresholds work correctly"
-        echo ""
-        echo "ℹ️  Note: Annotation comparison failures are expected"
-        echo "   Promtool compares exact annotation text including whitespace."
-        echo "   Prometheus template rendering can add trailing spaces/newlines."
-        echo "   Integration tests (test/prometheus_rules_test.go) validate annotation structure."
-        echo ""
-        exit 0
-    else
-        echo "❌ ERROR: Alert labels do not match or alerts firing at wrong times"
-        echo ""
-        echo "${OUTPUT}"
-        exit 1
-    fi
-fi
-
-# Unknown failure
-echo "❌ ERROR: Unexpected promtool failure"
-echo ""
-echo "${OUTPUT}"
-exit 1
+# Run promtool test (strict: labels and annotations must match exactly;
+# set -e propagates any failure)
+promtool test rules "${REPO_ROOT}/test/promtool/alert_tests.yml"
+echo "✓ All promtool tests passed"

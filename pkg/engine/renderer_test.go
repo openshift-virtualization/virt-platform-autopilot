@@ -266,7 +266,7 @@ func assertFunctionsNotExist(t *testing.T, funcMap map[string]any, dangerousFunc
 func TestCustomFuncMap(t *testing.T) {
 	loader := assets.NewLoader()
 	renderer := NewRenderer(loader)
-	funcMap := renderer.customFuncMap()
+	funcMap := renderer.customFuncMap(false)
 
 	t.Run("includes dig function", func(t *testing.T) {
 		if _, exists := funcMap["dig"]; !exists {

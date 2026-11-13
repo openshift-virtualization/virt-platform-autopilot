@@ -80,6 +80,7 @@ func (p *Patcher) SetEventRecorder(recorder *util.EventRecorder) {
 // DeleteAssetMetrics. Silently returns if rendering fails or yields nothing — the metric
 // series either never existed or the template cannot resolve, both are safe to ignore.
 func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) {
+	observability.SetRenderFailure(assetMeta.Name, "", "")
 	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
 	if err != nil || desired == nil {
 		return
@@ -88,6 +89,54 @@ func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCt
 	if _, err := p.clearMachineConfigStaging(context.Background(), desired, renderCtx); err != nil {
 		log.Log.V(1).Info("Failed to clear staged MachineConfig update for excluded asset", "name", desired.GetName(), "error", err)
 	}
+}
+
+// isRenderOptedOut reports whether an asset whose rendering failed is opted
+// out of management: root-excluded via the disabled-resources annotation, or
+// unmanaged (mode: unmanaged) on the live object. The target identity is
+// recovered with a configuration-tolerant render; when even that cannot
+// resolve an object, the asset is treated as managed so the failure stays
+// visible.
+func (p *Patcher) isRenderOptedOut(ctx context.Context, assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
+	logger := log.FromContext(ctx)
+
+	identity := p.renderer.RenderAssetIdentity(assetMeta, renderCtx)
+	if identity == nil {
+		return false
+	}
+
+	if renderCtx.HCO != nil {
+		if disabled := renderCtx.HCO.GetAnnotations()[DisabledResourcesAnnotation]; disabled != "" {
+			rules, err := ParseDisabledResources(disabled)
+			if err != nil {
+				logger.Error(err, "Invalid disabled-resources annotation, ignoring",
+					"annotation", disabled,
+				)
+			} else if IsResourceExcluded(identity.GetKind(), identity.GetNamespace(), identity.GetName(), rules) {
+				return true
+			}
+		}
+	}
+
+	// Mirror the main flow's live-object lookup: cached Get first, then a
+	// direct read for unlabeled objects the cache may filter out.
+	live := &unstructured.Unstructured{}
+	live.SetGroupVersionKind(identity.GroupVersionKind())
+	objKey := client.ObjectKey{
+		Namespace: identity.GetNamespace(),
+		Name:      identity.GetName(),
+	}
+	if err := p.applier.Get(ctx, objKey, live); err == nil {
+		return overrides.IsUnmanaged(live)
+	} else if !errors.IsNotFound(err) {
+		return false
+	}
+	direct := &unstructured.Unstructured{}
+	direct.SetGroupVersionKind(identity.GroupVersionKind())
+	if err := p.applier.GetDirect(ctx, objKey, direct); err == nil {
+		return overrides.IsUnmanaged(direct)
+	}
+	return false
 }
 
 // ReconcileAsset performs the full Patched Baseline algorithm for an asset
@@ -106,11 +155,26 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Step 1: Render asset template → Opinionated State
 	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
 	if err != nil {
+		// The render failed, but the asset may be opted out of management:
+		// a root-excluded or unmanaged resource is not our failure to report,
+		// and recording it would keep the alert firing for a resource the
+		// operator is not supposed to manage.
+		if p.isRenderOptedOut(ctx, assetMeta, renderCtx) {
+			observability.SetRenderFailure(assetMeta.Name, "", "")
+			logger.V(1).Info("Asset render failed but resource is opted out of management, skipping",
+				"name", assetMeta.Name,
+				"error", err,
+			)
+			return false, nil
+		}
+		reason, code := renderFailureLabels(err)
+		observability.SetRenderFailure(assetMeta.Name, reason, code)
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
 			p.eventRecorder.RenderFailed(renderCtx.HCO, assetMeta.Name, err.Error())
 		}
 		return false, fmt.Errorf("failed to render asset %s: %w", assetMeta.Name, err)
 	}
+	observability.SetRenderFailure(assetMeta.Name, "", "")
 
 	// Handle conditional assets that don't apply (template rendered empty)
 	if desired == nil {

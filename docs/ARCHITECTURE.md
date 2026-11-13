@@ -413,15 +413,19 @@ The autopilot exposes Prometheus metrics over HTTPS (mTLS) on port 8443 (`/metri
 - `kubevirt_autopilot_asset_apply_total` - Successful applies per asset
 - `kubevirt_autopilot_drift_detected_total` - Drift detections per asset
 - `kubevirt_autopilot_throttle_delayed_total` - Reconciliations delayed by throttling
+- `kubevirt_autopilot_render_failed` - Per-asset rendering status with `asset`, `reason` (`configuration` or `internal`), and bounded `code` labels. The gauge is 1 while the asset fails to render and 0 when it is healthy or opted out (excluded, unmanaged); series persist at 0 after recovery so alert `for:` timers are not reset by a disappearing series. A reason/code change zeroes the previous series and sets the new one to 1. Disabling Autopilot or removing HCO deletes all failure series; exits before asset reconciliation (HCO read or render-context errors) preserve the last recorded state until the asset is re-evaluated, so a transient error cannot falsely resolve a persistent failure and restart the alert's `for:` timer.
 
 ### Alerts
 
-The autopilot fires alerts only when user intervention is required:
+Actionable alerts identify failures requiring administrator intervention.
+The staged MachineConfig alert is informational:
 
 - **VirtPlatformAutopilotSyncFailed**: Asset reconciliation failing repeatedly
+- **VirtPlatformAutopilotLoggingStorageNotConfigured**: The `logging-lokistack` asset cannot select an explicit, existing, or default StorageClass for fifteen minutes. Only the validated `NoDefaultStorageClass` configuration error triggers this alert; internal rendering and API read failures remain observable without triggering a configuration alert.
 - **VirtPlatformAutopilotDependencyMissing**: Required CRD or dependency not found
 - **VirtPlatformAutopilotThrashingDetected**: Excessive reconciliation indicating configuration issue
 - **VirtPlatformAutopilotTombstoneStuck**: Tombstone deletion failing
+- **VirtPlatformAutopilotMachineConfigUpdateStaged**: An update is intentionally held for a matching pool rollout; no action is normally required.
 
 See [Runbooks](https://kubevirt.io/monitoring/runbooks/) for detailed alert descriptions and remediation steps.
 
@@ -434,6 +438,20 @@ Kubernetes events are emitted for significant state changes:
 - User patch applied
 - Tombstone processed
 - Errors and warnings
+
+### Configuration alerts and runbooks
+
+Renderer validation returns a typed `ConfigurationError` only for a known,
+administrator-correctable problem. Template execution preserves the error chain;
+the patcher classifies the original error before aggregating reconcile failures.
+Other rendering errors, including API lookup failures, use `reason="internal"`.
+`RenderFailed` warning events on HyperConverged include the asset and underlying
+problem. Error messages and object details are not metric labels.
+
+Add an alert for each distinct remediation, selecting the asset, configuration
+reason, and stable error code. Every alert, including informational alerts, must
+have a dedicated runbook in `kubevirt/monitoring`. Alert-rule tests verify the
+runbook URL shape; validate runbook content in the monitoring repository.
 
 ## Project Structure
 

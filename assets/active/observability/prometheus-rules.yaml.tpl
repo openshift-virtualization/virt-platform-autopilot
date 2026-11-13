@@ -108,6 +108,32 @@ spec:
               this alert or opt-out via platform.kubevirt.io/mode: unmanaged annotation.
             runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotDependencyMissing" }}"
 
+        - alert: VirtPlatformAutopilotLoggingStorageNotConfigured
+          expr: |
+            kubevirt_autopilot_render_failed{asset="logging-lokistack", reason="configuration", code="NoDefaultStorageClass"} == 1
+          for: 15m
+          labels:
+            severity: warning
+            # Route and filter this alert with the affected LokiStack namespace,
+            # not the operator namespace: the problem and its remediation belong
+            # to logging storage, and the LokiStack asset targets openshift-logging.
+            namespace: openshift-logging
+            operator: virt-platform-autopilot
+            kubernetes_operator_part_of: kubevirt
+            kubernetes_operator_component: autopilot
+            operator_health_impact: warning
+          annotations:
+            summary: "Autopilot logging storage is not configured for {{`{{ $labels.asset }}`}}"
+            description: |-
+              virt-platform-autopilot cannot configure Loki block storage for {{`{{ $labels.asset }}`}}:
+              no explicit storage class, existing LokiStack storage class,
+              or cluster default StorageClass is available.
+
+              Set platform.kubevirt.io/logging-storage-class on HyperConverged
+              to a suitable StorageClass, or configure a cluster default.
+              Inspect RenderFailed events on HyperConverged for details.
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotLoggingStorageNotConfigured" }}"
+
         - alert: VirtPlatformAutopilotTombstoneStuck
           # Tombstone cleanup indicator: Tombstone deletion failed or skipped
           # Expr: kubevirt_autopilot_tombstone_status < 0
@@ -145,7 +171,8 @@ spec:
       rules:
         - alert: VirtPlatformAutopilotMachineConfigUpdateStaged
           # Informational only: a staged update is intentional and will be
-          # applied when a matching MCP next begins its rollout.
+          # applied when a matching MCP reports Updating=True, which may
+          # occur after the rollout is already underway.
           expr: |
             kubevirt_autopilot_machineconfig_update_staged == 1
           for: 5m
@@ -162,5 +189,7 @@ spec:
               {{`{{ $labels.machineconfig }}`}} for MachineConfigPool {{`{{ $labels.pool }}`}}.
 
               The update is intentional and will be applied when a matching
-              MachineConfigPool next starts a rollout. No administrator action
-              is required.
+              MachineConfigPool reports Updating=True, which may occur after
+              the rollout is already underway. No administrator action is
+              required.
+            runbook_url: "{{ printf (.RunbookURLTemplate | default "https://kubevirt.io/monitoring/runbooks/%s") "VirtPlatformAutopilotMachineConfigUpdateStaged" }}"
