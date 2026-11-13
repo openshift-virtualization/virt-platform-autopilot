@@ -2,7 +2,9 @@
 
 `virt-platform-autopilot` is an OpenShift Virtualization operator that renders
 and reconciles opinionated platform assets. It manages existing Kubernetes and
-OpenShift APIs; it intentionally introduces no CRDs or autopilot status API.
+OpenShift APIs; it intentionally introduces no CRDs or general serving API.
+It may reconcile bounded inspection ConfigMaps in its own namespace; see
+`docs/console-inspection-api.md` for the approved scope, contract, and safeguards.
 
 Keep this file concise. Detailed design intent lives in the linked documents.
 
