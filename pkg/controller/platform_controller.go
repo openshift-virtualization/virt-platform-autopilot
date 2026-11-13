@@ -503,6 +503,22 @@ func (r *PlatformReconciler) getAssetsByCRD(crdName string) []string {
 	return r.registry.GetAssetsByCRD(crdName)
 }
 
+// MachineConfigPoolCRDName is the CRD backing the MachineConfigPool type that
+// staged MachineConfig updates coalesce against. No asset renders a
+// MachineConfigPool, so the registry does not treat it as a managed CRD; the
+// operator watches it (and cache-exempts it, see cmd/main.go) only when the
+// CRD is installed at startup.
+const MachineConfigPoolCRDName = "machineconfigpools.machineconfiguration.openshift.io"
+
+// isWatchDependencyCRD reports whether a CRD backs a resource that no asset
+// renders but that the operator watches and cache-exempts when it is
+// installed at startup. A late create or a delete of such a CRD is invisible
+// to the registry, yet it still requires a restart to reconfigure the watch
+// and the cache.
+func isWatchDependencyCRD(crdName string) bool {
+	return crdName == MachineConfigPoolCRDName
+}
+
 // isWatchedCRD safely checks if a CRD is currently being watched
 func (r *PlatformReconciler) isWatchedCRD(crdName string) bool {
 	r.watchedCRDsMu.RLock()
@@ -544,6 +560,15 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 				r.triggerShutdown()
 			}
 
+			// Watch dependencies are not rendered by any asset, so the registry
+			// does not know them; they are watched and cache-exempted only when
+			// installed at startup. Restart to pick both up.
+			if isWatchDependencyCRD(crd.Name) && !r.isWatchedCRD(crd.Name) {
+				logger.Info("New watch dependency CRD created - restarting operator to configure watch and cache exemption",
+					"crd", crd.Name)
+				r.triggerShutdown()
+			}
+
 			// For non-managed CRDs, just invalidate cache and trigger reconciliation
 			r.crdChecker.InvalidateCache("")
 			q.Add(reconcile.Request{
@@ -561,6 +586,14 @@ func (r *PlatformReconciler) crdEventHandler(ctx context.Context) handler.EventH
 				logger.Info("Watched CRD deleted - restarting operator to remove watch",
 					"crd", crd.Name)
 				// Trigger graceful shutdown so deployment restarts us without the watch
+				r.triggerShutdown()
+			}
+
+			// A deleted watch dependency leaves a stale watch and cache
+			// exemption behind; restart to drop both.
+			if isWatchDependencyCRD(crd.Name) && r.isWatchedCRD(crd.Name) {
+				logger.Info("Watched dependency CRD deleted - restarting operator to remove watch and cache exemption",
+					"crd", crd.Name)
 				r.triggerShutdown()
 			}
 
@@ -636,13 +669,16 @@ func (r *PlatformReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// MCO is absent on non-OpenShift clusters. Avoid registering an unserved
 	// GVK there, while still watching it immediately on OpenShift.
-	mcpInstalled, err := r.crdChecker.IsCRDInstalled(ctx, "machineconfigpools.machineconfiguration.openshift.io")
+	mcpInstalled, err := r.crdChecker.IsCRDInstalled(ctx, MachineConfigPoolCRDName)
 	if err != nil {
 		logger.Error(err, "Failed to check MCP CRD; staged MachineConfig updates will use periodic reconciliation")
 	} else if mcpInstalled {
 		builder = builder.Watches(mcp, handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, object client.Object) []reconcile.Request {
 			return []reconcile.Request{{NamespacedName: r.getHyperConvergedNamespacedName()}}
 		}), ctrlbuilder.WithPredicates(machineConfigPoolRolloutPredicate()))
+		// Mark the dependency as watched so a later deletion of its CRD
+		// restarts the operator, mirroring managed CRD discovery below.
+		r.markCRDAsWatched(MachineConfigPoolCRDName)
 	}
 
 	// The metrics TLS controller sends this only after it has atomically updated
