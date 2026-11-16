@@ -255,11 +255,36 @@ func systemdDropInContents(t *testing.T, unit map[string]any, name string) strin
 // the payload once to catch unresolved template markers (invalid YAML).
 
 func TestKubeletPerfSettingsDocumentation(t *testing.T) {
-	_, loader, asset := renderHCOAsset(t, "kubelet-perf-settings")
-
-	content, err := loader.LoadAsset(asset.Path)
+	rendered /*loader, asset*/, _, _ := renderHCOAsset(t, "kubelet-perf-settings")
+	if rendered == nil || rendered.Object == nil {
+		t.Fatalf("Failed to load kubelet perf settings")
+	}
+	files, found, err := unstructured.NestedSlice(rendered.Object, "spec", "config", "storage", "files")
 	if err != nil {
-		t.Fatalf("Failed to load template: %v", err)
+		t.Fatalf("Failed to load kubelet perf settings: %v", err)
+	}
+
+	if !found || len(files) != 1 {
+		t.Fatalf("Failed to find kubelet perf settings files")
+	}
+
+	source, found, err := unstructured.NestedString(files[0].(map[string]any), "contents", "source")
+	if err != nil {
+		t.Fatalf("Failed to load kubelet perf settings; %v", err)
+	}
+	if !found {
+		t.Fatalf("Failed to find kubelet perf settings contents; can't find file source field")
+	}
+
+	const base64Prefix = "data:text/plain;charset=utf-8;base64,"
+	fileBase64, isBase64 := strings.CutPrefix(source, base64Prefix)
+	if !isBase64 {
+		t.Fatal("Failed to find kubelet perf settings files; unknown file format")
+	}
+
+	content, err := base64.StdEncoding.DecodeString(fileBase64)
+	if err != nil {
+		t.Fatalf("Failed to decode kubelet perf settings: %v", err)
 	}
 
 	contentStr := string(content)
