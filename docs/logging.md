@@ -94,6 +94,12 @@ the asset name and underlying error, and failed reconciliations are retried.
 Render failures happen before resource compliance metrics are updated; do not
 rely on the existing per-resource sync-failure alert to detect every render error.
 
+The `VirtPlatformAutopilotLoggingStorageNotConfigured` warning fires after fifteen
+minutes when `logging-lokistack` reports `NoDefaultStorageClass`. Its dedicated
+[runbook](https://kubevirt.io/monitoring/runbooks/VirtPlatformAutopilotLoggingStorageNotConfigured)
+explains storage selection. API read failures and internal template errors are
+visible in events and metrics but do not trigger this configuration alert.
+
 ### Missing operators or disabled logging
 
 ```bash

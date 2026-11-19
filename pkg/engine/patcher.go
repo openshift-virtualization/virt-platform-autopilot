@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -76,18 +77,98 @@ func (p *Patcher) SetEventRecorder(recorder *util.EventRecorder) {
 
 // CleanupExcludedAsset deletes per-asset Prometheus metrics for an asset that is no
 // longer in the active set (allowlist narrowed, CRD removed, condition no longer met).
-// It renders the template to discover the resource's kind/name/namespace, then calls
-// DeleteAssetMetrics. Silently returns if rendering fails or yields nothing — the metric
-// series either never existed or the template cannot resolve, both are safe to ignore.
+// It recovers the resource's identity with a configuration-tolerant render, so cleanup
+// still works when cluster configuration is missing, then calls DeleteAssetMetrics.
+// Silently returns if the identity cannot be resolved — the metric series either
+// never existed or the template cannot resolve, both are safe to ignore.
 func (p *Patcher) CleanupExcludedAsset(assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) {
-	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
-	if err != nil || desired == nil {
+	observability.SetRenderFailure(assetMeta.Name, "", "")
+	identity := p.renderer.RenderAssetIdentity(assetMeta, renderCtx)
+	if identity == nil {
 		return
 	}
-	observability.DeleteAssetMetrics(desired.GetKind(), desired.GetName(), desired.GetNamespace())
-	if _, err := p.clearMachineConfigStaging(context.Background(), desired, renderCtx); err != nil {
-		log.Log.V(1).Info("Failed to clear staged MachineConfig update for excluded asset", "name", desired.GetName(), "error", err)
+	observability.DeleteAssetMetrics(identity.GetKind(), identity.GetName(), identity.GetNamespace())
+	if _, err := p.clearMachineConfigStaging(context.Background(), identity, renderCtx); err != nil {
+		log.Log.V(1).Info("Failed to clear staged MachineConfig update for excluded asset", "name", identity.GetName(), "error", err)
 	}
+}
+
+// isRootExcluded reports whether the resource identified by kind, namespace,
+// and name is excluded from management via the disabled-resources annotation
+// on the HCO CR. An invalid annotation is logged and ignored.
+func (p *Patcher) isRootExcluded(ctx context.Context, renderCtx *pkgcontext.RenderContext, kind, namespace, name string) bool {
+	logger := log.FromContext(ctx)
+	if renderCtx.HCO == nil {
+		return false
+	}
+	disabled := renderCtx.HCO.GetAnnotations()[DisabledResourcesAnnotation]
+	if disabled == "" {
+		return false
+	}
+	rules, err := ParseDisabledResources(disabled)
+	if err != nil {
+		logger.Error(err, "Invalid disabled-resources annotation, ignoring",
+			"annotation", disabled,
+		)
+		return false
+	}
+	return IsResourceExcluded(kind, namespace, name, rules)
+}
+
+// getLiveObject returns the live object identified by gvk and key. The cached
+// Get is tried first; an unlabeled object the cache may filter out is adopted
+// through a direct API read. It returns nil when the object does not exist.
+func (p *Patcher) getLiveObject(ctx context.Context, gvk schema.GroupVersionKind, key client.ObjectKey) (*unstructured.Unstructured, error) {
+	logger := log.FromContext(ctx)
+	live := &unstructured.Unstructured{}
+	live.SetGroupVersionKind(gvk)
+	if err := p.applier.Get(ctx, key, live); err == nil {
+		return live, nil
+	} else if !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get live object: %w", err)
+	}
+	// Object not found in cache - might be unlabeled and filtered out.
+	// Try a direct API call to check if it exists but lacks the managed-by
+	// label so it can be adopted.
+	direct := &unstructured.Unstructured{}
+	direct.SetGroupVersionKind(gvk)
+	if err := p.applier.GetDirect(ctx, key, direct); err == nil {
+		logger.V(1).Info("Adopting unlabeled object",
+			"kind", gvk.Kind,
+			"namespace", key.Namespace,
+			"name", key.Name,
+		)
+		return direct, nil
+	} else if !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get live object: %w", err)
+	}
+	return nil, nil
+}
+
+// isRenderOptedOut reports whether an asset whose rendering failed is opted
+// out of management: root-excluded via the disabled-resources annotation, or
+// unmanaged (mode: unmanaged) on the live object. The target identity is
+// recovered with a configuration-tolerant render; when even that cannot
+// resolve an object, the asset is treated as managed so the failure stays
+// visible.
+func (p *Patcher) isRenderOptedOut(ctx context.Context, assetMeta *assets.AssetMetadata, renderCtx *pkgcontext.RenderContext) bool {
+	identity := p.renderer.RenderAssetIdentity(assetMeta, renderCtx)
+	if identity == nil {
+		return false
+	}
+	if p.isRootExcluded(ctx, renderCtx, identity.GetKind(), identity.GetNamespace(), identity.GetName()) {
+		return true
+	}
+	live, err := p.getLiveObject(ctx, identity.GroupVersionKind(), client.ObjectKey{
+		Namespace: identity.GetNamespace(),
+		Name:      identity.GetName(),
+	})
+	if err != nil || live == nil {
+		// Lookup errors are inconclusive: treat the asset as managed so the
+		// failure stays visible.
+		return false
+	}
+	return overrides.IsUnmanaged(live)
 }
 
 // ReconcileAsset performs the full Patched Baseline algorithm for an asset
@@ -106,11 +187,26 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	// Step 1: Render asset template → Opinionated State
 	desired, err := p.renderer.RenderAsset(assetMeta, renderCtx)
 	if err != nil {
+		// The render failed, but the asset may be opted out of management:
+		// a root-excluded or unmanaged resource is not our failure to report,
+		// and recording it would keep the alert firing for a resource the
+		// operator is not supposed to manage.
+		if p.isRenderOptedOut(ctx, assetMeta, renderCtx) {
+			observability.SetRenderFailure(assetMeta.Name, "", "")
+			logger.V(1).Info("Asset render failed but resource is opted out of management, skipping",
+				"name", assetMeta.Name,
+				"error", err,
+			)
+			return false, nil
+		}
+		reason, code := renderFailureLabels(err)
+		observability.SetRenderFailure(assetMeta.Name, reason, code)
 		if p.eventRecorder != nil && renderCtx.HCO != nil {
 			p.eventRecorder.RenderFailed(renderCtx.HCO, assetMeta.Name, err.Error())
 		}
 		return false, fmt.Errorf("failed to render asset %s: %w", assetMeta.Name, err)
 	}
+	observability.SetRenderFailure(assetMeta.Name, "", "")
 
 	// Handle conditional assets that don't apply (template rendered empty)
 	if desired == nil {
@@ -121,32 +217,24 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 	}
 
 	// Root Exclusion: Check if this resource is explicitly disabled via annotation
-	disabledAnnotation := renderCtx.HCO.GetAnnotations()[DisabledResourcesAnnotation]
-	if disabledAnnotation != "" {
-		rules, err := ParseDisabledResources(disabledAnnotation)
-		if err != nil {
-			logger.Error(err, "Invalid disabled-resources annotation, ignoring",
-				"annotation", disabledAnnotation,
-			)
-		} else if IsResourceExcluded(desired.GetKind(), desired.GetNamespace(), desired.GetName(), rules) {
-			logger.Info("Skipping resource due to Root Exclusion",
-				"kind", desired.GetKind(),
-				"namespace", desired.GetNamespace(),
-				"name", desired.GetName(),
-				"annotation", DisabledResourcesAnnotation,
-			)
-			// Clear metrics that would be misleading if stale:
-			// - compliance_status: staying at 1 would imply the operator is
-			//   actively verifying the asset, which it is not.
-			// - paused_resources: staying at 1 would imply an active edit war.
-			// customization_info is intentionally left untouched: the underlying
-			// annotations persist on the object while excluded, so the metric
-			// accurately reflects their presence. When exclusion is lifted the
-			// managed reconcile re-evaluates them from scratch.
-			observability.ClearCompliance(desired)
-			observability.SetPaused(desired, false)
-			return false, nil
-		}
+	if p.isRootExcluded(ctx, renderCtx, desired.GetKind(), desired.GetNamespace(), desired.GetName()) {
+		logger.Info("Skipping resource due to Root Exclusion",
+			"kind", desired.GetKind(),
+			"namespace", desired.GetNamespace(),
+			"name", desired.GetName(),
+			"annotation", DisabledResourcesAnnotation,
+		)
+		// Clear metrics that would be misleading if stale:
+		// - compliance_status: staying at 1 would imply the operator is
+		//   actively verifying the asset, which it is not.
+		// - paused_resources: staying at 1 would imply an active edit war.
+		// customization_info is intentionally left untouched: the underlying
+		// annotations persist on the object while excluded, so the metric
+		// accurately reflects their presence. When exclusion is lifted the
+		// managed reconcile re-evaluates them from scratch.
+		observability.ClearCompliance(desired)
+		observability.SetPaused(desired, false)
+		return false, nil
 	}
 
 	// A MachineConfig that explicitly depends on a Node Disruption Policy must
@@ -174,42 +262,14 @@ func (p *Patcher) ReconcileAsset(ctx context.Context, assetMeta *assets.AssetMet
 
 	// Get live object from cluster
 	// First try cached Get, then fall back to direct API call for adoption scenarios
-	live := &unstructured.Unstructured{}
-	live.SetGroupVersionKind(desired.GroupVersionKind())
-	objKey := client.ObjectKey{
+	live, err := p.getLiveObject(ctx, desired.GroupVersionKind(), client.ObjectKey{
 		Namespace: desired.GetNamespace(),
 		Name:      desired.GetName(),
+	})
+	if err != nil {
+		return false, err
 	}
-
-	err = p.applier.Get(ctx, objKey, live)
-	liveExists := err == nil
-
-	if errors.IsNotFound(err) {
-		// Object not found in cache - might be unlabeled and filtered out
-		// Try direct API call to check if it exists but lacks managed-by label
-		directLive := &unstructured.Unstructured{}
-		directLive.SetGroupVersionKind(desired.GroupVersionKind())
-		directErr := p.applier.GetDirect(ctx, objKey, directLive)
-
-		if directErr == nil {
-			// Object exists but was not in cache (probably unlabeled)
-			// We'll adopt it by adding the label during Apply
-			logger.V(1).Info("Adopting unlabeled object",
-				"kind", desired.GetKind(),
-				"namespace", desired.GetNamespace(),
-				"name", desired.GetName(),
-			)
-			live = directLive
-			liveExists = true
-		} else if !errors.IsNotFound(directErr) {
-			// Some other error occurred
-			return false, fmt.Errorf("failed to get live object: %w", directErr)
-		}
-		// If directErr is NotFound, object truly doesn't exist
-	} else if err != nil {
-		// Some other error occurred during cached Get
-		return false, fmt.Errorf("failed to get live object: %w", err)
-	}
+	liveExists := live != nil
 
 	// Log if we need to re-label an existing object
 	if liveExists && !HasManagedByLabel(live) {
