@@ -76,11 +76,11 @@ require-container-tool:
 .PHONY: build
 build: fmt vet ## Build manager binary and csv-generator
 	go build -o bin/manager cmd/main.go
-	go build -o bin/csv-generator cmd/csv-generator/main.go
+	go build -o bin/csv-generator ./cmd/csv-generator
 
 .PHONY: build-csv-gen
 build-csv-gen: fmt vet ## Build csv-generator binary only
-	go build -o bin/csv-generator cmd/csv-generator/main.go
+	go build -o bin/csv-generator ./cmd/csv-generator
 
 .PHONY: generate-csv
 generate-csv: build-csv-gen ## Generate sample CSV to stdout (for inspection)
