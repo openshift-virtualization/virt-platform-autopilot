@@ -17,13 +17,19 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
@@ -193,6 +199,82 @@ func TestIsWatchedCRD(t *testing.T) {
 		if reconciler.isWatchedCRD("") {
 			t.Error("isWatchedCRD() returned true for empty name")
 		}
+	})
+}
+
+func TestIsWatchDependencyCRD(t *testing.T) {
+	t.Run("returns true for the MachineConfigPool CRD", func(t *testing.T) {
+		if !isWatchDependencyCRD(MachineConfigPoolCRDName) {
+			t.Error("isWatchDependencyCRD() returned false for the MachineConfigPool CRD")
+		}
+	})
+
+	t.Run("returns false for managed and unknown CRDs", func(t *testing.T) {
+		for _, name := range []string{
+			"",
+			"machineconfigs.machineconfiguration.openshift.io",
+			"operationrulesets.ifo.kubevirt.io",
+		} {
+			if isWatchDependencyCRD(name) {
+				t.Errorf("isWatchDependencyCRD() returned true for %q", name)
+			}
+		}
+	})
+}
+
+func TestCRDEventHandlerWatchDependency(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = apiextensionsv1.AddToScheme(scheme)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+	reconciler, _ := NewPlatformReconciler(fakeClient, fakeClient, "test-namespace")
+
+	// triggerShutdown falls back to os.Exit when no shutdownFunc is set.
+	shutdown := make(chan struct{}, 1)
+	reconciler.shutdownFunc = func() { shutdown <- struct{}{} }
+
+	handler := reconciler.crdEventHandler(context.Background())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
+	defer queue.ShutDown()
+
+	mcpCRD := &apiextensionsv1.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: MachineConfigPoolCRDName},
+	}
+
+	expectShutdown := func(t *testing.T, want bool) {
+		t.Helper()
+		select {
+		case <-shutdown:
+			if !want {
+				t.Error("operator restart triggered unexpectedly")
+			}
+		case <-time.After(100 * time.Millisecond):
+			if want {
+				t.Error("expected operator restart was not triggered")
+			}
+		}
+	}
+
+	t.Run("delete of unwatched dependency CRD does not restart operator", func(t *testing.T) {
+		handler.Delete(context.Background(), event.DeleteEvent{Object: mcpCRD}, queue)
+		expectShutdown(t, false)
+	})
+
+	t.Run("create of unwatched dependency CRD restarts operator", func(t *testing.T) {
+		handler.Create(context.Background(), event.CreateEvent{Object: mcpCRD}, queue)
+		expectShutdown(t, true)
+	})
+
+	t.Run("create of already-watched dependency CRD does not restart operator", func(t *testing.T) {
+		reconciler.markCRDAsWatched(MachineConfigPoolCRDName)
+		handler.Create(context.Background(), event.CreateEvent{Object: mcpCRD}, queue)
+		expectShutdown(t, false)
+	})
+
+	t.Run("delete of watched dependency CRD restarts operator", func(t *testing.T) {
+		handler.Delete(context.Background(), event.DeleteEvent{Object: mcpCRD}, queue)
+		expectShutdown(t, true)
 	})
 }
 

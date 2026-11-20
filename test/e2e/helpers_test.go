@@ -152,6 +152,29 @@ func installCRDFromFile(relativePath string) {
 		fmt.Sprintf("kubectl apply failed for %s: %s", absPath, string(output)))
 }
 
+// installCRDAndWaitForOperatorRestart installs a CRD and waits for the
+// operator to restart itself in reaction. Only managed CRDs and watch
+// dependencies trigger the self-restart, and the restart baseline must be
+// captured before the install, so this stays separate from
+// waitForCRDEstablished. Callers must ensure the install produces a genuine
+// create event (remove any pre-installed CRD first).
+func installCRDAndWaitForOperatorRestart(relativePath, crdName string) {
+	prevCount := getManagerRestartCount()
+	installCRDFromFile(relativePath)
+	waitForCRDEstablished(crdName)
+	waitForOperatorRestart(prevCount)
+}
+
+// removeCRDAndWaitForOperatorRestart removes a CRD and waits for the operator
+// self-restart that deleting a managed or watch-dependency CRD triggers.
+// Callers must ensure the CRD is installed first: deleting an absent CRD fires
+// no event, so the restart wait would time out.
+func removeCRDAndWaitForOperatorRestart(crdName string) {
+	prevCount := getManagerRestartCount()
+	removeCRD(crdName)
+	waitForOperatorRestart(prevCount)
+}
+
 // removeCRD deletes a CRD and waits for it to be fully removed.
 func removeCRD(name string) {
 	By(fmt.Sprintf("removing CRD %s", name))
@@ -167,6 +190,12 @@ func removeCRD(name string) {
 		return err != nil // true when NotFound
 	}, 60*time.Second, 1*time.Second).Should(BeTrue(),
 		fmt.Sprintf("CRD %s should be deleted", name))
+}
+
+// crdExists reports whether the named CRD is currently installed.
+func crdExists(name string) bool {
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: name}, &apiextensionsv1.CustomResourceDefinition{})
+	return err == nil
 }
 
 // unstructuredRef builds an Unstructured object reference for use with Patch/Delete calls.
