@@ -282,6 +282,18 @@ rules:
       - patch
       - update
       - watch
+  # KubeVirt MigrationPolicy
+  - apiGroups:
+      - migrations.kubevirt.io
+    resources:
+      - migrationpolicies
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
   # Prometheus Monitoring (includes tombstone cleanup)
   - apiGroups:
       - monitoring.coreos.com

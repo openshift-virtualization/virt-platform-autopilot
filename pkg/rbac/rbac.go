@@ -378,6 +378,8 @@ func pluralize(kind string) string {
 		return "securitycontextconstraints"
 	case "networkpolicy":
 		return "networkpolicies"
+	case "migrationpolicy":
+		return "migrationpolicies"
 	default:
 		if strings.HasSuffix(kind, "s") || strings.HasSuffix(kind, "x") || strings.HasSuffix(kind, "ch") {
 			return kind + "es"
