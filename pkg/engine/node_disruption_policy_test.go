@@ -18,16 +18,20 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"testing/fstest"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/kubevirt/virt-platform-autopilot/pkg/assets"
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/status"
 )
 
 const testNodeDisruptionPolicy = `apiVersion: operator.openshift.io/v1
@@ -185,6 +189,56 @@ func TestAggregateNodeDisruptionPolicies(t *testing.T) {
 	// Once the final dependent is inactive, empty map-lists remove the entries
 	// owned by Autopilot without affecting entries owned by other managers.
 	assertEntries(t, map[string]bool{}, 0)
+}
+
+func TestMarkNodeDisruptionPolicyAssetsPendingReplacesPriorSyncedObservation(t *testing.T) {
+	loader, allAssets := testNodeDisruptionPolicyCatalog(t, map[string]string{
+		"active/policy.yaml": testNodeDisruptionPolicy,
+		"active/worker.yaml": testNodeDisruptionPolicyMachineConfig("worker"),
+	}, `
+  - name: policy
+    path: active/policy.yaml
+    phase: 1
+    install: always
+    component: MachineConfiguration
+    reconcile_order: 1
+  - name: worker
+    path: active/worker.yaml
+    phase: 1
+    install: always
+    component: MachineConfig
+    reconcile_order: 2
+    node_disruption_policy:
+      asset: policy`)
+
+	previousStore := status.DefaultStore
+	store := status.NewStore()
+	status.DefaultStore = store
+	t.Cleanup(func() { status.DefaultStore = previousStore })
+
+	renderCtx := pkgcontext.NewRenderContext(pkgcontext.NewMockHCO("kubevirt-hyperconverged", "openshift-cnv"))
+	p := NewPatcher(fake.NewClientBuilder().Build(), nil, loader)
+	p.MarkNodeDisruptionPolicyAssetsPending(allAssets, map[string]bool{"worker": true}, renderCtx)
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	if err := store.Publish(context.Background(), c, c, "openshift-cnv"); err != nil {
+		t.Fatalf("publish inspection: %v", err)
+	}
+	summary := &corev1.ConfigMap{}
+	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "openshift-cnv", Name: status.SummaryConfigMapName}, summary); err != nil {
+		t.Fatalf("get inspection summary: %v", err)
+	}
+	var response status.Response
+	if err := json.Unmarshal([]byte(summary.Data["snapshot.json"]), &response); err != nil {
+		t.Fatalf("decode inspection summary: %v", err)
+	}
+	if len(response.Assets) != 1 || response.Assets[0].ID != "policy" || response.Assets[0].State != "staged" || response.Assets[0].Reason != status.AssetReasonNodeDisruptionPolicyPending {
+		t.Fatalf("policy inspection asset = %#v, want staged pending policy", response.Assets)
+	}
 }
 
 func TestNodeDisruptionPolicyChangeCount(t *testing.T) {

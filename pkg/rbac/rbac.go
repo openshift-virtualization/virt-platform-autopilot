@@ -161,13 +161,22 @@ func StaticRules() []Rule {
 			ResourceNames: []string{"virt-platform-autopilot-mc-staging"},
 			Verbs:         []string{"get", "patch", "update"},
 		},
-		// Rule 13: Loki block storage selection uses cluster StorageClasses.
+		// Rule 13: Inspection ConfigMaps are owned by the HCO. Kubernetes owner
+		// reference admission requires delete on each dependent, so keep this
+		// permission strictly scoped to the two bounded inspection objects.
+		{
+			APIGroups:     []string{""},
+			Resources:     []string{"configmaps"},
+			ResourceNames: []string{"virt-platform-autopilot-golden", "virt-platform-autopilot-inspection"},
+			Verbs:         []string{"delete", "get", "patch", "update"},
+		},
+		// Rule 14: Loki block storage selection uses cluster StorageClasses.
 		{
 			APIGroups: []string{"storage.k8s.io"},
 			Resources: []string{"storageclasses"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		// Rule 14: bind only the external collector ClusterRoles referenced by
+		// Rule 15: bind only the external collector ClusterRoles referenced by
 		// assets/active/logging/collector-crb-*.yaml.
 		{
 			APIGroups: []string{"rbac.authorization.k8s.io"},

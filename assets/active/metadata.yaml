@@ -1228,15 +1228,18 @@ excluded_assets:
 
 features:
   - name: Swap Enablement
+    id: swap-enablement
     description: Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available
     assets: [swap-enable]
 
   - name: File-based Swap Provisioning
+    id: file-based-swap-provisioning
     description: Optional cheaper alternative to a dedicated swap partition; provisions file-backed swap sized to each worker's memory overcommitment, skipped on workers that have the dedicated partition. Swap activation remains managed by Swap Enablement
     maturity: dp
     assets: [file-based-swap-provisioning]
 
   - name: Kubelet Performance
+    id: kubelet-performance
     description: >-
       Optimized kubelet settings for virtualization workloads. Does not
       require node reboot; restarts kubelet.
@@ -1246,23 +1249,27 @@ features:
       - kubelet-perf-settings
 
   - name: Observability Enhancements
+    id: observability-enhancements
     description: Enhanced observability with additional Prometheus alerting rules and advanced Perses dashboards in the OpenShift console
     assets: [metrics-service, metrics-servicemonitor, prometheus-alerts, monitoring-ui-plugin, autopilot-dashboard]
     requires:
       - Cluster Observability Operator
 
   - name: Load-Aware Descheduler
+    id: load-aware-descheduler
     description: Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics
     assets: [descheduler-loadaware, psi-enable, psi-enable-master, descheduler-dashboard]
     requires:
       - Kube Descheduler Operator
 
   - name: PCI Passthrough
+    id: pci-passthrough
     description: GPU/PCI device passthrough via VFIO
     maturity: dp
     assets: [pci-passthrough]
 
   - name: CPU Manager
+    id: cpu-manager
     description: >-
       Dedicated CPU pinning for guaranteed QoS workloads. Does not require
       node reboot; drains the node, restarts kubelet.
@@ -1272,6 +1279,7 @@ features:
       - kubelet-cpu-manager
 
   - name: SCSI Persistent Reservations
+    id: scsi-persistent-reservations
     description: >-
       Configures worker-node multipath to persist SCSI persistent-reservation
       keys for VMs sharing LUN-backed disks. Does not require node reboot.
@@ -1284,16 +1292,19 @@ features:
       - scsi-persistent-reservations-master
 
   - name: MTV Operator
+    id: mtv-operator
     description: Migration Toolkit for Virtualization
     maturity: dp
     assets: [mtv-operator]
 
   - name: MetalLB Operator
+    id: metallb-operator
     description: Bare-metal load balancer for services
     maturity: dp
     assets: [metallb-operator]
 
   - name: Logging
+    id: logging
     description: Integrated logging stack with LokiStack and ClusterLogForwarder
     maturity: dp
     groups: [logging, audit-logging]
@@ -1302,6 +1313,7 @@ features:
       - Red Hat OpenShift Logging Operator
 
   - name: Incident Detection
+    id: incident-detection
     description: >-
       OpenShift Incident Detection groups related cluster alerts into a single, cohesive
       timeline to eliminate alert fatigue and speed up troubleshooting.
@@ -1310,12 +1322,14 @@ features:
       - Cluster Observability Operator
 
   - name: Troubleshooting Panel
+    id: troubleshooting-panel
     description: Korrel8r observability signal correlation in the console
     assets: [troubleshooting-panel-ui-plugin]
     requires:
       - Cluster Observability Operator
 
   - name: KubeVirt Metrics Exporter
+    id: kubevirt-metrics-exporter
     description: Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics
     maturity: dp
     groups: [kubevirt-metrics-exporter]
@@ -1323,11 +1337,13 @@ features:
       - Cluster Observability Operator
 
   - name: In-Flight Operations
+    id: in-flight-operations
     description: OperationRuleSet-based coordination for safe concurrent operations
     maturity: tp
     groups: [inflightoperations]
 
   - name: Kernel Samepage Merging (KSM) zero pages only
+    id: kernel-samepage-merging-ksm-zero-pages-only
     description: >-
       Node-level KSM zero-pages-only deduplication with adaptive scan rate and
       max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows
@@ -1338,6 +1354,7 @@ features:
     groups: [ksm-zero-only]
 
   - name: Transparent Huge Pages (THP) Tuning
+    id: transparent-huge-pages-thp-tuning
     description: >-
       Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on
       kernels that support it, khugepaged scan rates, and max_ptes_none
@@ -1349,6 +1366,7 @@ features:
     groups: [thp-tuning]
 
   - name: NHC with FAR remediator and SBR detection-mode config
+    id: nhc-with-far-remediator-and-sbr-detection-mode-config
     description: Node health checks with fence-agents remediation and storage-based remediation in detection-only mode
     maturity: dp
     assets: [nhc-far, sbr-detection-config]
@@ -1358,6 +1376,7 @@ features:
       - Storage Based Remediation Operator
 
   - name: VM drain shutdown inhibitor
+    id: vm-drain-shutdown-inhibitor
     description: >-
       Attempts to gracefully shutdown KubeVirt VMs before allowing the
       node to shut down. Does not require node reboot.
