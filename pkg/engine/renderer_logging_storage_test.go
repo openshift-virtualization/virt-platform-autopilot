@@ -208,3 +208,50 @@ func TestLoggingStorageClassOfflineConfiguration(t *testing.T) {
 		t.Fatalf("offline discovery must omit storageClassName: found = %v, error = %v", found, err)
 	}
 }
+
+// TestRenderAssetIdentityToleratesConfigurationErrors pins the tolerant
+// render used for identity recovery: a missing storage default is suppressed
+// so the target identity is still resolved, while API failures stay fatal.
+func TestRenderAssetIdentityToleratesConfigurationErrors(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := storagev1.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := assets.NewRegistry(assets.NewLoader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset, err := registry.GetAsset("logging-lokistack")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hco := &unstructured.Unstructured{}
+	hco.SetAnnotations(map[string]string{"platform.kubevirt.io/logging-storage-class": ""})
+	renderCtx := &pkgcontext.RenderContext{
+		HCO: hco, Topology: &pkgcontext.TopologyContext{IsBareMetal: true, TotalNodeCount: 3},
+	}
+
+	t.Run("missing storage default still resolves identity", func(t *testing.T) {
+		renderer := NewRenderer(assets.NewLoader())
+		renderer.SetClient(fake.NewClientBuilder().WithScheme(scheme).Build())
+		identity := renderer.RenderAssetIdentity(asset, renderCtx)
+		if identity == nil {
+			t.Fatal("identity must be recovered when only the storage default is missing")
+		}
+		if identity.GetKind() != "LokiStack" || identity.GetName() != "logging-loki" || identity.GetNamespace() != "openshift-logging" {
+			t.Fatalf("identity = %s %s/%s, want LokiStack openshift-logging/logging-loki",
+				identity.GetKind(), identity.GetNamespace(), identity.GetName())
+		}
+		if class, found, _ := unstructured.NestedString(identity.Object, "spec", "storageClassName"); found || class != "" {
+			t.Fatalf("tolerant render must not invent a storage class, got %q", class)
+		}
+	})
+
+	t.Run("API failure stays fatal", func(t *testing.T) {
+		renderer := NewRenderer(assets.NewLoader())
+		renderer.SetClient(loggingFailingReader{Reader: fake.NewClientBuilder().WithScheme(scheme).Build(), operation: "list"})
+		if identity := renderer.RenderAssetIdentity(asset, renderCtx); identity != nil {
+			t.Fatal("API failures must not be suppressed by the tolerant render")
+		}
+	})
+}

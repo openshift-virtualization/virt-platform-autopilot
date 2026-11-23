@@ -134,21 +134,75 @@ func (r *Renderer) RenderMultiAsset(assetMeta *assets.AssetMetadata, ctx *pkgcon
 	return objs, nil
 }
 
+// RenderAssetIdentity renders an asset to recover its target identity even
+// when cluster configuration is missing: configuration errors are suppressed
+// so the tolerant render can still resolve the resource's kind, namespace,
+// and name. It returns nil when even the tolerant render cannot produce an
+// object; callers must treat that as "identity unknown", never as an
+// exclusion.
+func (r *Renderer) RenderAssetIdentity(assetMeta *assets.AssetMetadata, ctx *pkgcontext.RenderContext) *unstructured.Unstructured {
+	ctx.Params = assetMeta.TemplateParams
+
+	if !assets.IsTemplate(assetMeta.Path) {
+		obj, err := r.loader.LoadAssetAsUnstructured(assetMeta.Path)
+		if err != nil {
+			return nil
+		}
+		return obj
+	}
+
+	templateContent, err := r.loader.LoadAssetTemplate(assetMeta.Path)
+	if err != nil {
+		return nil
+	}
+
+	rendered, err := r.renderTemplateTolerant(assetMeta.Name, templateContent, ctx)
+	if err != nil || len(bytes.TrimSpace(rendered)) == 0 {
+		return nil
+	}
+
+	obj, err := assets.ParseYAML(rendered)
+	if err != nil {
+		return nil
+	}
+	return obj
+}
+
 // renderTemplate renders a template string with the given context
 func (r *Renderer) renderTemplate(name, templateContent string, ctx *pkgcontext.RenderContext) ([]byte, error) {
+	return r.renderTemplateMode(name, templateContent, ctx, false)
+}
+
+// renderTemplateTolerant renders like renderTemplate but suppresses
+// configuration errors: template functions that fail on missing cluster
+// configuration (e.g. defaultStorageClass) yield empty values instead. Use it
+// only to recover an asset's target identity, never for the applied render.
+func (r *Renderer) renderTemplateTolerant(name, templateContent string, ctx *pkgcontext.RenderContext) ([]byte, error) {
+	return r.renderTemplateMode(name, templateContent, ctx, true)
+}
+
+func (r *Renderer) renderTemplateMode(name, templateContent string, ctx *pkgcontext.RenderContext, tolerant bool) ([]byte, error) {
 	// Create template with safe functions only (not all of Sprig)
-	tmpl, err := template.New(name).
+	tmpl := template.New(name).
 		Option("missingkey=error").
 		Funcs(safeFuncMap()).
-		Funcs(r.customFuncMap()).
-		Parse(templateContent)
+		Funcs(r.customFuncMap())
+	if tolerant {
+		// Identity-only render: configuration gaps must not fail the render.
+		// text/template merges Funcs calls, so this overlay replaces only
+		// defaultStorageClass and leaves every other function untouched.
+		tmpl = tmpl.Funcs(template.FuncMap{
+			"defaultStorageClass": suppressConfigError(r.defaultStorageClass),
+		})
+	}
+	parsed, err := tmpl.Parse(templateContent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse template: %w", err)
 	}
 
 	// Render template
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, ctx); err != nil {
+	if err := parsed.Execute(&buf, ctx); err != nil {
 		return nil, fmt.Errorf("failed to execute template: %w", err)
 	}
 
@@ -213,7 +267,7 @@ func safeFuncMap() template.FuncMap {
 	return safeFuncs
 }
 
-// customFuncMap provides custom template functions beyond sprig
+// customFuncMap provides custom template functions beyond sprig.
 func (r *Renderer) customFuncMap() template.FuncMap {
 	return template.FuncMap{
 		// dig provides safe nested field access with default value

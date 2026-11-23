@@ -36,7 +36,24 @@ func (r *Renderer) defaultStorageClass() (string, error) {
 	if class := defaultStorageClass(classes.Items); class != "" {
 		return class, nil
 	}
-	return "", errors.New("no default StorageClass found; configure a cluster default or an explicit storage class")
+	return "", &ConfigurationError{
+		Code:    NoDefaultStorageClass,
+		Message: "no default StorageClass found; configure a cluster default or an explicit storage class",
+	}
+}
+
+// suppressConfigError wraps a template helper so a validated configuration
+// problem degrades to an empty value instead of failing the render. It is
+// used only by identity-recovery renders, never by the applied render.
+func suppressConfigError(f func() (string, error)) func() (string, error) {
+	return func() (string, error) {
+		v, err := f()
+		var cfgErr *ConfigurationError
+		if errors.As(err, &cfgErr) {
+			return "", nil
+		}
+		return v, err
+	}
 }
 
 // Kubernetes chooses the newest default when multiple defaults exist.
