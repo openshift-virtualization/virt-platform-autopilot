@@ -1,0 +1,102 @@
+name: GA Assets Detection
+
+# Detects whether a PR changes, introduces, or promotes GA assets and
+# records the verdict as an artifact, consumed by the ga-assets-labeler
+# workflow to mirror it into the ga-assets-changed label. This is the
+# fact layer; the QE approval policy on top of it lands separately.
+#
+# The workflow is read-only end to end, so it works for fork PRs, whose
+# pull_request token is read-only. It only triggers on push events: label
+# events are excluded so the labeler cannot re-trigger the detection that
+# produced its own input.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ga-assets-detection-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect GA assets changes
+    runs-on: ubuntu-latest
+    if: github.repository == 'openshift-virtualization/virt-platform-autopilot'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # The paths logic lives here instead of an on.paths filter because
+      # the cumulative diff must be evaluated on every push anyway (so the
+      # labeler can drop the label once the GA changes disappear), and a
+      # skipped job would leave the labeler without a verdict to reconcile.
+      - name: Detect asset catalog changes
+        id: relevance
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch origin "${BASE_REF}"
+          if git diff --name-only --no-renames "origin/${BASE_REF}...HEAD" \
+              | grep -qE '^assets/active/|^docs/generated/feature-status\.json$'; then
+            echo "Asset catalog changes detected; evaluating GA impact."
+            echo "relevant=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No asset catalog changes; GA assets unchanged."
+            echo "relevant=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Setup Go
+        if: steps.relevance.outputs.relevant == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install PyYAML
+        if: steps.relevance.outputs.relevant == 'true'
+        run: pip install pyyaml
+
+      - name: Detect GA-affecting changes
+        id: verdict
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          RELEVANT: ${{ steps.relevance.outputs.relevant }}
+        run: |
+          # Always emit a verdict, even when the PR is not relevant, so the
+          # labeler can reconcile (remove) a label left over from earlier
+          # pushes that did change GA assets.
+          if [ "${RELEVANT}" != "true" ]; then
+            echo "ga_assets_changed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          # Regenerate the head artifact so the verdict reflects the actual
+          # derived state of the PR head, even if the author has not run
+          # `make generate-feature-status` yet. A failing generation (invalid
+          # or incomplete catalog) is recorded conservatively: report it as
+          # changed rather than leave the PR unrecorded.
+          if ! make generate-feature-status; then
+            echo "ga_assets_changed=true" >> "${GITHUB_OUTPUT}"
+            echo "ga-assets-changed: true"
+            echo "  - feature-status generation failed (invalid or incomplete catalog)"
+            exit 0
+          fi
+          python3 scripts/check-ga-assets-changed.py --base-rev "origin/${BASE_REF}"
+
+      # The artifact is uploaded on every completed run so the labeler
+      # always has a verdict to reconcile against.
+      - name: Save verdict artifact
+        run: |
+          echo "${{ github.event.pull_request.number }}" > pr_number.txt
+          echo "${{ steps.verdict.outputs.ga_assets_changed }}" > ga_assets_changed.txt
+
+      - name: Upload verdict artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ga-assets-verdict
+          path: |
+            pr_number.txt
+            ga_assets_changed.txt

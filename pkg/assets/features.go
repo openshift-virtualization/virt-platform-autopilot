@@ -35,6 +35,7 @@ type FeatureStatus struct {
 	Maturity    string   `json:"maturity"`
 	Install     string   `json:"install"`
 	OptIn       *string  `json:"opt_in"`
+	Assets      []string `json:"assets,omitempty"`
 	Requires    []string `json:"requires,omitempty"`
 	Recommended []string `json:"recommended,omitempty"`
 }
@@ -111,12 +112,20 @@ func deriveFeatureStatuses(catalog *AssetCatalog) ([]FeatureStatus, error) {
 			return nil, fmt.Errorf("feature %q resolves to zero assets", feature.Name)
 		}
 
+		// Sorted for stable diffs of the generated catalog between revisions.
+		assetNames := make([]string, 0, len(resolved))
+		for _, a := range resolved {
+			assetNames = append(assetNames, a.Name)
+		}
+		sort.Strings(assetNames)
+
 		statuses = append(statuses, FeatureStatus{
 			Name:        feature.Name,
 			Description: feature.Description,
 			Maturity:    deriveFeatureMaturity(feature, resolved),
 			Install:     deriveFeatureInstall(resolved),
 			OptIn:       deriveFeatureOptIn(resolved),
+			Assets:      assetNames,
 			Requires:    feature.Requires,
 			Recommended: feature.Recommended,
 		})
