@@ -44,10 +44,7 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		patchAutopilotAndWait(autopilotEnabled)
 
 		By("removing MachineConfig CRD so we can test creation lifecycle")
-		prevCount := getManagerRestartCount()
-		removeCRD(machineConfigCRDName)
-		waitForOperatorRestart(prevCount)
-		waitForOperatorHealthy()
+		removeCRDAndWaitForOperatorRestart(machineConfigCRDName)
 	})
 
 	It("should restart when managed CRD is created and create the swap-enable resource", func() {
@@ -67,11 +64,7 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		}, timeout, interval).Should(Equal(1.0),
 			"dependency_opted_in should be 1 — MachineConfig is install:always")
 
-		prevCount := getManagerRestartCount()
-		installCRDFromFile(machineConfigCRDFile)
-		waitForCRDEstablished(machineConfigCRDName)
-		waitForOperatorRestart(prevCount)
-		waitForOperatorHealthy()
+		installCRDAndWaitForOperatorRestart(machineConfigCRDFile, machineConfigCRDName)
 
 		Eventually(func() error {
 			_, err := getUnstructuredResource(machineConfigGVK, "90-worker-swap-online", "")
@@ -90,9 +83,7 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		crdMissingBefore := captureAutopilotEvents().CRDMissing
 		deleteTime := time.Now()
 
-		prevCount := getManagerRestartCount()
-		removeCRD(machineConfigCRDName)
-		waitForOperatorRestart(prevCount)
+		removeCRDAndWaitForOperatorRestart(machineConfigCRDName)
 
 		By("verifying CRDMissing event was emitted after CRD deletion")
 		Eventually(func() int {
@@ -123,10 +114,7 @@ var _ = Describe("CRD Lifecycle Tests", Ordered, func() {
 		// reconfigure watches, so we must wait for that restart before
 		// checking health.
 		if !crdInstalled(machineConfigCRDName) {
-			prevCount := getManagerRestartCount()
-			installCRDFromFile(machineConfigCRDFile)
-			waitForCRDEstablished(machineConfigCRDName)
-			waitForOperatorRestart(prevCount)
+			installCRDAndWaitForOperatorRestart(machineConfigCRDFile, machineConfigCRDName)
 		} else {
 			waitForOperatorHealthy()
 		}
@@ -171,10 +159,7 @@ var _ = Describe("Dependency Opt-In Metric Tests", Ordered, func() {
 		if crdInstalled(nhcCRDName) {
 			By("removing NodeHealthCheck CRD to start from a known absent state")
 			nhcWasInstalled = true
-			prevCount := getManagerRestartCount()
-			removeCRD(nhcCRDName)
-			waitForOperatorRestart(prevCount)
-			waitForOperatorHealthy()
+			removeCRDAndWaitForOperatorRestart(nhcCRDName)
 		}
 
 		reconcileStart := time.Now()
@@ -190,17 +175,10 @@ var _ = Describe("Dependency Opt-In Metric Tests", Ordered, func() {
 		removeAnnotation(hcoGVK, hcoName, operatorNamespace, nhcAnnot)
 		if nhcWasInstalled && !crdInstalled(nhcCRDName) {
 			By("restoring NodeHealthCheck CRD")
-			prevCount := getManagerRestartCount()
-			installCRDFromFile(nhcCRDFile)
-			waitForCRDEstablished(nhcCRDName)
-			waitForOperatorRestart(prevCount)
-			waitForOperatorHealthy()
+			installCRDAndWaitForOperatorRestart(nhcCRDFile, nhcCRDName)
 		} else if nhcInstalledByTest && !nhcWasInstalled && crdInstalled(nhcCRDName) {
 			By("removing NodeHealthCheck CRD installed by test (was absent at suite entry)")
-			prevCount := getManagerRestartCount()
-			removeCRD(nhcCRDName)
-			waitForOperatorRestart(prevCount)
-			waitForOperatorHealthy()
+			removeCRDAndWaitForOperatorRestart(nhcCRDName)
 		}
 	})
 
@@ -237,11 +215,7 @@ var _ = Describe("Dependency Opt-In Metric Tests", Ordered, func() {
 	It("should emit missing_dependency=0 and dependency_opted_in=1 after gate CRD is installed", func() {
 		By("installing NodeHealthCheck CRD")
 		nhcInstalledByTest = true
-		prevCount := getManagerRestartCount()
-		installCRDFromFile(nhcCRDFile)
-		waitForCRDEstablished(nhcCRDName)
-		waitForOperatorRestart(prevCount)
-		waitForOperatorHealthy()
+		installCRDAndWaitForOperatorRestart(nhcCRDFile, nhcCRDName)
 		reconcileStart := time.Now()
 		touchHCO()
 		waitForReconcileSucceeded(reconcileStart)
