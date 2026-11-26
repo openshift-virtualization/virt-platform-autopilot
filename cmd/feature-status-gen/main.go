@@ -160,22 +160,12 @@ func renderTable(fw assets.FrameworkStatus, statuses []assets.FeatureStatus) str
 		fmt.Fprintf(&b, "> **Note:** The autopilot framework is currently **%s** and requires `%s` on the HCO CR. Feature maturity levels below are relative to an enabled autopilot.\n\n", fw.Maturity, *fw.OptIn)
 	}
 
-	b.WriteString("| Feature | Description | Maturity | Install | Dependencies |\n")
-	b.WriteString("|---------|-------------|----------|---------|--------------|\n")
+	b.WriteString("| Feature | Description | Maturity | Install | Disruption | Dependencies |\n")
+	b.WriteString("|---------|-------------|----------|---------|---------|--------------|\n")
 
 	for _, s := range statuses {
-		// The opt-in gate string is folded into the Install cell behind a
-		// disclosure so the (often long) gate expression doesn't widen the
-		// whole table. The row must stay on one physical line for the pipe
-		// table to parse, so gates are joined with <br> rather than newlines.
-		install := s.Install
-		if s.OptIn != nil {
-			gates := strings.Split(*s.OptIn, ", ")
-			for i, g := range gates {
-				gates[i] = "<code>" + g + "</code>"
-			}
-			install = "<details><summary>" + s.Install + "</summary>" + strings.Join(gates, "<br>") + "</details>"
-		}
+		install := featureInstall(s)
+		rollout := featureRollout(s)
 		// Required and recommended operators share one Dependencies column;
 		// recommended (but not strictly required) ones are marked so the
 		// distinction survives the merge.
@@ -192,10 +182,39 @@ func renderTable(fw assets.FrameworkStatus, statuses []assets.FeatureStatus) str
 		if description == "" {
 			description = "-"
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", s.Name, description, s.Maturity, install, dependencies)
+		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s | %s |\n", s.Name, description, s.Maturity, install, rollout, dependencies)
 	}
 
 	return b.String()
+}
+
+func featureInstall(status assets.FeatureStatus) string {
+	if status.Install != "opt-in" || len(status.Enablement) == 0 {
+		return status.Install
+	}
+	mechanisms := make([]string, 0, len(status.Enablement)+len(status.Prerequisites))
+	for _, control := range status.Enablement {
+		mechanisms = append(mechanisms, "<code>"+control.Annotation+"="+control.Value+"</code>")
+	}
+	for _, prerequisite := range status.Prerequisites {
+		mechanisms = append(mechanisms, "requires <code>"+prerequisite.Name+"</code>")
+	}
+	return "<details><summary>opt-in</summary>" + strings.Join(mechanisms, "<br>") + "</details>"
+}
+
+func featureRollout(status assets.FeatureStatus) string {
+	if status.Rollout == nil {
+		return "-"
+	}
+	disruption := map[string]string{
+		"none":               "none",
+		"serviceRestart":     "service restart",
+		"nodeDrainRequired":  "node drain required",
+		"nodeRebootPossible": "reboot possible",
+		"nodeRebootRequired": "reboot required",
+		"unknown":            "unknown",
+	}[status.Rollout.ExpectedDisruption]
+	return disruption
 }
 
 func extractSentinelSection(path string) (string, error) {

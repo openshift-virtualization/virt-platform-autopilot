@@ -143,13 +143,45 @@ func (d *NodeDisruptionPolicyDependency) PolicyAsset() *AssetMetadata {
 
 // FeatureMetadata defines a user-facing feature composed of one or more assets
 type FeatureMetadata struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Maturity    string   `json:"maturity,omitempty"`    // "dp" or "tp"; empty = auto-derive from install mode
-	Assets      []string `json:"assets,omitempty"`      // individual asset names
-	Groups      []string `json:"groups,omitempty"`      // asset group names
-	Requires    []string `json:"requires,omitempty"`    // hard dependencies (feature can't function without them)
-	Recommended []string `json:"recommended,omitempty"` // optional integrations that improve UX/visibility
+	ID            string                        `json:"id"`
+	Name          string                        `json:"name"`
+	Description   string                        `json:"description,omitempty"`
+	Maturity      string                        `json:"maturity,omitempty"`    // "dp" or "tp"; empty = auto-derive from install mode
+	Assets        []string                      `json:"assets,omitempty"`      // individual asset names
+	Groups        []string                      `json:"groups,omitempty"`      // asset group names
+	Requires      []string                      `json:"requires,omitempty"`    // hard dependencies (feature can't function without them)
+	Recommended   []string                      `json:"recommended,omitempty"` // optional integrations that improve UX/visibility
+	Enablement    []FeatureEnablementControl    `json:"enablement,omitempty"`
+	Prerequisites []FeaturePrerequisiteMetadata `json:"prerequisites,omitempty"`
+	Rollout       *FeatureRollout               `json:"rollout,omitempty"`
+}
+
+// FeatureEnablementControl is an independently selectable explicit HCO
+// annotation. Assets is optional; an empty value means all feature assets.
+type FeatureEnablementControl struct {
+	ID         string   `json:"id"`
+	Label      string   `json:"label"`
+	Annotation string   `json:"annotation"`
+	Value      string   `json:"value"`
+	Assets     []string `json:"assets,omitempty"`
+}
+
+// FeaturePrerequisiteMetadata names a stable, inspectable condition Console
+// must surface alongside enablement controls.
+type FeaturePrerequisiteMetadata struct {
+	Type   string `json:"type"`
+	Name   string `json:"name"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// FeatureRollout declares the strongest disruption an administrator should
+// expect from this feature. ExpectedDisruption is one of none, serviceRestart,
+// nodeDrainRequired, nodeRebootPossible, nodeRebootRequired, or unknown. NDP
+// coverage is derived from MachineConfig assets.
+type FeatureRollout struct {
+	ExpectedDisruption string   `json:"expected_disruption"`
+	Coverage           string   `json:"coverage,omitempty"`
+	PolicyAssetIDs     []string `json:"policy_asset_ids,omitempty"`
 }
 
 // FrameworkMetadata defines the maturity of the autopilot framework itself
@@ -199,6 +231,11 @@ func NewRegistry(loader *Loader) (*Registry, error) {
 	}
 	if err := resolveNodeDisruptionPolicyDependencies(catalog.Assets); err != nil {
 		return nil, err
+	}
+	for _, feature := range catalog.Features {
+		if err := validateFeatureControls(feature, catalog.Assets); err != nil {
+			return nil, err
+		}
 	}
 
 	return &Registry{

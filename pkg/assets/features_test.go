@@ -96,6 +96,7 @@ func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 		},
 		Features: []FeatureMetadata{
 			{
+				ID:          "kubevirt-metrics-exporter",
 				Name:        "KubeVirt Metrics Exporter",
 				Description: "Per-node metrics exporter",
 				Groups:      []string{},
@@ -114,6 +115,99 @@ func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 	}
 	if len(statuses[0].Recommended) != 1 || statuses[0].Recommended[0] != "Cluster Observability Operator" {
 		t.Fatalf("status.Recommended = %v, want [Cluster Observability Operator]", statuses[0].Recommended)
+	}
+}
+
+func TestValidateFeatureCoverageRequiresUniqueStableIDs(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{{Name: "asset-a"}, {Name: "asset-b"}},
+		Features: []FeatureMetadata{
+			{ID: "duplicate", Name: "A", Assets: []string{"asset-a"}},
+			{ID: "duplicate", Name: "B", Assets: []string{"asset-b"}},
+		},
+	}
+	if err := ValidateFeatureCoverage(catalog); err == nil {
+		t.Fatal("expected duplicate feature IDs to be rejected")
+	}
+}
+
+func TestDeriveFeatureStatusIncludesControlsAndRollout(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{
+			{Name: "policy", Component: "MachineConfiguration"},
+			{Name: "machine-config", Component: "MachineConfig", NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}},
+		},
+		Features: []FeatureMetadata{{
+			ID: "example", Name: "Example", Assets: []string{"policy", "machine-config"},
+			Enablement: []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-example", Value: "true"}},
+			Rollout:    &FeatureRollout{ExpectedDisruption: "serviceRestart"},
+		}},
+	}
+	statuses, err := deriveFeatureStatuses(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := statuses[0]
+	if got.ID != "example" || len(got.Assets) != 2 || len(got.Enablement) != 1 || got.Rollout == nil || got.Rollout.Coverage != "full" || got.Rollout.PolicyAssetIDs[0] != "policy" {
+		t.Fatalf("unexpected derived feature status: %#v", got)
+	}
+}
+
+func TestDeriveFeatureStatusRequiresRolloutForMachineConfig(t *testing.T) {
+	_, err := deriveFeatureStatuses(&AssetCatalog{Assets: []AssetMetadata{{Name: "machine-config", Component: "MachineConfig"}}, Features: []FeatureMetadata{{ID: "example", Name: "Example", Assets: []string{"machine-config"}}}})
+	if err == nil {
+		t.Fatal("expected MachineConfig rollout declaration to be required")
+	}
+}
+
+func TestValidateFeatureControlsMatchAssetConditions(t *testing.T) {
+	asset := AssetMetadata{Name: "asset", Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-example", Value: "true"}}}
+	base := FeatureMetadata{ID: "example", Name: "Example", Assets: []string{"asset"}, Enablement: []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-example", Value: "true", Assets: []string{"asset"}}}}
+	if err := validateFeatureControls(base, []AssetMetadata{asset}); err != nil {
+		t.Fatalf("valid control rejected: %v", err)
+	}
+
+	missing := base
+	missing.Enablement = nil
+	if err := validateFeatureControls(missing, []AssetMetadata{asset}); err == nil {
+		t.Fatal("missing control for enable annotation was accepted")
+	}
+
+	mismatched := base
+	mismatched.Enablement = []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-typo", Value: "true"}}
+	if err := validateFeatureControls(mismatched, []AssetMetadata{asset}); err == nil {
+		t.Fatal("control without matching asset condition was accepted")
+	}
+
+	omitted := base
+	omitted.Assets = []string{"asset", "other"}
+	omitted.Enablement = []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-example", Value: "true", Assets: []string{"other"}}}
+	if err := validateFeatureControls(omitted, []AssetMetadata{asset, {Name: "other"}}); err == nil {
+		t.Fatal("control that omits its affected asset was accepted")
+	}
+}
+
+func TestDeriveFeatureRolloutCoverage(t *testing.T) {
+	policy := AssetMetadata{Name: "policy", Component: "MachineConfiguration"}
+	protected := AssetMetadata{Name: "protected", Component: "MachineConfig", NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}}
+	unprotected := AssetMetadata{Name: "unprotected", Component: "MachineConfig"}
+	feature := FeatureMetadata{Rollout: &FeatureRollout{ExpectedDisruption: "nodeRebootPossible"}}
+	for _, testCase := range []struct {
+		name     string
+		assets   []*AssetMetadata
+		coverage string
+	}{
+		{name: "full", assets: []*AssetMetadata{&policy, &protected}, coverage: "full"},
+		{name: "partial", assets: []*AssetMetadata{&policy, &protected, &unprotected}, coverage: "partial"},
+		{name: "none", assets: []*AssetMetadata{&unprotected}, coverage: "none"},
+		{name: "not applicable", assets: []*AssetMetadata{{Name: "config", Component: "ConfigMap"}}, coverage: "notApplicable"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := deriveFeatureRollout(feature, testCase.assets)
+			if got.Coverage != testCase.coverage {
+				t.Fatalf("coverage = %q, want %q", got.Coverage, testCase.coverage)
+			}
+		})
 	}
 }
 
