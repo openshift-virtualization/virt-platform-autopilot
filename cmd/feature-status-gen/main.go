@@ -59,7 +59,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	output, err := assets.DeriveFeatureCatalog(catalog)
+	// os.DirFS("assets") matches the embedded-filesystem layout the renderer
+	// serves readAsset from: cataloged paths ("active/...") resolve directly.
+	output, err := assets.DeriveFeatureCatalog(catalog, os.DirFS("assets"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error deriving feature statuses: %v\n", err)
 		os.Exit(1)

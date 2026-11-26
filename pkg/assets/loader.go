@@ -55,6 +55,12 @@ func NewLoaderFromFS(files fs.FS) *Loader {
 	}
 }
 
+// FS returns the filesystem the loader reads assets from, rooted at the
+// assets directory.
+func (l *Loader) FS() fs.FS {
+	return l.fs
+}
+
 // LoadAsset loads a single asset by path and returns its raw content
 func (l *Loader) LoadAsset(path string) ([]byte, error) {
 	file, err := l.fs.Open(path)

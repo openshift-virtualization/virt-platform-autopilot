@@ -1,0 +1,64 @@
+name: GA Assets Labeler
+
+# Mirrors the GA Assets Detection verdict into the ga-assets-changed
+# label: applied when the PR changes GA assets, removed when it no longer
+# does. The label is a persistent, queryable record of the fact; no merge
+# policy depends on it.
+#
+# This workflow runs in the BASE REPO context (not the fork), so
+# GITHUB_TOKEN has label write access even for cross-repository (fork)
+# PRs. It is intentionally separate from ga-assets-detection.yml, which
+# runs with pull_request (read-only for forks) for security isolation.
+on:
+  workflow_run:
+    workflows: ["GA Assets Detection"]
+    types: [completed]
+
+jobs:
+  reconcile:
+    name: Reconcile ga-assets-changed label
+    runs-on: ubuntu-latest
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.repository == 'openshift-virtualization/virt-platform-autopilot'
+    permissions:
+      issues: write
+      pull-requests: write
+    concurrency:
+      group: ga-assets-labeler-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: true
+    steps:
+      - name: Download verdict artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ga-assets-verdict
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The label is a mirror of the computed verdict: the automation
+      # always wins over manual /label edits, and it is removed as soon as
+      # the GA-affecting changes disappear from the PR.
+      - name: Reconcile ga-assets-changed label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PR_NUMBER=$(cat pr_number.txt)
+          CHANGED=$(cat ga_assets_changed.txt)
+
+          gh label create ga-assets-changed --color fbca04 \
+            --description "Indicates this PR changes, introduces, or promotes GA assets" --force
+
+          labeled=$(gh pr view "${PR_NUMBER}" --json labels \
+            --jq 'any(.labels[]; .name == "ga-assets-changed")')
+
+          if [ "${CHANGED}" = "true" ] && [ "${labeled}" != "true" ]; then
+            gh pr edit "${PR_NUMBER}" --add-label ga-assets-changed
+            echo "Applied ga-assets-changed to PR #${PR_NUMBER}."
+          elif [ "${CHANGED}" != "true" ] && [ "${labeled}" = "true" ]; then
+            gh pr edit "${PR_NUMBER}" --remove-label ga-assets-changed
+            echo "Removed ga-assets-changed from PR #${PR_NUMBER}: GA assets no longer changed."
+          else
+            echo "ga-assets-changed already reflects the verdict (changed=${CHANGED})."
+          fi
