@@ -81,6 +81,19 @@ def make_status():
                 "assets": ["dp-asset"],
             },
         ],
+        # ga-asset's template reaches into the dp area: reference-based
+        # attribution must map that file to ga-asset, not to the dp asset
+        # whose directory it lives in.
+        "assets": [
+            {
+                "name": "ga-asset",
+                "supporting_files": [
+                    "active/ga/support/settings.conf",
+                    "active/dp/shared/script.sh",
+                ],
+            },
+            {"name": "dp-asset", "supporting_files": ["active/dp/helper.py"]},
+        ],
     }
 
 
@@ -120,10 +133,22 @@ class StatusReasonsTest(unittest.TestCase):
 
                 self.assertTrue(CHECKER.status_reasons(self.base, head))
 
-    def test_new_feature_is_detected_at_any_maturity(self):
-        for feature in (
+    def test_new_ga_feature_is_detected(self):
+        head = self.head()
+        head["features"].append(
             {"name": "New GA", "maturity": "GA", "install": "always",
-             "opt_in": None, "assets": ["ga-asset"]},
+             "opt_in": None, "assets": ["ga-asset"]}
+        )
+
+        self.assertTrue(
+            has_reason(
+                CHECKER.status_reasons(self.base, head),
+                "new GA feature declared: New GA",
+            )
+        )
+
+    def test_new_non_ga_features_are_not_flagged(self):
+        for feature in (
             {"name": "New DP", "maturity": "DP", "install": "opt-in",
              "opt_in": None, "assets": ["dp-asset"]},
             {"name": "New TP", "maturity": "TP", "install": "opt-in",
@@ -133,31 +158,34 @@ class StatusReasonsTest(unittest.TestCase):
                 head = self.head()
                 head["features"].append(feature)
 
-                self.assertTrue(
-                    any(
-                        f"new feature declared: {feature['name']}" in reason
-                        for reason in CHECKER.status_reasons(self.base, head)
-                    )
-                )
+                self.assertEqual([], CHECKER.status_reasons(self.base, head))
 
-    def test_removing_any_feature_is_detected(self):
+    def test_ga_feature_removal_is_detected(self):
+        head = self.head()
+        head["features"] = [
+            feature
+            for feature in head["features"]
+            if feature["name"] != "GA feature"
+        ]
+
+        self.assertTrue(
+            has_reason(
+                CHECKER.status_reasons(self.base, head),
+                "GA feature removed: GA feature",
+            )
+        )
+
+    def test_non_ga_feature_removal_is_not_flagged(self):
         # The generated JSON carries only effective maturity, so explicit and
-        # derived previews cannot be told apart; removals always flag.
-        for feature_name in ("GA feature", "DP feature"):
-            with self.subTest(feature=feature_name):
-                head = self.head()
-                head["features"] = [
-                    feature
-                    for feature in head["features"]
-                    if feature["name"] != feature_name
-                ]
+        # derived previews cannot be told apart; only GA removals flag.
+        head = self.head()
+        head["features"] = [
+            feature
+            for feature in head["features"]
+            if feature["name"] != "DP feature"
+        ]
 
-                self.assertTrue(
-                    has_reason(
-                        CHECKER.status_reasons(self.base, head),
-                        f"feature removed: {feature_name}",
-                    )
-                )
+        self.assertEqual([], CHECKER.status_reasons(self.base, head))
 
     def test_feature_maturity_change_is_detected(self):
         head = self.head()
@@ -268,7 +296,7 @@ class MetadataReasonsTest(unittest.TestCase):
                     )
                 )
 
-    def test_dp_asset_metadata_change_does_not_are_detected(self):
+    def test_dp_asset_metadata_change_is_not_flagged(self):
         head = self.head()
         head["assets"][1]["phase"] = 3
 
@@ -313,119 +341,73 @@ class FileAssociationTest(unittest.TestCase):
         self.assertTrue(any("ga-asset" in reason for reason in reasons))
         self.assertTrue(any("excluded-asset" in reason for reason in reasons))
 
-    def test_direct_dp_asset_file_does_not_are_detected(self):
+    def test_direct_dp_asset_file_is_not_flagged(self):
         reasons = self.analyze_files(["assets/active/dp/dp.yaml.tpl"])
 
         self.assertEqual([], reasons)
 
-    def test_sibling_supporting_file_is_associated_with_asset(self):
-        reasons = self.analyze_files(["assets/active/ga/render-helper.py"])
+    def test_supporting_file_referenced_by_ga_asset_is_detected(self):
+        reasons = self.analyze_files(["assets/active/ga/support/settings.conf"])
 
         self.assertTrue(
             any(
-                "render-helper.py" in reason and "ga-asset" in reason
+                "settings.conf" in reason and "ga-asset" in reason
                 for reason in reasons
             )
         )
 
-    def test_template_support_directory_suffixes_are_resolved(self):
-        for filename, expected_stem in (
-            ("01-swap-enable.yaml.tpl", "01-swap-enable"),
-            ("02-swap-enable.yaml", "02-swap-enable"),
-            ("03-swap-enable.yml", "03-swap-enable"),
-        ):
-            with self.subTest(filename=filename):
-                self.assertEqual(
-                    expected_stem,
-                    CHECKER.template_stem(f"active/templates/{filename}"),
-                )
+    def test_supporting_file_referenced_by_dp_asset_is_not_flagged(self):
+        reasons = self.analyze_files(["assets/active/dp/helper.py"])
 
-        template_catalog = {
-            "assets": [
-                {
-                    "name": "template-asset",
-                    "path": "active/templates/01-swap-enable.yaml.tpl",
-                    "install": "always",
-                }
-            ],
-            "features": [{"name": "Template feature", "assets": ["template-asset"]}],
-        }
-        template_status = {
-            "framework": {"maturity": "GA", "opt_in": None},
-            "features": [
-                {
-                    "name": "Template feature",
-                    "maturity": "GA",
-                    "install": "always",
-                    "opt_in": None,
-                    "assets": ["template-asset"],
-                }
-            ],
-        }
+        self.assertEqual([], reasons)
 
-        reasons = CHECKER.analyze(
-            template_catalog,
-            template_catalog,
-            template_status,
-            template_status,
-            ["assets/active/templates/01-swap-enable/settings.yaml"],
-        )
-
-        self.assertTrue(any("template-asset" in reason for reason in reasons))
-
-    def test_shared_directory_flags_ga_member_and_ignores_dp_member(self):
-        catalog = {
-            "assets": [
-                {
-                    "name": "ga-one",
-                    "path": "active/shared/one.yaml",
-                    "install": "always",
-                },
-                {
-                    "name": "dp-two",
-                    "path": "active/shared/two.yaml",
-                    "install": "opt-in",
-                },
-            ],
-            "features": [
-                {"name": "GA", "maturity": "ga", "assets": ["ga-one"]},
-                {"name": "DP", "maturity": "dp", "assets": ["dp-two"]},
-            ],
-        }
-        status = {
-            "framework": {"maturity": "GA", "opt_in": None},
-            "features": [
-                {
-                    "name": "GA",
-                    "maturity": "GA",
-                    "install": "always",
-                    "opt_in": None,
-                    "assets": ["ga-one"],
-                },
-                {
-                    "name": "DP",
-                    "maturity": "DP",
-                    "install": "opt-in",
-                    "opt_in": None,
-                    "assets": ["dp-two"],
-                },
-            ],
-        }
-
-        reasons = CHECKER.analyze(
-            catalog, catalog, status, status, ["assets/active/shared/common.yaml"]
-        )
-
-        self.assertEqual(1, len(reasons))
-        self.assertIn("ga-one", reasons[0])
-        self.assertNotIn("dp-two", reasons[0])
-
-    def test_uncataloged_file_under_active_assets_is_flagged(self):
-        reasons = self.analyze_files(["assets/active/new-area/untracked.yaml"])
+    def test_supporting_file_in_dp_area_referenced_by_ga_asset_is_detected(self):
+        # The reference graph wins over directory intuition: the file lives
+        # in the dp area but is embedded by the GA template.
+        reasons = self.analyze_files(["assets/active/dp/shared/script.sh"])
 
         self.assertTrue(
-            has_reason(reasons, "not covered by the asset catalog")
+            any(
+                "script.sh" in reason and "ga-asset" in reason
+                for reason in reasons
+            )
         )
+
+    def test_unowned_files_are_not_flagged(self):
+        # Files that no asset owns — neither cataloged nor referenced — do
+        # not affect rendered output, wherever under assets/active/ they
+        # live (including directories full of GA assets).
+        for path in (
+            "assets/active/new-area/untracked.yaml",
+            "assets/active/ga/orphan.conf",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual([], self.analyze_files([path]))
+
+    def test_reference_map_inverts_supporting_files(self):
+        self.assertEqual(
+            {
+                "active/ga/support/settings.conf": {"ga-asset"},
+                "active/dp/shared/script.sh": {"ga-asset"},
+                "active/dp/helper.py": {"dp-asset"},
+            },
+            CHECKER.reference_map(make_status()),
+        )
+
+    def test_head_reference_map_flags_changed_supporting_file(self):
+        # Base JSON predates the assets section (empty map); the head map
+        # still attributes the changed file.
+        base_status = make_status()
+        base_status.pop("assets")
+
+        reasons = analyze(
+            self.catalog,
+            self.catalog,
+            ["assets/active/ga/support/settings.conf"],
+            status_base=base_status,
+        )
+
+        self.assertTrue(has_reason(reasons, "settings.conf"))
 
     def test_owners_and_files_outside_assets_active_are_ignored(self):
         reasons = self.analyze_files(
