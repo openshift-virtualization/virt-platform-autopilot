@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kubevirt.io/virt-platform-autopilot/console-inspection-v1beta1.schema.json",
+  "title": "Virt Platform Autopilot Console Inspection v1beta1",
+  "type": "object",
+  "required": ["apiVersion", "generation", "state", "ready", "features", "assets"],
+  "properties": {
+    "apiVersion": { "const": "autopilot.kubevirt.io/status/v1beta1" },
+    "generation": { "type": "integer", "minimum": 0 },
+    "state": { "enum": ["initializing", "ready", "error", "disabled", "absent"] },
+    "reason": { "$ref": "#/$defs/topLevelReason" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "ready": { "type": "boolean" },
+    "lastSuccessfulReconcile": { "type": "string", "format": "date-time" },
+    "lastFailedReconcile": { "type": "string", "format": "date-time" },
+    "stale": { "type": "boolean" },
+    "truncated": { "type": "boolean" },
+    "truncationReason": { "enum": ["sizeLimit"] },
+    "features": { "type": "array", "items": { "$ref": "#/$defs/feature" } },
+    "assets": { "type": "array", "items": { "$ref": "#/$defs/asset" } }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "topLevelReason": { "enum": ["reconciliationFailed", "autopilotOptOut", "hcoNotFound", "summaryTooLarge"] },
+    "feature": {
+      "type": "object",
+      "required": ["id", "name", "description", "maturity", "install", "assets", "availability", "evidence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "name": { "type": "string" }, "description": { "type": "string" },
+        "maturity": { "enum": ["GA", "DP", "TP"] }, "install": { "enum": ["always", "opt-in"] },
+        "requires": { "type": "array", "items": { "type": "string" } }, "recommended": { "type": "array", "items": { "type": "string" } },
+        "assets": { "type": "array", "items": { "type": "string" } },
+        "availability": { "enum": ["unknown", "disabled", "healthy", "pending", "partial", "degraded", "unmanaged", "blocked"] },
+        "reason": { "enum": ["notAssessed", "notConfigured", "detected", "awaitingReconciliation", "someAssetsExcluded", "someAssetsUnmanaged", "userOptOut", "noApplicableAssets", "applyFailed", "drifted"] },
+        "enablement": { "$ref": "#/$defs/enablement" }, "rollout": { "$ref": "#/$defs/rollout" }, "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      },
+      "additionalProperties": true
+    },
+    "enablementAction": {
+      "type": "object", "required": ["target", "method", "patchType", "patch"],
+      "properties": {
+        "target": { "type": "object", "required": ["group", "version", "resource", "kind", "namespace", "name"], "properties": { "group": { "type": "string" }, "version": { "type": "string" }, "resource": { "type": "string" }, "kind": { "type": "string" }, "namespace": { "type": "string" }, "name": { "type": "string" } }, "additionalProperties": true },
+        "method": { "const": "PATCH" }, "patchType": { "const": "application/merge-patch+json" }, "patch": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "enablement": {
+      "type": "object", "required": ["state", "controls"],
+      "properties": {
+        "state": { "enum": ["notConfigured", "partiallyConfigured", "configured"] },
+        "controls": { "type": "array", "items": { "$ref": "#/$defs/enablementControl" } },
+        "prerequisites": { "type": "array", "items": { "$ref": "#/$defs/prerequisite" } }
+      }, "additionalProperties": true
+    },
+    "enablementControl": {
+      "type": "object", "required": ["id", "label", "assets", "configured"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "label": { "type": "string", "minLength": 1 },
+        "assets": { "type": "array", "items": { "type": "string" } }, "configured": { "type": "boolean" },
+        "action": { "$ref": "#/$defs/enablementAction" }
+      }, "additionalProperties": true
+    },
+    "prerequisite": {
+      "type": "object", "required": ["type", "name", "satisfied"],
+      "properties": {
+        "type": { "enum": ["kubevirtFeatureGate"] }, "name": { "type": "string", "minLength": 1 },
+        "satisfied": { "type": "boolean" }, "reason": { "type": "string" }
+      }, "additionalProperties": true
+    },
+    "rollout": {
+      "type": "object", "required": ["containsMachineConfig", "expectedDisruption"],
+      "properties": {
+        "containsMachineConfig": { "type": "boolean" },
+        "expectedDisruption": { "enum": ["none", "serviceRestart", "nodeDrainRequired", "nodeRebootPossible", "nodeRebootRequired", "unknown"] },
+        "rebootAvoidance": { "$ref": "#/$defs/rebootAvoidance" }
+      }, "additionalProperties": true
+    },
+    "rebootAvoidance": {
+      "type": "object", "required": ["coverage"],
+      "properties": {
+        "coverage": { "enum": ["notApplicable", "full", "partial", "none", "unavailable"] },
+        "policyAssetIDs": { "type": "array", "items": { "type": "string" } }
+      }, "additionalProperties": true
+    },
+    "evidence": {
+      "type": "object", "required": ["assetID", "state"],
+      "properties": { "assetID": { "type": "string", "minLength": 1 }, "state": { "enum": ["unobserved", "synced", "drifted", "applyFailed", "staged", "excluded", "unmanaged"] }, "reason": { "$ref": "#/$defs/assetReason" } },
+      "additionalProperties": true
+    },
+    "asset": {
+      "type": "object", "required": ["id", "apiVersion", "kind", "name", "namespace", "state", "lastTransitionTime"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 }, "apiVersion": { "type": "string" }, "kind": { "type": "string" }, "name": { "type": "string" }, "namespace": { "type": "string" },
+        "state": { "enum": ["synced", "drifted", "applyFailed", "staged", "excluded", "unmanaged"] }, "reason": { "$ref": "#/$defs/assetReason" },
+        "lastTransitionTime": { "type": "string", "format": "date-time" }, "lastDriftTime": { "type": "string", "format": "date-time" }, "goldenKey": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.json$" }, "sharedObject": { "type": "boolean" }, "sharedPath": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "assetReason": { "enum": ["notRenderable", "rootExclusion", "nodeDisruptionPolicyPending", "reconciliationPaused", "userOptOut", "driftDetectionFailed", "machineConfigRollout", "detected", "namespaceNotFound", "applyFailed", "missingCRD", "dependencyCheckFailed", "conditionEvaluationFailed", "conditionNotMet", "nodeDisruptionPolicyAggregationFailed", "nodeDisruptionPolicyApplyFailed"] },
+    "renderMode": { "enum": ["applied", "preview", "notExposed", "tooLarge"] },
+    "goldenMetadata": {
+      "type": "object", "required": ["renderMode"],
+      "properties": { "renderMode": { "$ref": "#/$defs/renderMode" }, "reason": { "oneOf": [{ "$ref": "#/$defs/assetReason" }, { "enum": ["sensitiveContent", "sizeLimit"] }] } },
+      "additionalProperties": true
+    },
+    "goldenIndex": {
+      "type": "object", "required": ["generation", "assets"],
+      "properties": { "generation": { "type": "integer", "minimum": 0 }, "assets": { "type": "object", "additionalProperties": { "$ref": "#/$defs/goldenMetadata" } } },
+      "additionalProperties": true
+    }
+  },
+  "$comment": "v1beta1 is additive-only. Existing required fields, stable IDs, enum values, and JSON types must not change. Clients must ignore future fields and enum values."
+}

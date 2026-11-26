@@ -159,6 +159,35 @@ var _ = Describe("RBAC Permissions Validation", func() {
 		Expect(found).To(BeTrue(), "ClusterRole should have read permissions for CRDs")
 	})
 
+	It("should restrict inspection ConfigMap deletion to the two inspection objects", func() {
+		expectedNames := map[string]bool{
+			"virt-platform-autopilot-inspection": true,
+			"virt-platform-autopilot-golden":     true,
+		}
+		for _, rule := range clusterRole.Rules {
+			if len(rule.APIGroups) != 1 || rule.APIGroups[0] != "" || len(rule.Resources) != 1 || rule.Resources[0] != "configmaps" {
+				continue
+			}
+			hasDelete := false
+			for _, verb := range rule.Verbs {
+				if verb == "delete" {
+					hasDelete = true
+					break
+				}
+			}
+			if !hasDelete {
+				continue
+			}
+			actualNames := make(map[string]bool, len(rule.ResourceNames))
+			for _, name := range rule.ResourceNames {
+				actualNames[name] = true
+			}
+			Expect(actualNames).To(Equal(expectedNames), "ConfigMap delete must be limited to the inspection objects")
+			return
+		}
+		Fail("ClusterRole is missing name-scoped delete permission for inspection ConfigMaps")
+	})
+
 	It("should have permissions for Nodes (hardware detection)", func() {
 		By("checking Node permissions")
 

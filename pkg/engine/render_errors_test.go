@@ -34,6 +34,7 @@ import (
 	pkgcontext "github.com/kubevirt/virt-platform-autopilot/pkg/context"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/observability"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/overrides"
+	"github.com/kubevirt/virt-platform-autopilot/pkg/status"
 	"github.com/kubevirt/virt-platform-autopilot/pkg/util"
 )
 
@@ -135,7 +136,7 @@ func TestRenderFailureMetricAndEventLifecycle(t *testing.T) {
 	// Exclusion clears a failure even when discovery is still unavailable.
 	patcher.renderer.SetClient(loggingFailingReader{Reader: fakeClient, operation: "list"})
 	observability.SetRenderFailure(asset.Name, "internal", "")
-	patcher.CleanupExcludedAsset(asset, renderCtx)
+	patcher.CleanupExcludedAsset(asset, renderCtx, status.AssetReasonConditionNotMet)
 	assertRenderFailureMetric(t,
 		failureSeries{asset: asset.Name, reason: "internal", value: 0},
 		failureSeries{asset: asset.Name, reason: "configuration", code: NoDefaultStorageClass, value: 0},

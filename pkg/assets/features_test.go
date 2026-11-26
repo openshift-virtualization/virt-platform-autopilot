@@ -17,8 +17,55 @@ limitations under the License.
 package assets
 
 import (
+	"context"
 	"testing"
 )
+
+func TestFeatureEnabledUsesPerAssetConditions(t *testing.T) {
+	registry := &Registry{catalog: &AssetCatalog{
+		Assets: []AssetMetadata{
+			{Name: "logging", Install: InstallModeOptIn, Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-logging", Value: "true"}}},
+			{Name: "audit", Install: InstallModeOptIn, Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-audit-logging", Value: "true"}}},
+		},
+		Features: []FeatureMetadata{{ID: "logging", Name: "Logging", Assets: []string{"logging", "audit"}}},
+	}}
+	enabled, err := registry.FeatureEnabled(context.Background(), &DefaultConditionEvaluator{Annotations: map[string]string{"platform.kubevirt.io/enable-logging": "true"}})
+	if err != nil || !enabled["Logging"] {
+		t.Fatalf("FeatureEnabled() = %v, %v; want Logging enabled by one applicable asset", enabled, err)
+	}
+}
+
+func TestFeatureEnabledSeparatesConfiguredIntentFromApplicability(t *testing.T) {
+	registry := &Registry{catalog: &AssetCatalog{
+		Assets: []AssetMetadata{{Name: "pci", Install: InstallModeOptIn, Conditions: []AssetCondition{
+			{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-pci-passthrough", Value: "true"},
+			{Type: ConditionTypeHardwareDetection, Detector: "pciDevicesPresent"},
+		}}},
+		Features: []FeatureMetadata{{ID: "pci", Name: "PCI", Assets: []string{"pci"}}},
+	}}
+	evaluator := &DefaultConditionEvaluator{
+		Annotations:     map[string]string{"platform.kubevirt.io/enable-pci-passthrough": "true"},
+		HardwareContext: map[string]bool{"pciDevicesPresent": false},
+	}
+	enabled, err := registry.FeatureEnabled(context.Background(), evaluator)
+	if err != nil || !enabled["PCI"] {
+		t.Fatalf("FeatureEnabled() = %v, %v; want configured intent despite unavailable hardware", enabled, err)
+	}
+}
+
+func TestFeatureEnabledDoesNotTreatAlwaysOnPrerequisiteAsOptInIntent(t *testing.T) {
+	registry := &Registry{catalog: &AssetCatalog{Assets: []AssetMetadata{
+		{Name: "prerequisite", Install: InstallModeAlways},
+		{Name: "optional", Install: InstallModeOptIn, Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-example", Value: "true"}}},
+	}, Features: []FeatureMetadata{{ID: "example", Name: "Example", Assets: []string{"prerequisite", "optional"}}}}}
+	enabled, err := registry.FeatureEnabled(context.Background(), &DefaultConditionEvaluator{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enabled["Example"] {
+		t.Fatalf("always-on prerequisite incorrectly enabled opt-in feature: %#v", enabled)
+	}
+}
 
 func TestDeriveFeatureOptInIncludesUserFacingConditionTypes(t *testing.T) {
 	resolved := []*AssetMetadata{
@@ -96,6 +143,7 @@ func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 		},
 		Features: []FeatureMetadata{
 			{
+				ID:          "kubevirt-metrics-exporter",
 				Name:        "KubeVirt Metrics Exporter",
 				Description: "Per-node metrics exporter",
 				Groups:      []string{},
@@ -114,6 +162,124 @@ func TestDeriveFeatureStatusesIncludesRecommended(t *testing.T) {
 	}
 	if len(statuses[0].Recommended) != 1 || statuses[0].Recommended[0] != "Cluster Observability Operator" {
 		t.Fatalf("status.Recommended = %v, want [Cluster Observability Operator]", statuses[0].Recommended)
+	}
+}
+
+func TestDeriveFeatureStatusesExposesFeatureAndAssetIdentifiers(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{
+			{Name: "first-asset", Install: InstallModeOptIn},
+			{Name: "second-asset", Install: InstallModeOptIn},
+		},
+		Features: []FeatureMetadata{{
+			ID:     "example-feature",
+			Name:   "Example Feature",
+			Assets: []string{"second-asset", "first-asset"},
+		}},
+	}
+
+	statuses, err := deriveFeatureStatuses(catalog)
+	if err != nil {
+		t.Fatalf("deriveFeatureStatuses() error = %v", err)
+	}
+	if len(statuses) != 1 || statuses[0].ID != "example-feature" {
+		t.Fatalf("unexpected feature identifier: %#v", statuses)
+	}
+	if got, want := statuses[0].Assets, []string{"first-asset", "second-asset"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("feature asset identifiers = %v, want %v", got, want)
+	}
+}
+
+func TestValidateFeatureCoverageRequiresUniqueStableIDs(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{{Name: "asset-a"}, {Name: "asset-b"}},
+		Features: []FeatureMetadata{
+			{ID: "duplicate", Name: "A", Assets: []string{"asset-a"}},
+			{ID: "duplicate", Name: "B", Assets: []string{"asset-b"}},
+		},
+	}
+	if err := ValidateFeatureCoverage(catalog); err == nil {
+		t.Fatal("expected duplicate feature IDs to be rejected")
+	}
+}
+
+func TestDeriveFeatureStatusIncludesControlsAndRollout(t *testing.T) {
+	catalog := &AssetCatalog{
+		Assets: []AssetMetadata{
+			{Name: "policy", Component: "MachineConfiguration"},
+			{Name: "machine-config", Component: "MachineConfig", NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}},
+		},
+		Features: []FeatureMetadata{{
+			ID: "example", Name: "Example", Assets: []string{"policy", "machine-config"},
+			Enablement: []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-example", Value: "true"}},
+			Rollout:    &FeatureRollout{ExpectedDisruption: "serviceRestart"},
+		}},
+	}
+	statuses, err := deriveFeatureStatuses(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := statuses[0]
+	if got.ID != "example" || len(got.Assets) != 2 || len(got.Enablement) != 1 || got.Rollout == nil || got.Rollout.Coverage != "full" || got.Rollout.PolicyAssetIDs[0] != "policy" {
+		t.Fatalf("unexpected derived feature status: %#v", got)
+	}
+}
+
+func TestDeriveFeatureStatusRequiresRolloutForMachineConfig(t *testing.T) {
+	_, err := deriveFeatureStatuses(&AssetCatalog{Assets: []AssetMetadata{{Name: "machine-config", Component: "MachineConfig"}}, Features: []FeatureMetadata{{ID: "example", Name: "Example", Assets: []string{"machine-config"}}}})
+	if err == nil {
+		t.Fatal("expected MachineConfig rollout declaration to be required")
+	}
+}
+
+func TestValidateFeatureControlsMatchAssetConditions(t *testing.T) {
+	asset := AssetMetadata{Name: "asset", Conditions: []AssetCondition{{Type: ConditionTypeAnnotation, Key: "platform.kubevirt.io/enable-example", Value: "true"}}}
+	base := FeatureMetadata{ID: "example", Name: "Example", Assets: []string{"asset"}, Enablement: []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-example", Value: "true", Assets: []string{"asset"}}}}
+	if err := validateFeatureControls(base, []AssetMetadata{asset}); err != nil {
+		t.Fatalf("valid control rejected: %v", err)
+	}
+
+	missing := base
+	missing.Enablement = nil
+	if err := validateFeatureControls(missing, []AssetMetadata{asset}); err == nil {
+		t.Fatal("missing control for enable annotation was accepted")
+	}
+
+	mismatched := base
+	mismatched.Enablement = []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-typo", Value: "true"}}
+	if err := validateFeatureControls(mismatched, []AssetMetadata{asset}); err == nil {
+		t.Fatal("control without matching asset condition was accepted")
+	}
+
+	omitted := base
+	omitted.Assets = []string{"asset", "other"}
+	omitted.Enablement = []FeatureEnablementControl{{ID: "example", Label: "Enable example", Annotation: "platform.kubevirt.io/enable-example", Value: "true", Assets: []string{"other"}}}
+	if err := validateFeatureControls(omitted, []AssetMetadata{asset, {Name: "other"}}); err == nil {
+		t.Fatal("control that omits its affected asset was accepted")
+	}
+}
+
+func TestDeriveFeatureRolloutCoverage(t *testing.T) {
+	policy := AssetMetadata{Name: "policy", Component: "MachineConfiguration"}
+	protected := AssetMetadata{Name: "protected", Component: "MachineConfig", NodeDisruptionPolicy: &NodeDisruptionPolicyDependency{Asset: "policy"}}
+	unprotected := AssetMetadata{Name: "unprotected", Component: "MachineConfig"}
+	feature := FeatureMetadata{Rollout: &FeatureRollout{ExpectedDisruption: "nodeRebootPossible"}}
+	for _, testCase := range []struct {
+		name     string
+		assets   []*AssetMetadata
+		coverage string
+	}{
+		{name: "full", assets: []*AssetMetadata{&policy, &protected}, coverage: "full"},
+		{name: "partial", assets: []*AssetMetadata{&policy, &protected, &unprotected}, coverage: "partial"},
+		{name: "none", assets: []*AssetMetadata{&unprotected}, coverage: "none"},
+		{name: "not applicable", assets: []*AssetMetadata{{Name: "config", Component: "ConfigMap"}}, coverage: "notApplicable"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := deriveFeatureRollout(feature, testCase.assets)
+			if got.Coverage != testCase.coverage {
+				t.Fatalf("coverage = %q, want %q", got.Coverage, testCase.coverage)
+			}
+		})
 	}
 }
 
