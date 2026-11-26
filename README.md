@@ -105,7 +105,7 @@ For logging storage configuration and collector permissions, see [Logging setup]
 
 - OpenShift cluster with OpenShift Virtualization (HCO) installed
 - `kubectl` or `oc` CLI access
-- Go 1.26+ (for development)
+- Go 1.27+ (for development)
 
 ### Installation
 
