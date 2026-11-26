@@ -316,5 +316,83 @@
         "vm-drain-shutdown-inhibitor-node-disruption-policy"
       ]
     }
+  ],
+  "assets": [
+    {
+      "name": "file-based-swap-provisioning",
+      "supporting_files": [
+        "active/machine-config/09-file-based-swap-provisioning/kubevirt-provision-file-swap.sh"
+      ]
+    },
+    {
+      "name": "ksm-zero-only",
+      "supporting_files": [
+        "active/machine-config/05-ksm-zero-only/ksm-tune.py"
+      ]
+    },
+    {
+      "name": "ksm-zero-only-master",
+      "supporting_files": [
+        "active/machine-config/05-ksm-zero-only/ksm-tune.py"
+      ]
+    },
+    {
+      "name": "kubelet-cpu-manager",
+      "supporting_files": [
+        "active/machine-config/07-kubelet-cpu-manager/kubelet-96-cpu-manager.conf"
+      ]
+    },
+    {
+      "name": "kubelet-perf-settings",
+      "supporting_files": [
+        "active/machine-config/03-kubelet-perf-settings/95-perf.conf"
+      ]
+    },
+    {
+      "name": "scsi-persistent-reservations",
+      "supporting_files": [
+        "active/machine-config/08-scsi-persistent-reservations/reservation.conf"
+      ]
+    },
+    {
+      "name": "scsi-persistent-reservations-master",
+      "supporting_files": [
+        "active/machine-config/08-scsi-persistent-reservations/reservation.conf"
+      ]
+    },
+    {
+      "name": "swap-enable",
+      "supporting_files": [
+        "active/machine-config/01-swap-enable/kubelet-90-swap.conf",
+        "active/machine-config/01-swap-enable/kubevirt-io-latency-setup.py",
+        "active/machine-config/01-swap-enable/kubevirt-tune-watermarks.py"
+      ]
+    },
+    {
+      "name": "thp-tuning",
+      "supporting_files": [
+        "active/machine-config/06-thp-tuning/thp-tune.py"
+      ]
+    },
+    {
+      "name": "thp-tuning-master",
+      "supporting_files": [
+        "active/machine-config/06-thp-tuning/thp-tune.py"
+      ]
+    },
+    {
+      "name": "vm-drain-shutdown-inhibitor",
+      "supporting_files": [
+        "active/machine-config/99-vm-drain-shutdown-inhibitor/10-inhibit-delay.conf",
+        "active/machine-config/99-vm-drain-shutdown-inhibitor/vm-drain-shutdown-inhibitor.py"
+      ]
+    },
+    {
+      "name": "vm-drain-shutdown-inhibitor-master",
+      "supporting_files": [
+        "active/machine-config/99-vm-drain-shutdown-inhibitor/10-inhibit-delay.conf",
+        "active/machine-config/99-vm-drain-shutdown-inhibitor/vm-drain-shutdown-inhibitor.py"
+      ]
+    }
   ]
 }

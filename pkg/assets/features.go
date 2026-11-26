@@ -18,6 +18,7 @@ package assets
 
 import (
 	"fmt"
+	"io/fs"
 	"sort"
 	"strings"
 )
@@ -40,15 +41,23 @@ type FeatureStatus struct {
 	Recommended []string `json:"recommended,omitempty"`
 }
 
+// AssetStatus is the derived per-asset reference information: the supporting
+// files its template embeds through readAsset.
+type AssetStatus struct {
+	Name            string   `json:"name"`
+	SupportingFiles []string `json:"supporting_files"`
+}
+
 // FeatureCatalog is the structured feature list exposed by generators and debug endpoints.
 type FeatureCatalog struct {
 	Framework FrameworkStatus `json:"framework"`
 	Features  []FeatureStatus `json:"features"`
+	Assets    []AssetStatus   `json:"assets,omitempty"`
 }
 
 // FeatureCatalog returns the derived feature catalog from the registry metadata.
 func (r *Registry) FeatureCatalog() (*FeatureCatalog, error) {
-	return DeriveFeatureCatalog(r.catalog)
+	return DeriveFeatureCatalog(r.catalog, r.loader.FS())
 }
 
 // ValidateFeatureCoverage ensures every asset is covered by a feature or excluded_assets.
@@ -87,15 +96,23 @@ func ValidateFeatureCoverage(catalog *AssetCatalog) error {
 	return nil
 }
 
-// DeriveFeatureCatalog builds the framework and feature status list from metadata.
-func DeriveFeatureCatalog(catalog *AssetCatalog) (*FeatureCatalog, error) {
+// DeriveFeatureCatalog builds the framework and feature status list from
+// metadata, and the per-asset supporting-file references read from files.
+// The files filesystem is rooted at the assets directory: cataloged asset
+// paths ("active/...") resolve directly against it.
+func DeriveFeatureCatalog(catalog *AssetCatalog, files fs.FS) (*FeatureCatalog, error) {
 	statuses, err := deriveFeatureStatuses(catalog)
+	if err != nil {
+		return nil, err
+	}
+	assetStatuses, err := deriveAssetStatuses(catalog, files)
 	if err != nil {
 		return nil, err
 	}
 	return &FeatureCatalog{
 		Framework: deriveFrameworkStatus(catalog),
 		Features:  statuses,
+		Assets:    assetStatuses,
 	}, nil
 }
 

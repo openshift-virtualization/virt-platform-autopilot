@@ -17,6 +17,8 @@ limitations under the License.
 package assets
 
 import (
+	"io/fs"
+	"strings"
 	"testing"
 )
 
@@ -146,6 +148,28 @@ func TestRegistryFeatureCatalog(t *testing.T) {
 		}
 		if prevRank == currRank && prev.Name > curr.Name {
 			t.Fatalf("features not sorted by name within maturity: %q before %q", prev.Name, curr.Name)
+		}
+	}
+
+	if len(catalog.Assets) == 0 {
+		t.Fatal("expected assets with supporting-file references")
+	}
+	for i := 1; i < len(catalog.Assets); i++ {
+		if catalog.Assets[i-1].Name > catalog.Assets[i].Name {
+			t.Fatalf("assets not sorted by name: %q before %q", catalog.Assets[i-1].Name, catalog.Assets[i].Name)
+		}
+	}
+	for _, asset := range catalog.Assets {
+		if len(asset.SupportingFiles) == 0 {
+			t.Fatalf("asset %q has no supporting files", asset.Name)
+		}
+		for _, path := range asset.SupportingFiles {
+			if !strings.HasPrefix(path, "active/") {
+				t.Fatalf("asset %q supporting file %q is not rooted at active/", asset.Name, path)
+			}
+			if _, err := fs.Stat(loader.FS(), path); err != nil {
+				t.Fatalf("asset %q supporting file %q does not exist: %v", asset.Name, path, err)
+			}
 		}
 	}
 }
