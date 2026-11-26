@@ -1240,80 +1240,158 @@ excluded_assets:
 
 features:
   - name: Swap Enablement
+    id: swap-enablement
     description: Enables OpenShift worker nodes to safely use swap for virtualization workloads; swap requires pre-provisioned dedicated storage to be available
     assets: [swap-enable]
+    rollout:
+      expected_disruption: nodeRebootRequired
 
   - name: File-based Swap Provisioning
+    id: file-based-swap-provisioning
     description: Optional cheaper alternative to a dedicated swap partition; provisions file-backed swap sized to each worker's memory overcommitment, skipped on workers that have the dedicated partition. Swap activation remains managed by Swap Enablement
     maturity: dp
     assets: [file-based-swap-provisioning]
+    enablement:
+      - id: file-based-swap-provisioning
+        label: Enable file-based swap provisioning
+        annotation: platform.kubevirt.io/enable-file-based-swap-provisioning
+        value: "true"
+    rollout:
+      expected_disruption: nodeRebootRequired
 
   - name: Kubelet Performance
-    description: >-
-      Optimized kubelet settings for virtualization workloads. Does not
-      require node reboot; restarts kubelet.
+    id: kubelet-performance
+    description: Optimized kubelet settings for virtualization workloads.
     maturity: tp
     assets:
       - kubelet-perf-settings-node-disruption-policy
       - kubelet-perf-settings
+    enablement:
+      - id: kubelet-performance
+        label: Enable Kubelet performance settings
+        annotation: platform.kubevirt.io/enable-kubelet-performance-settings
+        value: "true"
+    rollout:
+      expected_disruption: serviceRestart
 
   - name: Observability Enhancements
+    id: observability-enhancements
     description: Enhanced observability with additional Prometheus alerting rules and advanced Perses dashboards in the OpenShift console
     assets: [metrics-service, metrics-servicemonitor, prometheus-alerts, monitoring-ui-plugin, autopilot-dashboard]
     requires:
       - Cluster Observability Operator
 
   - name: Load-Aware Descheduler
+    id: load-aware-descheduler
     description: Load-aware VM balancing based on CPU/memory utilization and pressure stall metrics
     assets: [descheduler-loadaware, psi-enable, psi-enable-master, descheduler-dashboard]
     requires:
       - Kube Descheduler Operator
+    rollout:
+      expected_disruption: nodeRebootPossible
 
   - name: PCI Passthrough
+    id: pci-passthrough
     description: GPU/PCI device passthrough via VFIO
     maturity: dp
     assets: [pci-passthrough]
+    enablement:
+      - id: pci-passthrough
+        label: Enable PCI passthrough
+        annotation: platform.kubevirt.io/enable-pci-passthrough
+        value: "true"
+    rollout:
+      expected_disruption: nodeRebootPossible
 
   - name: CPU Manager
-    description: >-
-      Dedicated CPU pinning for guaranteed QoS workloads. Does not require
-      node reboot; drains the node, restarts kubelet.
+    id: cpu-manager
+    description: Dedicated CPU pinning for guaranteed QoS workloads.
     maturity: dp
     assets:
       - kubelet-cpu-manager-node-disruption-policy
       - kubelet-cpu-manager
+    enablement:
+      - id: cpu-manager-tunings
+        label: Enable CPU Manager performance tunings
+        annotation: platform.kubevirt.io/enable-cpu-manager-perf-tunings
+        value: "true"
+    prerequisites:
+      - type: kubevirtFeatureGate
+        name: CPUManager
+        reason: CPU Manager must be enabled in KubeVirt first
+    rollout:
+      expected_disruption: nodeDrainRequired
 
   - name: SCSI Persistent Reservations
+    id: scsi-persistent-reservations
     description: >-
       Configures worker-node multipath to persist SCSI persistent-reservation
-      keys for VMs sharing LUN-backed disks. Does not require node reboot.
-      Requires an existing /etc/multipath.conf so multipathd is active before
-      enable.
+      keys for VMs sharing LUN-backed disks. Requires an existing
+      /etc/multipath.conf so multipathd is active before enable.
     maturity: dp
     assets:
       - scsi-persistent-reservations-node-disruption-policy
       - scsi-persistent-reservations
       - scsi-persistent-reservations-master
+    enablement:
+      - id: scsi-persistent-reservations
+        label: Enable SCSI persistent reservations
+        annotation: platform.kubevirt.io/enable-scsi-persistent-reservations
+        value: "true"
+    rollout:
+      expected_disruption: serviceRestart
 
   - name: MTV Operator
+    id: mtv-operator
     description: Migration Toolkit for Virtualization
     maturity: dp
     assets: [mtv-operator]
+    enablement:
+      - id: mtv-operator
+        label: Enable Migration Toolkit for Virtualization
+        annotation: platform.kubevirt.io/enable-mtv
+        value: "true"
 
   - name: MetalLB Operator
+    id: metallb-operator
     description: Bare-metal load balancer for services
     maturity: dp
     assets: [metallb-operator]
+    enablement:
+      - id: metallb-operator
+        label: Enable MetalLB Operator
+        annotation: platform.kubevirt.io/enable-metallb
+        value: "true"
 
   - name: Logging
+    id: logging
     description: Integrated logging stack with LokiStack and ClusterLogForwarder
     maturity: dp
     groups: [logging, audit-logging]
     requires:
       - Loki Operator
       - Red Hat OpenShift Logging Operator
+    enablement:
+      - id: logging
+        label: Enable logging
+        annotation: platform.kubevirt.io/enable-logging
+        value: "true"
+        assets:
+          - logging-collector
+          - logging-collector-crb-application
+          - logging-collector-crb-infrastructure
+          - logging-collector-crb-writer
+          - logging-collector-sa
+          - logging-lokistack
+          - logging-ui-plugin
+      - id: audit-logging
+        label: Collect audit logs
+        annotation: platform.kubevirt.io/enable-audit-logging
+        value: "true"
+        assets: [logging-collector-crb-audit]
 
   - name: Incident Detection
+    id: incident-detection
     description: >-
       OpenShift Incident Detection groups related cluster alerts into a single, cohesive
       timeline to eliminate alert fatigue and speed up troubleshooting.
@@ -1322,45 +1400,78 @@ features:
       - Cluster Observability Operator
 
   - name: Troubleshooting Panel
+    id: troubleshooting-panel
     description: Korrel8r observability signal correlation in the console
     assets: [troubleshooting-panel-ui-plugin]
     requires:
       - Cluster Observability Operator
 
   - name: KubeVirt Metrics Exporter
+    id: kubevirt-metrics-exporter
     description: Per-node VM storage I/O latency collection via QMP, QGA, and eBPF, and detailed KVM and memory statistics
     maturity: dp
     groups: [kubevirt-metrics-exporter]
     recommended:
       - Cluster Observability Operator
+    enablement:
+      - id: kubevirt-metrics-exporter
+        label: Enable KubeVirt Metrics Exporter
+        annotation: platform.kubevirt.io/enable-kubevirt-metrics-exporter
+        value: "true"
 
   - name: In-Flight Operations
+    id: in-flight-operations
     description: OperationRuleSet-based coordination for safe concurrent operations
     maturity: tp
     groups: [inflightoperations]
+    enablement:
+      - id: in-flight-operations
+        label: Enable in-flight operations
+        annotation: platform.kubevirt.io/enable-in-flight-operations
+        value: "true"
 
   - name: Kernel Samepage Merging (KSM) zero pages only
+    id: kernel-samepage-merging-ksm-zero-pages-only
     description: >-
       Node-level KSM zero-pages-only deduplication with adaptive scan rate and
       max_ptes_none=0 when KSM is active. Standalone for memory savings on Windows
       VM workers; recommend thp-tuning on the same nodes for THP performance.
-      KSM tuner updates restart only the tuner service through an MCO Node
-      Disruption Policy, avoiding a node reboot.
     maturity: dp
     groups: [ksm-zero-only]
+    enablement:
+      - id: ksm-zero-only
+        label: Enable KSM zero pages only
+        annotation: platform.kubevirt.io/enable-ksm-zero-only
+        value: "true"
+    rollout:
+      expected_disruption: serviceRestart
 
   - name: Transparent Huge Pages (THP) Tuning
+    id: transparent-huge-pages-thp-tuning
     description: >-
       Node-level THP madvise/defrag/shmem tuning, shrink_underused=0 on
       kernels that support it, khugepaged scan rates, and max_ptes_none
-      coordination with KSM. Does not require node reboot. Optional
-      sub-feature: enable-thp-tuning-kernelcore sets kernelcore=2G and
-      movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node);
-      requires reboot.
+      coordination with KSM. Optional kernelcore sub-feature sets kernelcore=2G
+      and movablecore=97% (max(2G, 3% MemTotal) ZONE_MOVABLE split per node).
     maturity: dp
     groups: [thp-tuning]
+    enablement:
+      - id: thp-tuning
+        label: Enable THP tuning
+        annotation: platform.kubevirt.io/enable-thp-tuning
+        value: "true"
+        assets: [thp-tuning, thp-tuning-master, thp-tuning-node-disruption-policy]
+      - id: thp-tuning-kernelcore
+        label: Enable THP kernelcore tuning
+        annotation: platform.kubevirt.io/enable-thp-tuning-kernelcore
+        value: "true"
+        assets: [thp-tuning-kernelcore, thp-tuning-kernelcore-master]
+    rollout:
+      expected_disruption: nodeRebootRequired
 
   - name: Stun Time
+    # Stable API identifier; do not derive it from the display name.
+    id: stun-time
     description: >-
       Cluster-wide MigrationPolicy enabling KubeVirt live-migration downtime
       tuning for all VMs (empty selectors, lowest precedence). Ramps guest
@@ -1369,8 +1480,14 @@ features:
       more specific MigrationPolicies still override.
     maturity: dp
     assets: [stun-time]
+    enablement:
+      - id: stun-time
+        label: Enable stun time tuning
+        annotation: platform.kubevirt.io/enable-stun-time
+        value: "true"
 
   - name: NHC with FAR remediator and SBR detection-mode config
+    id: nhc-with-far-remediator-and-sbr-detection-mode-config
     description: Node health checks with fence-agents remediation and storage-based remediation in detection-only mode
     maturity: dp
     assets: [nhc-far, sbr-detection-config]
@@ -1378,13 +1495,26 @@ features:
       - Node Health Check Operator
       - Fence Agents Remediation Operator
       - Storage Based Remediation Operator
+    enablement:
+      - id: node-remediation
+        label: Enable node remediation
+        annotation: platform.kubevirt.io/enable-node-remediation
+        value: "true"
 
   - name: VM drain shutdown inhibitor
+    id: vm-drain-shutdown-inhibitor
     description: >-
-      Attempts to gracefully shutdown KubeVirt VMs before allowing the
-      node to shut down. Does not require node reboot.
+      Attempts to gracefully shut down KubeVirt VMs before allowing the node to
+      shut down.
     maturity: dp
     assets:
       - vm-drain-shutdown-inhibitor-node-disruption-policy
       - vm-drain-shutdown-inhibitor
       - vm-drain-shutdown-inhibitor-master
+    enablement:
+      - id: vm-drain-shutdown-inhibitor
+        label: Enable VM drain shutdown inhibitor
+        annotation: platform.kubevirt.io/enable-vm-drain-shutdown-inhibitor
+        value: "true"
+    rollout:
+      expected_disruption: serviceRestart
