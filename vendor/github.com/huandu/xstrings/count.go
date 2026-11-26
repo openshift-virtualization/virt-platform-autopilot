@@ -15,8 +15,9 @@ func Len(str string) int {
 
 // WordCount returns number of words in a string.
 //
-// Word is defined as a locale dependent string containing alphabetic characters,
-// which may also contain but not start with `'` and `-` characters.
+// A word consists of Unicode letters, excluding Han ideographs.
+// It may also contain ASCII apostrophes and hyphens, but cannot start with them.
+// The classification does not use the system locale.
 func WordCount(str string) int {
 	var r rune
 	var size, n int
@@ -46,33 +47,9 @@ func WordCount(str string) int {
 	return n
 }
 
-const minCJKCharacter = '\u3400'
-
-// Checks r is a letter but not CJK character.
+// Checks r is a letter but not a CJK ideograph.
 func isAlphabet(r rune) bool {
-	if !unicode.IsLetter(r) {
-		return false
-	}
-
-	switch {
-	// Quick check for non-CJK character.
-	case r < minCJKCharacter:
-		return true
-
-	// Common CJK characters.
-	case r >= '\u4E00' && r <= '\u9FCC':
-		return false
-
-	// Rare CJK characters.
-	case r >= '\u3400' && r <= '\u4D85':
-		return false
-
-	// Rare and historic CJK characters.
-	case r >= '\U00020000' && r <= '\U0002B81D':
-		return false
-	}
-
-	return true
+	return unicode.IsLetter(r) && !unicode.Is(unicode.Han, r)
 }
 
 // Width returns string width in monotype font.
