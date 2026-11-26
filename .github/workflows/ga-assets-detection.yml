@@ -60,6 +60,13 @@ jobs:
         if: steps.relevance.outputs.relevant == 'true'
         run: pip install pyyaml
 
+      # The gate validates its own tooling before every verdict: a failing
+      # test suite fails this check, and with no artifact the labeler skips
+      # the run (fail-closed).
+      - name: Run checker tests
+        if: steps.relevance.outputs.relevant == 'true'
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
       - name: Detect GA-affecting changes
         id: verdict
         env:
