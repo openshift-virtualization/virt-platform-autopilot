@@ -112,91 +112,112 @@ func readAssetRefs(name, text string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	var refs []string
-	seen := make(map[string]bool)
-	var walk func(parse.Node) error
-	walk = func(n parse.Node) error {
-		switch node := n.(type) {
-		case *parse.ListNode:
-			for _, child := range node.Nodes {
-				if err := walk(child); err != nil {
-					return err
-				}
-			}
-		case *parse.ActionNode:
-			return walk(node.Pipe)
-		case *parse.IfNode:
-			if err := walk(node.Pipe); err != nil {
-				return err
-			}
-			if err := walk(node.List); err != nil {
-				return err
-			}
-			if node.ElseList != nil {
-				return walk(node.ElseList)
-			}
-			return nil
-		case *parse.RangeNode:
-			if err := walk(node.Pipe); err != nil {
-				return err
-			}
-			if err := walk(node.List); err != nil {
-				return err
-			}
-			if node.ElseList != nil {
-				return walk(node.ElseList)
-			}
-			return nil
-		case *parse.WithNode:
-			if err := walk(node.Pipe); err != nil {
-				return err
-			}
-			if err := walk(node.List); err != nil {
-				return err
-			}
-			if node.ElseList != nil {
-				return walk(node.ElseList)
-			}
-			return nil
-		case *parse.PipeNode:
-			for _, cmd := range node.Cmds {
-				if err := walk(cmd); err != nil {
-					return err
-				}
-			}
-		case *parse.CommandNode:
-			if len(node.Args) > 0 {
-				if ident, ok := node.Args[0].(*parse.IdentifierNode); ok && ident.Ident == readAssetFuncName {
-					if len(node.Args) != 2 {
-						return fmt.Errorf("%s must be called with a single literal path in %s", readAssetFuncName, name)
-					}
-					literal, ok := node.Args[1].(*parse.StringNode)
-					if !ok {
-						return fmt.Errorf("%s must be called with a literal path in %s", readAssetFuncName, name)
-					}
-					if !seen[literal.Text] {
-						seen[literal.Text] = true
-						refs = append(refs, literal.Text)
-					}
-					return nil
-				}
-			}
-			// Nested calls in parentheses parse as sub-pipelines in the
-			// command arguments (e.g. {{ printf "%s" (readAsset "x") }}).
-			for _, arg := range node.Args {
-				switch arg.(type) {
-				case *parse.PipeNode, *parse.CommandNode:
-					if err := walk(arg); err != nil {
-						return err
-					}
-				}
-			}
-		}
-		return nil
-	}
-	if err := walk(tmpl.Tree.Root); err != nil {
+	walker := &refWalker{name: name, seen: make(map[string]bool)}
+	if err := walker.walk(tmpl.Root); err != nil {
 		return nil, err
 	}
-	return refs, nil
+	return walker.refs, nil
+}
+
+// refWalker collects the literal readAsset arguments of a parsed template.
+type refWalker struct {
+	name string
+	refs []string
+	seen map[string]bool
+}
+
+// walk dispatches a node by type. Node types that cannot hold a command
+// (text, comments, variables, chained fields) are ignored.
+func (w *refWalker) walk(n parse.Node) error {
+	switch node := n.(type) {
+	case *parse.ListNode:
+		return w.walkNodes(node.Nodes)
+	case *parse.ActionNode:
+		return w.walk(node.Pipe)
+	case *parse.IfNode:
+		return w.walkBranch(&node.BranchNode)
+	case *parse.RangeNode:
+		return w.walkBranch(&node.BranchNode)
+	case *parse.WithNode:
+		return w.walkBranch(&node.BranchNode)
+	case *parse.PipeNode:
+		return w.walkCommands(node.Cmds)
+	case *parse.CommandNode:
+		return w.walkCommand(node)
+	}
+	return nil
+}
+
+func (w *refWalker) walkNodes(nodes []parse.Node) error {
+	for _, child := range nodes {
+		if err := w.walk(child); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (w *refWalker) walkCommands(commands []*parse.CommandNode) error {
+	for _, command := range commands {
+		if err := w.walk(command); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// walkBranch walks the branch constructs (if/range/with): the condition
+// pipe, the body, and the optional else body.
+func (w *refWalker) walkBranch(branch *parse.BranchNode) error {
+	if err := w.walk(branch.Pipe); err != nil {
+		return err
+	}
+	if err := w.walk(branch.List); err != nil {
+		return err
+	}
+	if branch.ElseList != nil {
+		return w.walk(branch.ElseList)
+	}
+	return nil
+}
+
+func (w *refWalker) walkCommand(command *parse.CommandNode) error {
+	if w.isReadAssetCall(command) {
+		return w.recordRef(command)
+	}
+	// Nested calls in parentheses parse as sub-pipelines in the command
+	// arguments (e.g. {{ printf "%s" (readAsset "x") }}).
+	for _, arg := range command.Args {
+		switch arg.(type) {
+		case *parse.PipeNode, *parse.CommandNode:
+			if err := w.walk(arg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (w *refWalker) isReadAssetCall(command *parse.CommandNode) bool {
+	if len(command.Args) == 0 {
+		return false
+	}
+	ident, ok := command.Args[0].(*parse.IdentifierNode)
+	return ok && ident.Ident == readAssetFuncName
+}
+
+// recordRef validates a readAsset invocation and records its literal path.
+func (w *refWalker) recordRef(command *parse.CommandNode) error {
+	if len(command.Args) != 2 {
+		return fmt.Errorf("%s must be called with a single literal path in %s", readAssetFuncName, w.name)
+	}
+	literal, ok := command.Args[1].(*parse.StringNode)
+	if !ok {
+		return fmt.Errorf("%s must be called with a literal path in %s", readAssetFuncName, w.name)
+	}
+	if !w.seen[literal.Text] {
+		w.seen[literal.Text] = true
+		w.refs = append(w.refs, literal.Text)
+	}
+	return nil
 }
